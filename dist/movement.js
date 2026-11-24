@@ -15,21 +15,21 @@ function heightSpan(b,x,z){
  const dx=x-clamp(x,b[0],b[2]);
  return Math.sqrt(Math.max(0,P.radius*P.radius-dx*dx));
 }
-function overlaps(y,b,z,x){
- if(!b[7])return y<b[5]-.012&&y+P.height>b[4]+.012;
+function overlaps(y,b,z,x,height=P.height){
+ if(!b[7])return y<b[5]-.012&&y+height>b[4]+.012;
  const span=heightSpan(b,x,z);
  return y<Math.max(blockHeight(b,z-span,1),blockHeight(b,z+span,1))-.012&&
-  y+P.height>Math.min(blockHeight(b,z-span,0),blockHeight(b,z+span,0))+.012;
+  y+height>Math.min(blockHeight(b,z-span,0),blockHeight(b,z+span,0))+.012;
 }
 function clip(s,nx,nz){let v=s.vx*nx+s.vz*nz;if(v<0){s.vx-=nx*v;s.vz-=nz*v;}}
 function solve(s,blocks,dx,dz,surface){
  const oldX=s.x,oldZ=s.z,oldY=s.y; s.x+=dx;s.z+=dz;
  // Only allow a step if the top is accessible and the full body fits.
  if(s.grounded){let top=surface(s.x,s.z,s.y);for(const b of blocks){if(b[6]!=='rail'&&b[5]>s.y+.012&&b[5]<=s.y+P.stepHeight&&contact(s.x,s.z,b,P.radius+.005))top=Math.max(top,b[5]);}
-  if(top>s.y&&top-s.y<=P.stepHeight&&!blocks.some(b=>overlaps(top,b,s.z,s.x)&&contact(s.x,s.z,b,P.radius)))s.y=top;
+  if(top>s.y&&top-s.y<=P.stepHeight&&!blocks.some(b=>overlaps(top,b,s.z,s.x,s.bodyHeight)&&contact(s.x,s.z,b,P.radius)))s.y=top;
  }
- for(let i=0;i<7;i++){let hit=false;for(const b of blocks){if(!overlaps(s.y,b,s.z,s.x))continue;const n=contact(s.x,s.z,b,P.radius);if(!n)continue;hit=true;s.x+=n[0]*(n[2]+P.skin);s.z+=n[1]*(n[2]+P.skin);clip(s,n[0],n[1]);}if(!hit)break;}
- if(blocks.some(b=>overlaps(s.y,b,s.z,s.x)&&contact(s.x,s.z,b,P.radius-.002))){s.x=oldX;s.z=oldZ;s.y=oldY;s.vx=s.vz=0;}
+ for(let i=0;i<7;i++){let hit=false;for(const b of blocks){if(!overlaps(s.y,b,s.z,s.x,s.bodyHeight))continue;const n=contact(s.x,s.z,b,P.radius);if(!n)continue;hit=true;s.x+=n[0]*(n[2]+P.skin);s.z+=n[1]*(n[2]+P.skin);clip(s,n[0],n[1]);}if(!hit)break;}
+ if(blocks.some(b=>overlaps(s.y,b,s.z,s.x,s.bodyHeight)&&contact(s.x,s.z,b,P.radius-.002))){s.x=oldX;s.z=oldZ;s.y=oldY;s.vx=s.vz=0;}
 }
 function accelerate(s,x,z,wish,accel,dt){const add=wish-(s.vx*x+s.vz*z);if(add<=0)return;const amt=Math.min(add,accel*wish*dt);s.vx+=x*amt;s.vz+=z*amt;}
 const ease=t=>t*t*(3-2*t);
@@ -65,7 +65,7 @@ function planVault(s,blocks,x,z,surface,wish){
  const nearby=blocks.filter(b=>b[2]>=Math.min(s.x,s.x+2*x)-P.radius&&b[0]<=Math.max(s.x,s.x+2*x)+P.radius&&
   b[3]>=Math.min(s.z,s.z+2*z)-P.radius&&b[1]<=Math.max(s.z,s.z+2*z)+P.radius);
  const blocked=(px,py,pz)=>surface(px,pz,py)>py+.012||
-  nearby.some(b=>overlaps(py,b,pz,px)&&contact(px,pz,b,P.radius));
+  nearby.some(b=>overlaps(py,b,pz,px,s.bodyHeight)&&contact(px,pz,b,P.radius));
  function planCrossing(obstacle,entryDistance){
   const rail=obstacle[6]==='rail';
   // A landing footprint must fit on terrain or on the actual climbing surface.
@@ -84,7 +84,9 @@ function planVault(s,blocks,x,z,surface,wish){
   }
   let crest=blockHeight(obstacle,s.z+z*entryDistance,1);
   // A diagonal ascent can gain additional height from the ramp itself.
-  const maxCrest=s.y+vaultHeight;
+  const high=obstacle[6]==='shelf'&&crest-s.y>vaultHeight;
+  if(high&&s.carried>=0){s.climbHint=s.elapsed+2;return null;}
+  const maxCrest=s.y+(high?1.84:vaultHeight);
   const onRamp=obstacle[7]&&Math.abs(blockHeight(obstacle,s.z,0)-s.y)<.24;
   if(crest>maxCrest&&!onRamp)return null;
   const approach=entryDistance*.97;
@@ -110,14 +112,14 @@ function planVault(s,blocks,x,z,surface,wish){
    if(!clear||blocked(px,landing,pz))continue;
    const entry=clamp(.34+approach*.12,.34,.44),crossing=distance-approach;
    const desiredExit=Math.max(1.65,speed*Math.max(.65,alignment));
-   const duration=clamp(2*crossing/((1-entry)*desiredExit),.28,.60);
+   const duration=high?.90:clamp(2*crossing/((1-entry)*desiredExit),.28,.60);
    const exitSpeed=Math.min(desiredExit,2.65*crossing/((1-entry)*duration));
    const startTangent=Math.min(speed*duration,2*approach/entry);
    const entryTangent=Math.min(.75*approach/entry,.75*crossing/(1-entry));
    // Keep the feet above the rail until the capsule clears its far edge.
    const release=rail?.88:.80;
    const v={x:s.x,y:s.y,z:s.z,dirX:x,dirZ:z,distance,approach,entry,release,crest:top,rail,landing,
-    startTangent,entryTangent,exitSpeed,time:0,duration};
+    high,startTangent,entryTangent,exitSpeed,time:0,duration};
    // Sample the swept body more finely than a normal collision substep.
    for(let i=1;i<=96;i++){if(blocked(...vaultPoint(v,i/96))){clear=false;break;}}
    if(clear)return v;
@@ -132,7 +134,7 @@ function planVault(s,blocks,x,z,surface,wish){
     let low=Math.max(0,d-.025),high=d;
     for(let i=0;i<10;i++){const mid=(low+high)/2;if(hits(b,mid))high=mid;else low=mid;}
     const [px,pz]=at(d);
-    if(blockHeight(b,pz,1)>s.y+P.stepHeight&&overlaps(s.y,b,pz,px))obstacles.push([b,low]);
+    if(blockHeight(b,pz,1)>s.y+P.stepHeight&&(b[6]==='shelf'||overlaps(s.y,b,pz,px,s.bodyHeight)))obstacles.push([b,low]);
     break;
    }
    if(d===reach)break;
@@ -162,10 +164,19 @@ function advanceVault(s,dt){
 export function move(s,keys,staticBlocks,dt,jump,surface){
  if(dt<=0)return;s.vx??=0;s.vz??=0;s.jumpBuffer??=0;
  if(jump)s.jumpBuffer=P.jumpBuffer;else s.jumpBuffer=Math.max(0,s.jumpBuffer-dt);
- const up=+keys.has('KeyW')-+keys.has('KeyS'),side=+keys.has('KeyD')-+keys.has('KeyA'),mag=Math.hypot(up,side),wish=keys.has('ShiftLeft')||keys.has('ShiftRight')?P.sprint:P.walk;
+ const blocks=[...staticBlocks.filter(b=>s.x>b[0]-3&&s.x<b[2]+3&&s.z>b[1]-3&&s.z<b[3]+3),...bounds];
+ const duck=keys.has('ControlLeft')||keys.has('ControlRight');
+ const current=s.bodyHeight??P.height,target=duck?1.06:P.height;
+ const height=current+clamp(target-current,-dt*4,dt*4);
+ s.bodyHeight=height<=current||!blocks.some(b=>contact(s.x,s.z,b,P.radius)&&overlaps(s.y,b,s.z,s.x,height))?height:current;
+ const up=+keys.has('KeyW')-+keys.has('KeyS'),side=+keys.has('KeyD')-+keys.has('KeyA'),mag=Math.hypot(up,side),wish=s.bodyHeight<P.height-.01?P.walk*.55:keys.has('ShiftLeft')||keys.has('ShiftRight')?P.sprint:P.walk;
  const x=mag?(Math.cos(s.yaw)*side-Math.sin(s.yaw)*up)/mag:0,z=mag?(-Math.sin(s.yaw)*side-Math.cos(s.yaw)*up)/mag:0;
- const blocks=[...staticBlocks,...bounds];
- if(s.vault){advanceVault(s,dt);return;}
+
+ if(s.vault){
+  const [px,py,pz]=vaultPoint(s.vault,Math.min(1,(s.vault.time+dt)/s.vault.duration));
+  if(!(s.vault.high&&jump)&&!blocks.some(b=>overlaps(py,b,pz,px,s.bodyHeight)&&contact(px,pz,b,P.radius))){advanceVault(s,dt);return;}
+  s.vault=null;s.vy=Math.min(0,s.vy);s.jumpBuffer=0;
+ }
  if(s.grounded&&s.jumpBuffer>0&&mag){
   s.vault=planVault(s,blocks,x,z,surface,wish);
   if(s.vault){s.grounded=false;s.jumpBuffer=0;advanceVault(s,dt);return;}
@@ -182,7 +193,7 @@ export function move(s,keys,staticBlocks,dt,jump,surface){
  for(const b of blocks){if(!contact(s.x,s.z,b,P.radius-.035))continue;const top=blockHeight(b,s.z,1);if(b[6]!=='rail'&&top<=old+.025&&top>=floor)floor=top;
   const span=b[7]?heightSpan(b,s.x,s.z):0;
   const bottom=Math.min(blockHeight(b,s.z-span,0),blockHeight(b,s.z+span,0));
-  if(s.vy>0&&old+P.height<=bottom+.012&&next+P.height>=bottom){next=Math.min(next,bottom-P.height-.002);s.vy=0;}}
+  if(s.vy>0&&old+s.bodyHeight<=bottom+.012&&next+s.bodyHeight>=bottom){next=Math.min(next,bottom-s.bodyHeight-.002);s.vy=0;}}
  if(s.vy<=0&&(next<=floor+.003||(wasGrounded&&old-floor<=P.groundSnap&&old>=floor))){s.y=floor;s.vy=0;s.grounded=true;}else{s.y=next;s.grounded=false;}
  s.elapsed+=dt;
 }

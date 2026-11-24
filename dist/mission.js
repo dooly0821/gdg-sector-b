@@ -98,7 +98,7 @@ export function canUse(s,target,blocks=[]){
  if(!target||s.vault)return false;
  if(target.drop&&(!s.grounded||s.carried!==target.index||!placementClear(s,target.pos,blocks)))return false;
  let pos=target.pos.slice();pos[1]+=target.dock?.55:.24;
- const eye=[s.x,s.y+CONFIG.eye,s.z],v=vsub(pos,eye),d=Math.hypot(...v);
+ const eye=[s.x,s.y+(s.bodyHeight??1.70)-.12,s.z],v=vsub(pos,eye),d=Math.hypot(...v);
  if(target.drop){
   if(d>1.91||dot(unit([v[0],0,v[2]]),[-Math.sin(s.yaw),0,-Math.cos(s.yaw)])<.73)return false;
  }else if(d>(s.parked?.[target.index]?1.91:CONFIG.reach)||dot(unit(v),forward(s))<.63)return false;

@@ -37,10 +37,12 @@ export function buildStorage(w) {
     for (let j = 0; j < 5; j++) {
       box(x, y + 0.136, z + (j - 2) * depth / 5, width, 0.036, depth * 0.172, choose(wood));
     }
+    w.block(x-width/2,z-depth/2,x+width/2,z+depth/2,y,y+.154,'climb');
     return y + 0.154;
   }
 
   function crate(x, ground, z, width, height, depth) {
+    w.block(x-width/2,z-depth/2,x+width/2,z+depth/2,ground,ground+height,'climb');
     const y = ground + height / 2;
     box(x, y, z, width - 0.065, height - 0.065, depth - 0.065, agedWood);
     const batten = Math.min(0.085, height * 0.11);
@@ -88,6 +90,7 @@ export function buildStorage(w) {
           const offX = level ? (rand() - 0.5) * 0.035 : 0;
           const offZ = level ? (rand() - 0.5) * 0.035 : 0;
           const mat = rand() < 0.65 ? groupMaterial : choose(carton);
+          w.block(cx+offX-dw/2,cz+offZ-dd/2,cx+offX+dw/2,cz+offZ+dd/2,top+h*level,top+h*(level+1),'climb');
           box(cx + offX, top + h * (level + 0.5), cz + offZ, dw, h, dd, mat, 0, (rand() - 0.5) * 0.025, 0);
         }
         if (slim && nx === 1 && layers > 1) {
@@ -102,6 +105,7 @@ export function buildStorage(w) {
   }
 
   function upright(x, z, height, detailed, outward) {
+    w.block(x-.071,z-.073,x+.071,z+.073,0,height);
     box(x, 0.037, z, 0.25, 0.074, 0.24, rust);
     box(x, height / 2, z, 0.108, height, 0.113, steel);
     for (const k of [-1, 1]) box(x + k * 0.06, height / 2, z, 0.022, height, 0.145, steelEdge);
@@ -120,7 +124,7 @@ export function buildStorage(w) {
     const halfWidth = (x1 - x0) / 2;
     const bayLen = (z1 - z0) / bayCount;
     const levels = [0.16, 1.88, 3.58, 5.27];
-    w.block(x0 - 0.105, z0 - 0.11, x1 + 0.105, z1 + 0.11, 0, height + 1.36);
+    for(const y of levels)w.block(x0-.06,z0-.05,x1+.06,z1+.05,y-.16,y,'shelf');
     w.shadow(xMid, (z0 + z1) / 2, x1 - x0 + 0.42, z1 - z0 + 0.44);
     for (let j = 0; j <= bayCount; j++) {
       const z = z0 + j * bayLen;
@@ -148,6 +152,11 @@ export function buildStorage(w) {
           const right = bracedX + halfWidth - 0.095;
           const low = levels[k] + 0.06;
           const high = levels[k + 1] - 0.19;
+          for(let n=0;n<10;n++){
+            const xStart=k%2?right:left,xEnd=k%2?left:right;
+            const a=xStart+(xEnd-xStart)*n/10,b=xStart+(xEnd-xStart)*(n+1)/10;
+            w.block(Math.min(a,b)-.03,z+face*.069-.02,Math.max(a,b)+.03,z+face*.069+.02,low+(high-low)*n/10,low+(high-low)*(n+1)/10);
+          }
           beam([k % 2 ? right : left, low, z + face * 0.069], [k % 2 ? left : right, high, z + face * 0.069], 0.056, 0.038, steel);
         }
       }

@@ -32,7 +32,7 @@ function panel(name,body,title,eyebrow='GDG / 근무 안내'){
 function openPane(name){
  if(mode==='game'){pauseShift(false);}
  if(name==='quit')panel(name,'<p>현재 근무를 종료할까요? 진행 중인 배송은 초기화됩니다.</p><div class="panel-actions">'+action('quit','근무 종료',true)+action('brief','계속하기')+'</div>','게임 종료','GDG / 야간 근무');
- if(name==='manual')panel(name,'<p>GDG 상자 다섯 개를 한 개씩 02번 출고대로 운반하세요. 상자에 가까이 다가가 조준선에 노란 테두리가 생기면 E로 집습니다. E를 다시 눌러 앞의 빈 바닥이나 받침대에 내려놓거나 출고대에서 배송하세요. 서쪽 입구는 C-01 야간 분류 구역으로 이어집니다.</p>'+rows.map(([k,l])=>'<div class="row"><span>'+l+'</span><kbd>'+k+'</kbd></div>').join('')+'<p>상층 캣워크는 동쪽 계단으로 올라갑니다. 마우스가 고정되지 않으면 왼쪽 버튼을 누른 채 드래그하거나 방향키로 시점을 돌릴 수 있습니다.</p>'+ '<div class="panel-actions">'+action('map','구역 지도')+'</div>'+links,'조작 방법','WORK 모드 / 근무자 매뉴얼');
+ if(name==='manual')panel(name,'<p>GDG 상자 다섯 개를 한 개씩 02번 출고대로 운반하세요. 상자에 가까이 다가가 조준선에 노란 테두리가 생기면 E로 집습니다. E를 다시 눌러 앞의 빈 바닥이나 받침대에 내려놓거나 출고대에서 배송하세요. 서쪽 입구는 C-01 야간 분류 구역으로 이어집니다.</p>'+rows.map(([k,l])=>'<div class="row"><span>'+l+'</span><kbd>'+k+'</kbd></div>').join('')+'<p>Ctrl을 누르면 앉습니다. 선반 앞에서 이동 키와 Space로 오릅니다. 상층 캣워크는 동쪽 계단으로 올라갑니다. 마우스가 고정되지 않으면 왼쪽 버튼을 누른 채 드래그하거나 방향키로 시점을 돌릴 수 있습니다.</p>'+ '<div class="panel-actions">'+action('map','구역 지도')+'</div>'+links,'조작 방법','WORK 모드 / 근무자 매뉴얼');
  if(name==='map')panel(name,plan()+'<p>직원 입고대에서 중앙 통로를 따라 북쪽으로 가면 출고대가 나옵니다. 동쪽 계단은 상층 화물로 연결됩니다.</p>','구역 지도','SECTOR B / 시설 평면도');
  if(name==='settings')panel(name,'<small>그래픽 품질</small><div class="presets">'+['HIGH','BALANCED','PERFORMANCE'].map(q=>'<button class="preset '+(q===settings.quality?'active':'')+'" data-quality="'+q+'">'+q+'</button>').join('')+'</div><label class="row">렌더 해상도 <output id="scaleVal">'+Math.round(settings.scale*100)+'%</output><input id="scale" type="range" min=".55" max="1" step=".05" value="'+settings.scale+'"></label><label class="row">마우스 감도 <output id="sensVal">'+settings.sensitivity.toFixed(1)+'×</output><input id="sens" type="range" min=".4" max="1.8" step=".1" value="'+settings.sensitivity+'"></label><div class="row">걸을 때 시점 흔들림<button class="toggle '+(settings.motion?'on':'')+'" data-toggle="motion">'+(settings.motion?'ON':'OFF')+'</button></div><div class="row">창고 소리<button class="toggle '+(settings.audio?'on':'')+'" data-toggle="audio">'+(settings.audio?'ON':'OFF')+'</button></div>','설정','SECTOR B / 환경 설정');
  if(name==='pause')panel(name,'<div class="row"><span>배송 완료</span><b>'+deliveryCount(session)+' / 5</b></div><div class="panel-actions">'+action('resume','근무 재개',true)+action('map','구역 지도')+action('settings','설정')+action('manual','조작 방법')+action('brief','메인 메뉴')+'</div>','일시 정지','GDG / 대기 중');
@@ -136,13 +136,13 @@ function frame(now){if(mode!=='game')return;const dt=Math.min(.1,Math.max(0,(now
  const useTarget=handlingTarget(s,worlds[0].blocks),available=canUse(s,useTarget,worlds[0].blocks);
  const target=s.carried<0&&available?useTarget:nextTarget(s);
  const {reach,brace}=vaultPose(s.vault);
- const eye=[s.x,s.y+CONFIG.eye+bob-.065*brace-(s.landKick??0)*.8,s.z];
+ const eye=[s.x,s.y+(s.bodyHeight??1.70)-.12+bob-.065*brace-(s.landKick??0)*.8,s.z];
  const view=brace?forward({...s,pitch:s.pitch-.125*reach}):facing;
  const pose=choreography(s,eye,available,moving,keys.has('ShiftLeft')||keys.has('ShiftRight'),s.elapsed);
  pose.actors=hauntLayers(s);pose.clock=s.elapsed;
  renderer.render(eye,view,parcelPositions(s,pose.hidden),pose,settings.scale);
  const mark=$('#waypoint'),p=$('#prompt'),brackets=$('#target-brackets');
- let msg='';brackets.hidden=true;mark.hidden=true;
+ let msg=s.climbHint>s.elapsed?'높은 선반에 오르려면 E로 상자를 내려놓으세요.':'';brackets.hidden=true;mark.hidden=true;
  if(target&&!s.handAction){
   const distance=Math.hypot(s.x-target.pos[0],s.y-target.pos[1],s.z-target.pos[2]);const pt=target.pos.slice();pt[1]+=target.dock?1.05:.83;
   const clip=renderer.project(pt),label=target.dock?'출고 02':target.id;

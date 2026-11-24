@@ -52,7 +52,7 @@ export function toggleFlashlight(s){
  s.flashlight=!s.flashlight;return true;
 }
 export function updateViewmodel(s,dt){
- const target=s.flashlight&&!s.handAction?1:0;
+ const target=s.flashlight&&!s.handAction&&!s.vault?.high?1:0;
  const flashA=s.flashAmount??0;
  const equip=s.carried>=0?HAND_TIMING.cargoEquip:HAND_TIMING.equip,stow=s.carried>=0?HAND_TIMING.cargoStow:HAND_TIMING.stow;
  s.flashAmount=target>flashA?Math.min(target,flashA+dt/equip):Math.max(target,flashA-dt/stow);
