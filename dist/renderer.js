@@ -1,3 +1,4 @@
+import {CORE} from './annex.js';
 import {geometry,customShapes} from './geometry.js';
 import {cameraView,perspective,multiply,unit,dot,cross} from './world.js';
 const vs=`#version 300 es
@@ -5,7 +6,7 @@ precision highp float;
 layout(location=0) in vec3 p;layout(location=1) in vec3 n;layout(location=2) in vec2 uv;
 layout(location=3) in vec3 origin;layout(location=4) in vec3 ax;layout(location=5) in vec3 ay;layout(location=6) in vec3 az;
 layout(location=7) in vec4 colorTex;layout(location=8) in vec4 params;
-uniform mat4 VP,lightVP;uniform vec3 offset;uniform vec3 flexPivot,flexForward,flexNormal,flexWidth;uniform float flexAmount;
+uniform mat4 VP,lightVP,objectMatrix;uniform bool worldObject;uniform vec3 offset;uniform vec3 flexPivot,flexForward,flexNormal,flexWidth;uniform float flexAmount;
 out vec3 P,N;out vec2 UV,tile;out vec4 C,Q,shadowPos;
 void main(){
  mat3 m=mat3(ax,ay,az);vec3 pp=p,nn=n;
@@ -24,6 +25,7 @@ void main(){
  }
  P=origin+m*pp+offset;
  N=normalize(mat3(ax/dot(ax,ax),ay/dot(ay,ay),az/dot(az,az))*nn);
+ if(worldObject){P=(objectMatrix*vec4(P,1.)).xyz;N=normalize(mat3(objectMatrix)*N);}
  vec3 scale=vec3(length(ax),length(ay),length(az));vec3 an=abs(n);
  vec2 sz=an.y>.7?scale.xz:an.x>.7?scale.zy:scale.xy;
  UV=uv;tile=uv*sz*params.z+vec2(dot(origin,vec3(.13,.23,.72)),dot(origin,vec3(.31,.62,.14)));
@@ -33,7 +35,7 @@ void main(){
 const fs=`#version 300 es
 precision highp float;precision highp sampler2DArray;
 in vec3 P,N;in vec2 UV,tile;in vec4 C,Q,shadowPos;
-uniform sampler2DArray atlas;uniform sampler2D shadowMap,floorTex;uniform vec3 eye,lamps[8];uniform float shadowStep,hand,clock,torchPower;uniform vec3 torchPos,torchDir;
+uniform sampler2DArray atlas;uniform sampler2D shadowMap,floorTex;uniform vec3 eye,lamps[8];uniform float shadowStep,hand,clock,torchPower;uniform vec3 torchPos,torchDir,core;
 out vec4 outColor;
 float visibility(vec3 n){
  if(hand>.5||shadowStep==0.)return 1.;vec3 s=shadowPos.xyz/shadowPos.w*.5+.5;
@@ -71,8 +73,20 @@ void main(){
   lit+=vec3(1.,.88,.67)*torchPower*spot*atten*(.08+.92*diffuse);
   sheen+=pow(max(dot(n,normalize(v-ray)),0.),25.)*spot*atten*Q.y*.2*torchPower;
  }
+ if(hand<.5&&P.x< -15.2){
+  vec3 vent=core-P;float d2=dot(vent,vent);
+  float pulse=.85+.15*sin(clock*2.1);
+  lit+=vec3(1.,.15,.10)*pulse*(9./(d2+3.))*(.3+.7*max(0.,dot(n,normalize(vent))));
+  float blue=exp(-.045*pow(P.x+26.,2.))*smoothstep(-7.,2.,P.z);
+  lit+=vec3(.13,.25,.42)*blue*max(n.y,0.);
+ }
+ if(hand<.5&&n.y>.65&&(Q.w==3.||Q.w==0.)){
+  // Low-angle highlights follow worn tracks without replacing the floor texture.
+  float tracks=pow(.5+.5*sin(P.x*3.6+sin(P.z*1.1)*.3),7.);
+  sheen+=tracks*grit*pow(1.-max(dot(n,v),0.),4.)*.065;
+ }
  vec3 col=base*lit+vec3(1.,.80,.55)*sheen+base*e;
- if(hand<.5){float dist=distance(eye,P);col=mix(col,vec3(.28,.32,.41),1.-exp(-dist*.011));}
+ if(hand<.5){float dist=distance(eye,P);col=mix(col,vec3(.28,.32,.41),1.-exp(-dist*(P.x< -15.2?.020:.011)));}
  outColor=vec4(col+vec3(1.,.76,.45)*mist,1.);
 }`;
 const depthFS='#version 300 es\nprecision highp float;void main(){}';
@@ -84,9 +98,9 @@ export class Renderer{
  constructor(canvas){
   this.canvas=canvas;this.gl=canvas.getContext('webgl2',{alpha:false,antialias:true,powerPreference:'high-performance'});if(!this.gl)throw Error('WebGL 2 is unavailable. Enable graphics acceleration in desktop Chrome, then reload.');
   const gl=this.gl;this.program=compile(gl,vs,fs);this.depthProgram=compile(gl,vs,depthFS);
-  this.loc={};for(let p of [this.program,this.depthProgram]){let u={};for(let k of ['VP','offset','lightVP','atlas','shadowMap','floorTex','eye','lamps','shadowStep','hand','torchPower','torchPos','torchDir','flexPivot','flexForward','flexNormal','flexWidth','flexAmount'])u[k]=gl.getUniformLocation(p,k);this.loc[p===this.program?'main':'depth']=u;}
+  this.loc={};for(let p of [this.program,this.depthProgram]){let u={};for(let k of ['VP','offset','lightVP','worldObject','objectMatrix','clock','core','atlas','shadowMap','floorTex','eye','lamps','shadowStep','hand','torchPower','torchPos','torchDir','flexPivot','flexForward','flexNormal','flexWidth','flexAmount'])u[k]=gl.getUniformLocation(p,k);this.loc[p===this.program?'main':'depth']=u;}
   this.buffers={};for(let shape of ['box','face','sphere','cylinder','forearm',...customShapes]){let arr=geometry(shape),b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,arr,gl.STATIC_DRAW);this.buffers[shape]=[b,arr.length/8];}
-  const lv=cameraView([14,34,-9],[-14,-34,9]);const ortho=new Float32Array([1/28,0,0,0,0,1/28,0,0,0,0,-2/80,0,0,0,-1,1]);this.lightVP=multiply(ortho,lv);
+  const lv=cameraView([0,39,-9],[-14,-39,9]);const ortho=new Float32Array([1/37,0,0,0,0,1/32,0,0,0,0,-2/95,0,0,0,-1,1]);this.lightVP=multiply(ortho,lv);
  }
  async prepare(worlds,progress=()=>{}){
   const gl=this.gl,slots=new Map();const paths=['plain',...Array.from({length:6},(_,i)=>'carton'+i),...Array.from({length:6},(_,i)=>'cartontop'+i),'concrete','paint','metal','wood','rubber','cloth','skin','cardboard'];
@@ -110,7 +124,7 @@ export class Renderer{
    progress(.67+.27*(i+1)/worlds.length,'창고 메시 준비 중');
    await new Promise(r=>requestAnimationFrame(r));
   }
-  this.lights=new Float32Array(worlds[0].lights.slice(0,8).flat());
+  this.lights=worlds[0].lights;
   this.setQuality('BALANCED');
  }
  batch(world,slots,chunked){
@@ -148,11 +162,23 @@ export class Renderer{
   // to avoid placing a light source on the far side of a wall.
   const local=pose.torchLocal?.position??[.325,-.283,-.887],dir=pose.torchLocal?.direction??[-.045,-.025,-1];
   const torch=eye.map((v,i)=>v+right[i]*(local[0]+off[0])*.3+up[i]*(local[1]+off[1])*.3+forward[i]*.12);
-  gl.uniform3fv(u.torchPos,torch);gl.uniform3fv(u.torchDir,unit(forward.map((v,i)=>v*(-dir[2])+right[i]*dir[0]+up[i]*dir[1])));gl.uniform1f(u.torchPower,pose.flashlight||0);gl.uniform3fv(u.lamps,this.lights);gl.uniform1f(u.flexAmount,0);gl.uniform1f(u.hand,0);gl.uniform1f(u.shadowStep,1/this.size);gl.uniform3f(u.offset,0,0,0);
+  gl.uniform3fv(u.torchPos,torch);gl.uniform3fv(u.torchDir,unit(forward.map((v,i)=>v*(-dir[2])+right[i]*dir[0]+up[i]*dir[1])));gl.uniform1f(u.torchPower,pose.flashlight||0);const lights=eye[0]<-17?[...this.lights].sort((a,b)=>
+   Math.hypot(a[0]-eye[0],a[2]-eye[2])-Math.hypot(b[0]-eye[0],b[2]-eye[2])):this.lights;
+  gl.uniform3fv(u.lamps,new Float32Array(lights.slice(0,8).flat()));
+  gl.uniform1f(u.clock,pose.clock??0);gl.uniform3fv(u.core,CORE);gl.uniform1f(u.flexAmount,0);gl.uniform1f(u.hand,0);gl.uniform1f(u.shadowStep,1/this.size);gl.uniform3f(u.offset,0,0,0);
   gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D_ARRAY,this.atlas);gl.uniform1i(u.atlas,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,this.depth);gl.uniform1i(u.shadowMap,1);gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,this.floorTex);gl.uniform1i(u.floorTex,2);
   const planes=[];for(let i=0;i<3;i++)for(let s of [-1,1]){let pl=[0,1,2,3].map(j=>vp[4*j+3]+s*vp[4*j+i]);planes.push(pl.map(v=>v/Math.hypot(...pl.slice(0,3))));}
   for(const b of this.groups[0])if(planes.every(p=>dot(p.slice(0,3),b.center)+p[3]>-b.radius))this.draw(b);
   for(const xyz of items){gl.uniform3fv(u.offset,xyz);for(const b of this.groups[1])this.draw(b);}
+  if(pose.actors?.length){
+   gl.uniform3f(u.offset,0,0,0);
+   gl.uniform1i(u.worldObject,1);
+   for(const actor of pose.actors){
+    gl.uniformMatrix4fv(u.objectMatrix,false,actor.matrix);
+    for(const b of this.groups[actor.group])this.draw(b);
+   }
+   gl.uniform1i(u.worldObject,0);
+  }
   if(pose.flight&&!pose.assembly){gl.uniformMatrix4fv(u.VP,false,multiply(vp,pose.flight));gl.uniform3f(u.offset,0,0,0);gl.uniform1f(u.hand,1);for(const b of this.groups[1])this.draw(b);}
   gl.clear(gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(u.VP,false,proj);gl.uniform1f(u.hand,1);gl.uniform3f(u.eye,0,0,0);for(const layer of pose.hands){gl.uniformMatrix4fv(u.VP,false,layer.matrix?multiply(proj,layer.matrix):proj);gl.uniform3fv(u.offset,layer.offset);const flex=layer.flex;if(flex){gl.uniform3fv(u.flexPivot,flex.pivot);gl.uniform3fv(u.flexForward,flex.forward);gl.uniform3fv(u.flexNormal,flex.normal);gl.uniform3fv(u.flexWidth,flex.width);}for(const b of this.groups[layer.group]){gl.uniform1f(u.flexAmount,flex&&b.shape.includes('_glove_')?flex.amount:0);this.draw(b);}}
  }

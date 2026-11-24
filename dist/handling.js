@@ -1,3 +1,4 @@
+import {buildHauntRigs} from './haunt.js';
 import {basis,cameraView,multiply,unit,cross,dot} from './world.js';
 import {TORCH_LOCAL,SOCKETS,FINGER_FLEX} from './viewmodel.js';
 import {CONFIG,baySlot,deliveryCount,canUse,interact,forward} from './mission.js';
@@ -11,14 +12,14 @@ export const HAND_TIMING=Object.freeze({pickup:.48,place:.52,equip:.18,stow:.16,
 export function rigs(worlds){
  const [building,parcel,empty,carried,flashlight]=worlds;
  const group=(world,channel)=>({materials:world.materials,parts:world.parts.filter(p=>p.channel===channel)});
- return [building,parcel,group(empty,'left'),group(empty,'right'),group(carried,'left'),group(carried,'right'),group(carried,'parcel'),flashlight,group(carried,'leftSleeve'),group(carried,'rightSleeve'),group(carried,'support')];
+ return [building,parcel,group(empty,'left'),group(empty,'right'),group(carried,'left'),group(carried,'right'),group(carried,'parcel'),flashlight,group(carried,'leftSleeve'),group(carried,'rightSleeve'),group(carried,'support'),...buildHauntRigs()];
 }
 export function beginHandling(s,target,blocks){
  if(s.handAction||!canUse(s,target,blocks))return false;
- if(target.dock?s.carried<0:s.states[target.index]!=='AVAILABLE'||s.carried>=0)return false;
+ if((target.dock||target.drop)?s.carried<0:s.states[target.index]!=='AVAILABLE'||s.carried>=0)return false;
  s.flashlight=false;s.flashAmount=0;
- s.handAction={placing:!!target.dock,target,index:target.dock?s.carried:target.index,
-  worldPos:target.dock?baySlot(deliveryCount(s)):target.pos.slice(),time:0,duration:target.dock?HAND_TIMING.place:HAND_TIMING.pickup};
+ s.handAction={placing:!!(target.dock||target.drop),target,index:target.dock?s.carried:target.index,
+  worldPos:target.dock?baySlot(deliveryCount(s)):target.pos.slice(),time:0,duration:target.dock||target.drop?HAND_TIMING.place:HAND_TIMING.pickup};
  return true;
 }
 export function advanceHandling(s,blocks,dt){
@@ -32,7 +33,19 @@ function transform(angles,position,scale){
  const axes=basis(...angles);
  return new Float32Array([...axes[0].map(v=>v*scale),0,...axes[1].map(v=>v*scale),0,...axes[2].map(v=>v*scale),0,...position,1]);
 }
-// Q toggles a stored tool; two-handed cargo takes priority.
+// Keep the torch, glove and sleeve in one assembly. Aim down camera -Z.
+const torchBasis=basis(Math.asin(TORCH_LOCAL.direction[1]),Math.atan2(-TORCH_LOCAL.direction[0],-TORCH_LOCAL.direction[2]),0);
+const torchWrist=SOCKETS.torch.wrist;
+const aimTorch=p=>torchBasis.map((axis,i)=>dot(axis,p.map((v,j)=>v-torchWrist[j]))+torchWrist[i]);
+const torchAim={position:aimTorch(TORCH_LOCAL.position),direction:[0,0,-1]};
+function torchLayer(layer){
+ const offset=layer.offset;
+ const origin=aimTorch([0,0,0]).map((v,i)=>v+offset[i]);
+ return {...layer,offset:[0,0,0],matrix:new Float32Array([
+  ...torchBasis.map(a=>a[0]),0,...torchBasis.map(a=>a[1]),0,...torchBasis.map(a=>a[2]),0,...origin,1
+ ])};
+}
+// Q toggles a stored tool.
 export function toggleFlashlight(s){
  if(s.handAction)return false;
  s.flashlight=!s.flashlight;return true;
@@ -101,7 +114,14 @@ export function choreography(s,eye,near,moving,sprinting,t){
   const position=a.worldPos.map((v,i)=>mix(v,end[i],heldFraction));
   // shortest angular arc; exactly aligns with camera in the final pose.
   const yaw=Math.atan2(Math.sin(s.yaw),Math.cos(s.yaw));
-  flight=transform([s.pitch*heldFraction,yaw*heldFraction,0],position,mix(1,HELD_SIZE/CONFIG.parcelWidth,heldFraction));
+  const pitch=s.pitch*heldFraction,scale=mix(1,HELD_SIZE/CONFIG.parcelWidth,heldFraction);
+  if(a.target.drop||s.parked?.[a.index]){
+   // Clear the support with the rotated bottom edge, then come to rest flush on contact.
+   const corner=Math.abs(Math.sin(pitch))*CONFIG.parcelWidth*.41*scale;
+   const correction=Math.max(0,a.worldPos[1]+corner-position[1]);
+   position[1]+=correction*(1-smooth((heldFraction-.68)/.32));
+  }
+  flight=transform([pitch,yaw*heldFraction,0],position,scale);
   const cam=cameraView(eye,forward(s));
   const cargoMatrix=multiply(multiply(cam,flight),multiply(transform([0,0,0],[0,0,0],CONFIG.parcelWidth/HELD_SIZE),translate(ANCHOR.map(v=>-v))));
   const gripping=a.placing?phase<=contact:phase>=contact;
@@ -141,6 +161,22 @@ export function choreography(s,eye,near,moving,sprinting,t){
  // Static carry uses the authored sleeve meshes. During a reach, extend sleeves
  // from the viewport edge to the exact animated wrist; no detached arm ends.
  for(const layer of [...hands])if(layer.group===4||layer.group===5){const i=layer.group-4;hands.push(a||holding&&flash>0?sleeveLayer(layer,i):{group:8+i,offset:layer.offset});}
- const torchOffset=hands.find(layer=>layer.group===7)?.offset??bob;
- return {hands,flight,assembly,flashlight:flash>(holding?.82:.65)?smooth((flash-(holding?.82:.65))/(holding?.18:.35)):0,torchOffset,torchLocal:TORCH_LOCAL,hidden};
+ const torchIndex=hands.findIndex(layer=>layer.group===7);
+ const torchOffset=torchIndex<0?bob:hands[torchIndex].offset;
+ if(torchIndex>=0)hands[torchIndex]=torchLayer(hands[torchIndex]);
+ if(s.vault&&!a){
+  const phase=s.vault.time/s.vault.duration;
+  const reach=Math.sin(Math.PI*phase)**2;
+  for(const hand of hands){
+   if(hand.group===7){
+    hand.matrix[13]-=.115*reach;
+    torchOffset[1]-=.115*reach;
+   }else if(hand.group===2||hand.group===3){
+    const side=hand.group===2?-1:1;
+    hand.offset=hand.offset.map((v,i)=>v+[-side*.048,.12,-.16][i]*reach);
+    hand.flex.amount-=.16*reach;
+   }
+  }
+ }
+ return {hands,flight,assembly,flashlight:flash>(holding?.82:.65)?smooth((flash-(holding?.82:.65))/(holding?.18:.35)):0,torchOffset,torchLocal:torchAim,hidden};
 }

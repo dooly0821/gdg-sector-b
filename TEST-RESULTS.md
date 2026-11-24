@@ -39,3 +39,9 @@ Node v22.16.0.
 - PASS: actual headless Chromium WebGL2 startup, compiled shaders, Q keyboard equip and screenshots inspected at 1280×720; no page errors. SwiftShader was used, so hardware GPU performance, subjective smoothness, and complete browser-driven delivery routes remain unverified.
 - Browser reproduction: serve `dist` at port 8090, run `node scripts/check-browser.mjs` with Playwright available and `/usr/bin/chromium` installed; optional `QA_CAPTURE_DIR` saves screenshots. No runtime dependency or deployment setting was added.
 - Preserved: map, UI, all existing texture files, mission and movement source, Vercel configuration, and paths within `dist`.
+
+# C-01 야간 분류동 확장
+- PASS: 배송 5건의 집기·출고를 30/60/120Hz에서 검증했습니다. 상층 경사로 왕복, 공중 관성, 버니합 입력 버퍼와 기존 충돌도 통과했습니다.
+- PASS: check-expansion. 빈손/운반 중 전방 광축, 분류동 왕복, 난간과 화물 넘기, 천장에 막힌 동작 차단, 바닥 적치 후 재집기/출고, 괴물의 빛 반응과 복귀 시 화물 보존을 확인했습니다.
+- PASS: check-contact-motion, check-hand-timing, check-finger-motion, check-dual. 손전등 렌더 변환을 적용한 상자 전환 메시 표본 3,175,846개에서 관통이 검출되지 않았습니다. 이 검사는 모든 물체 및 프레임의 연속 충돌 검사까지 포함하지 않습니다.
+- PASS: Chromium WebGL2에서 Q/E 실제 입력으로 집기, 한 손 운반과 손전등, 바닥 적치, 다시 집기, 출고를 확인했습니다. 테스트는 상호작용 지점에 플레이어를 배치합니다. C-01 화면도 캡처했습니다. 브라우저의 전 구간 수동 플레이와 GPU 성능은 별도 확인이 필요합니다.

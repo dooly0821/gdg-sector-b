@@ -108,8 +108,16 @@ export function buildArchitecture(w) {
   // Safety marking at the approach to the stair flight.
   for (let n=0;n<6;n++)box(11.83+n*.27,.019,15.5,.12,.015,.38,m.line,0,-.48);
   for(const x of [-15,15]){
-    box(x,4.3,0,.28,8.6,44.0,m.wall);
-    box(x-Math.sign(x)*.16,.46,0,.09,.92,43.87,m.wallDark);
+    if(x<0){
+      for(const [lo,hi] of [[-22,12],[16,22]]){
+        box(x,4.3,(lo+hi)/2,.28,8.6,hi-lo,m.wall);
+        box(x+.16,.46,(lo+hi)/2,.09,.92,hi-lo,m.wallDark);
+      }
+      box(x,6.1,14,.28,5,4,m.wall);
+    }else{
+      box(x,4.3,0,.28,8.6,44.0,m.wall);
+      box(x-.16,.46,0,.09,.92,43.87,m.wallDark);
+    }
     for(let n=0;n<8;n++) {
       const z=-19.25+n*5.5;
       sideWindow(x-Math.sign(x)*.16,z,4.65);
@@ -193,7 +201,7 @@ export function buildArchitecture(w) {
       box(x,3.63,z,.12,.06,.12,m.plate);
     }
     for (const height of [4.07,4.60])rail([x1,height,z1],[x2,height,z2],.058,m.yellow);
-    block(Math.min(x1,x2)-.045,Math.min(z1,z2)-.045,Math.max(x1,x2)+.045,Math.max(z1,z2)+.045,3.60,4.63);
+    block(Math.min(x1,x2)-.045,Math.min(z1,z2)-.045,Math.max(x1,x2)+.045,Math.max(z1,z2)+.045,3.60,4.63,"rail");
   }
   deckRail(11.075,-19.94,11.075,6.96);
   deckRail(11.075,-19.94,14.74,-19.94);
@@ -207,7 +215,7 @@ export function buildArchitecture(w) {
     box(12.5,top-.017,z+run*.46,1.69,.061,.055,i===0||i===steps-1?m.line:m.edge);
     for(const x of [11.71,13.29]){
       box(x,top-.090,z,.055,.14,.198,m.plate);
-      block(x-.050,z-run*.5,x+.050,z+run*.5,top-.02,top+.97);
+      block(x-.050,z-run*.5,x+.050,z+run*.5,top-.02,top+.97,"rail");
     }
   }
   for(const x of [11.66,13.34]){

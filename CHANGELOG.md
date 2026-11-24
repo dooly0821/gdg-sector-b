@@ -43,3 +43,9 @@
 - Added rounded joint reinforcement and seam accents using existing glove materials/textures; regenerated source OBJ/GLB and packed runtime meshes.
 - Staggered flashlight finger wrap angles for the finger cascade; kept hand/tool transforms and authored contact clearance.
 - Restored missing mission/physics regression scripts and added finger continuity and Chromium smoke checks. See TEST-RESULTS.md for measured coverage and limits.
+
+## C-01 야간 분류동 확장
+- 기존 창고 서쪽 통로와 28 × 30m 분류동을 연결했습니다. 랙, 점검 데크, 격리 설비, 경광 및 천장 조명을 추가했습니다.
+- 네 괴물의 순찰과 추격, 적재귀의 예고 돌진, 녹령과 표찰귀의 손전등 반응을 추가했습니다. 관절 계층으로 팔꿈치를 포함한 동작을 제어합니다.
+- 장갑·손전등 모델과 빛이 카메라 전방을 향하도록 함께 정렬했습니다.
+- E로 상자를 임시 적치하고 다시 집거나 출고대에서 배송할 수 있습니다. 점프 입력으로 난간과 낮은 화물을 오르는 동작을 추가했습니다.

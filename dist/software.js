@@ -81,6 +81,7 @@ export class SoftwareRenderer{
   const cam=cameraView(eye,forward);this.vp=multiply(perspective(78*Math.PI/180,w/h,.045,95),cam);
   const draw=(group,offset,view,arms,flex)=>{for(let mesh of this.groups[group])this.drawMesh(mesh,offset,view,arms,mesh.shape.includes("_glove_")?flex:null);};
   draw(0,[0,0,0],cam,false);for(let off of parcels)draw(1,off,cam,false);
+  for(const actor of pose.actors??[])draw(actor.group,[0,0,0],multiply(cam,actor.matrix),false);
   if(pose.flight&&!pose.assembly)draw(1,[0,0,0],multiply(cam,pose.flight),false);
   this.glow(cam);if(pose.flashlight>0)this.torch(pose.flashlight,pose.torchOffset,pose.torchLocal);this.zbuffer.fill(0);const local=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);for(const layer of pose.hands)draw(layer.group,layer.offset,layer.matrix??local,true,layer.flex);this.ctx.putImageData(this.image,0,0);
  }

@@ -1,4 +1,5 @@
-import {createScene,CONFIG,PARCELS,DOCK,newShift,step,forward,nextTarget,canUse,parcelPositions,deliveryCount} from './mission.js';
+import {updateHaunt,hauntLayers} from './haunt.js';
+import {createScene,CONFIG,PARCELS,DOCK,newShift,step,forward,nextTarget,handlingTarget,canUse,parcelPositions,deliveryCount} from './mission.js';
 import {PHYSICS} from "./movement.js";
 import {rigs,beginHandling,advanceHandling,choreography,toggleFlashlight,updateViewmodel} from './handling.js';
 import {Renderer} from './renderer.js';
@@ -13,15 +14,15 @@ let sound,master,hum;
 function audioOn(){try{if(!sound){sound=new AudioContext();master=sound.createGain();master.gain.value=0;master.connect(sound.destination);hum=sound.createOscillator();hum.frequency.value=56;hum.type='sine';hum.connect(master);hum.start();}sound.resume().catch(()=>{});master.gain.setTargetAtTime(settings.audio&&mode==='game'?.026:0,sound.currentTime,.4);}catch{}}
 function beep(hz,time=.12,type='sine',gain=.1){if(!sound||!settings.audio)return;let o=sound.createOscillator(),g=sound.createGain(),now=sound.currentTime;o.type=type;o.frequency.setValueAtTime(hz,now);o.frequency.exponentialRampToValueAtTime(hz*.68,now+time);g.gain.setValueAtTime(gain,now);g.gain.exponentialRampToValueAtTime(.0001,now+time);o.connect(g);g.connect(sound.destination);o.start();o.stop(now+time+.02);}
 function say(line,duration=5){$('#radio').innerHTML='<strong>관제실</strong>'+line;radioUntil=performance.now()+duration*1000;}
-const rows=[['W A S D','이동'],['MOUSE','시점 회전'],['SHIFT','달리기'],['SPACE / WHEEL','점프 · 연속 점프'],['Q','손전등 들기 / 내리기'],['E','상자 들기 · 지정 위치에 내려놓기'],['ESC','일시 정지']];
+const rows=[['W A S D','이동'],['MOUSE','시점 회전'],['SHIFT','달리기'],['SPACE / WHEEL','점프 · 연속 점프 · 방향 입력 중 장애물 넘기'],['Q','손전등 들기 / 내리기'],['E','상자 들기 · 다시 눌러 내려놓기'],['ESC','일시 정지']];
 const links='<div class="panel-actions"><a class="doc" href="unity-migration.html" target="_blank" rel="noopener">Unity 이식 가이드 ↗</a></div>';
 function action(name,label,primary=false){return '<button class="'+(primary?'primary':'secondary')+'" data-action="'+name+'">'+label+'</button>';}
 function plan(){
  const X=x=>105+x*4,Y=z=>100+z*4;
  const rect=(x,z,w,d,fill)=>'<rect class="rack" x="'+X(x)+'" y="'+Y(z)+'" width="'+(w*4)+'" height="'+(d*4)+'" style="fill:'+fill+'"/>';
- let shapes=rect(-15,-22,30,44,'#232820');for(let r of [[-4.8,-16,4,9],[-4.8,-3.7,4,7.7],[-13,-16,3,9],[-13,-3.7,3,12.7],[3,-17,4,3],[6.5,-10,1.3,14],[11,-20,3.9,27],[11.65,7,1.7,8],[-5.9,8.45,2.7,1.5]])shapes+=rect(...r,'#51584b');
- const lines=PARCELS.map((p,i)=>'<circle cx="'+X(p.pos[0])+'" cy="'+Y(p.pos[2])+'" r="2.4" fill="'+(session?.states[i]==='DELIVERED'?'#646a59':'#f3bd51')+'"/>').join('');
- return '<svg class="map-drawing" viewBox="0 0 322 201" aria-label="Sector B 시설 평면도"><defs><pattern id="grid" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M8 0H0V8" stroke="#494e44" fill="none" stroke-width=".32"/></pattern></defs><rect width="322" height="201" fill="url(#grid)"/>'+shapes+lines+'<rect x="'+(X(DOCK[0])-4)+'" y="'+(Y(DOCK[2])-2)+'" width="8" height="4" fill="#9bc8cf"/><circle cx="'+X(session?.x??1.7)+'" cy="'+Y(session?.z??15)+'" r="2.7" fill="#f1f1e2"/><g stroke="#838777" stroke-width=".6" fill="none"><path d="M135 22h38l8-8h23M112 71h62l8-8h23M135 100h40l9-11h21M156 121h19l10-9h20M114 160h64l9-9h17"/></g><g><text x="209" y="17">02번 출고대</text><text x="209" y="66">보관 통로</text><text x="209" y="92">분류 컨베이어</text><text x="209" y="115">상층 캣워크</text><text x="209" y="155">직원 입고대</text></g></svg><div class="map-key"><span><b>●</b> 화물</span><span style="color:#9bc8cf">■ 출고대</span><span>● 작업자</span></div>';
+ let shapes=rect(-43,-9,28,30,'#303031')+rect(-15,-22,30,44,'#232820')+rect(-15.7,12,1.4,4,'#bd9852')+'<text x="-57" y="117">C-01 야간 분류</text>';for(let r of [[-4.8,-16,4,9],[-4.8,-3.7,4,7.7],[-13,-16,3,9],[-13,-3.7,3,12.7],[3,-17,4,3],[6.5,-10,1.3,14],[11,-20,3.9,27],[11.65,7,1.7,8],[-5.9,8.45,2.7,1.5]])shapes+=rect(...r,'#51584b');
+ const lines=PARCELS.map((p,i)=>{const pos=session?.parked?.[i]??p.pos;return '<circle cx="'+X(pos[0])+'" cy="'+Y(pos[2])+'" r="2.4" fill="'+(session?.states[i]==='DELIVERED'?'#646a59':'#f3bd51')+'"/>';}).join('');
+ return '<svg class="map-drawing" viewBox="-75 0 397 201" aria-label="Sector B 시설 평면도"><defs><pattern id="grid" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M8 0H0V8" stroke="#494e44" fill="none" stroke-width=".32"/></pattern></defs><rect width="322" height="201" fill="url(#grid)"/>'+shapes+lines+'<rect x="'+(X(DOCK[0])-4)+'" y="'+(Y(DOCK[2])-2)+'" width="8" height="4" fill="#9bc8cf"/><circle cx="'+X(session?.x??1.7)+'" cy="'+Y(session?.z??15)+'" r="2.7" fill="#f1f1e2"/><g stroke="#838777" stroke-width=".6" fill="none"><path d="M135 22h38l8-8h23M112 71h62l8-8h23M135 100h40l9-11h21M156 121h19l10-9h20M114 160h64l9-9h17"/></g><g><text x="209" y="17">02번 출고대</text><text x="209" y="66">보관 통로</text><text x="209" y="92">분류 컨베이어</text><text x="209" y="115">상층 캣워크</text><text x="209" y="155">직원 입고대</text></g></svg><div class="map-key"><span><b>●</b> 화물</span><span style="color:#9bc8cf">■ 출고대</span><span>● 작업자</span></div>';
 }
 function panel(name,body,title,eyebrow='GDG / 근무 안내'){
  pane=name;$('#eyebrow').textContent=eyebrow;$('#paneTitle').textContent=title;$('#paneBody').innerHTML=body;$('#modal').hidden=false;$('#close').focus();
@@ -29,7 +30,7 @@ function panel(name,body,title,eyebrow='GDG / 근무 안내'){
 function openPane(name){
  if(mode==='game'){pauseShift(false);}
  if(name==='quit')panel(name,'<p>현재 근무를 종료할까요? 진행 중인 배송은 초기화됩니다.</p><div class="panel-actions">'+action('quit','근무 종료',true)+action('brief','계속하기')+'</div>','게임 종료','GDG / 야간 근무');
- if(name==='manual')panel(name,'<p>GDG 상자 다섯 개를 한 개씩 02번 출고대로 운반하세요. 상자에 가까이 다가가 조준선에 노란 테두리가 생기면 E로 집습니다. 출고대에서 E를 다시 눌러 내려놓으세요.</p>'+rows.map(([k,l])=>'<div class="row"><span>'+l+'</span><kbd>'+k+'</kbd></div>').join('')+'<p>상층 캣워크는 동쪽 계단으로 올라갑니다. 마우스가 고정되지 않으면 왼쪽 버튼을 누른 채 드래그하거나 방향키로 시점을 돌릴 수 있습니다.</p>'+ '<div class="panel-actions">'+action('map','구역 지도')+'</div>'+links,'조작 방법','WORK 모드 / 근무자 매뉴얼');
+ if(name==='manual')panel(name,'<p>GDG 상자 다섯 개를 한 개씩 02번 출고대로 운반하세요. 상자에 가까이 다가가 조준선에 노란 테두리가 생기면 E로 집습니다. E를 다시 눌러 앞의 빈 바닥이나 받침대에 내려놓거나 출고대에서 배송하세요. 서쪽 입구는 C-01 야간 분류 구역으로 이어집니다.</p>'+rows.map(([k,l])=>'<div class="row"><span>'+l+'</span><kbd>'+k+'</kbd></div>').join('')+'<p>상층 캣워크는 동쪽 계단으로 올라갑니다. 마우스가 고정되지 않으면 왼쪽 버튼을 누른 채 드래그하거나 방향키로 시점을 돌릴 수 있습니다.</p>'+ '<div class="panel-actions">'+action('map','구역 지도')+'</div>'+links,'조작 방법','WORK 모드 / 근무자 매뉴얼');
  if(name==='map')panel(name,plan()+'<p>직원 입고대에서 중앙 통로를 따라 북쪽으로 가면 출고대가 나옵니다. 동쪽 계단은 상층 화물로 연결됩니다.</p>','구역 지도','SECTOR B / 시설 평면도');
  if(name==='settings')panel(name,'<small>그래픽 품질</small><div class="presets">'+['HIGH','BALANCED','PERFORMANCE'].map(q=>'<button class="preset '+(q===settings.quality?'active':'')+'" data-quality="'+q+'">'+q+'</button>').join('')+'</div><label class="row">렌더 해상도 <output id="scaleVal">'+Math.round(settings.scale*100)+'%</output><input id="scale" type="range" min=".55" max="1" step=".05" value="'+settings.scale+'"></label><label class="row">마우스 감도 <output id="sensVal">'+settings.sensitivity.toFixed(1)+'×</output><input id="sens" type="range" min=".4" max="1.8" step=".1" value="'+settings.sensitivity+'"></label><div class="row">걸을 때 시점 흔들림<button class="toggle '+(settings.motion?'on':'')+'" data-toggle="motion">'+(settings.motion?'ON':'OFF')+'</button></div><div class="row">창고 소리<button class="toggle '+(settings.audio?'on':'')+'" data-toggle="audio">'+(settings.audio?'ON':'OFF')+'</button></div>','설정','SECTOR B / 환경 설정');
  if(name==='pause')panel(name,'<div class="row"><span>배송 완료</span><b>'+deliveryCount(session)+' / 5</b></div><div class="panel-actions">'+action('resume','근무 재개',true)+action('map','구역 지도')+action('settings','설정')+action('manual','조작 방법')+action('brief','메인 메뉴')+'</div>','일시 정지','GDG / 대기 중');
@@ -92,14 +93,15 @@ $('#start').onclick=async()=>{
 };
 function complete(){pauseShift(false);beep(630,.3);panel('complete','<div class="row"><span>출고 내역</span><b>5 / 5건 배송 완료</b></div><div class="row"><span>근무 시간</span><b>'+Math.floor(session.elapsed/60)+'분 '+Math.floor(session.elapsed%60)+'초</b></div><p>화물 다섯 개의 배송을 마쳤습니다. 여섯 번째 서명은 야간 관리자가 처리합니다.</p><div class="panel-actions">'+action('brief','근무 마치기',true)+action('resume','창고 둘러보기')+'</div>','전체 배송 완료','출고 02 / 근무 확인서');}
 let receiptUntil=0;
-function use(){
- if(session.handAction||session.pendingUse||!canUse(session,nextTarget(session),worlds[0].blocks))return;
- if(session.flashlight||session.flashAmount>0){session.restoreTorch=session.flashlight||session.restoreTorch;session.flashlight=false;if(session.flashAmount>0){session.pendingUse=true;return;}}
- if(beginHandling(session,nextTarget(session),worlds[0].blocks))beep(235,.07,'sine',.035);
+function use(target=handlingTarget(session,worlds[0].blocks)){
+ if(session.handAction||session.pendingUse||!canUse(session,target,worlds[0].blocks))return;
+ if(session.flashlight||session.flashAmount>0){session.restoreTorch=session.flashlight||session.restoreTorch;session.flashlight=false;if(session.flashAmount>0){session.pendingUse=target;return;}}
+ if(beginHandling(session,target,worlds[0].blocks))beep(235,.07,'sine',.035);
 }
 function onHandling(result,now,id){
  if(session.restoreTorch){session.flashlight=true;session.restoreTorch=false;}
  if(result==='cancelled'){say('작업이 중단됐습니다. 상자나 출고대를 향해 다시 시도하세요.',2);return;}
+ if(result==='dropped'){beep(195,.11);say(id+' 임시 적치 완료. 다시 집어 배송할 수 있습니다.',2);return;}
  if(result==='picked'){beep(295,.13);say(id+' 집화 완료. 02번 출고대로 운반하세요.',3);return;}
  if(result==='delivered'){
   const n=deliveryCount(session);beep(620,.18);$('#receipt').hidden=false;
@@ -121,14 +123,19 @@ function targetCorners(pos,dock){
 function frame(now){if(mode!=='game')return;const dt=Math.min(.1,Math.max(0,(now-last)/1000));last=now;const s=session;
  if(keys.has('ArrowLeft'))s.yaw+=dt*1.65;if(keys.has('ArrowRight'))s.yaw-=dt*1.65;if(keys.has('ArrowUp'))s.pitch=Math.min(CONFIG.pitchLimit,s.pitch+dt);if(keys.has('ArrowDown'))s.pitch=Math.max(-CONFIG.pitchLimit,s.pitch-dt);
  const was=s.steps;const tick=1/PHYSICS.hz;accumulator+=dt;while(accumulator>=tick){step(s,keys,worlds[0].blocks,tick,jump);jump=false;accumulator-=tick;}updateViewmodel(s,dt);
- if(s.pendingUse&&s.flashAmount===0){s.pendingUse=false;use();if(!s.handAction&&s.restoreTorch){s.flashlight=true;s.restoreTorch=false;}}
+ if(s.pendingUse&&s.flashAmount===0){const target=s.pendingUse;s.pendingUse=null;use(target);if(!s.handAction&&s.restoreTorch){s.flashlight=true;s.restoreTorch=false;}}
  if(s.grounded&&Math.floor(s.steps/1.12)>Math.floor(was/1.12))beep(95,.08,'sine',.04);
  const moving=s.steps>was+.002;const bob=settings.motion&&moving&&s.grounded?Math.sin(s.steps*5.5)*.014:0;
  const active=s.handAction;
  if(active){const result=advanceHandling(s,worlds[0].blocks,dt);if(result)onHandling(result,now,active.target.id);}
- const eye=[s.x,s.y+CONFIG.eye+bob,s.z],facing=forward(s);
- const target=nextTarget(s),available=canUse(s,target,worlds[0].blocks);
+ const facing=forward(s);
+ const threat=updateHaunt(s,worlds[0].blocks,facing,dt);
+ if(threat){say(threat+' 출현. 비상 차단으로 서쪽 통로로 복귀했습니다.',3);beep(110,.52,'triangle',.12);}
+ const useTarget=handlingTarget(s,worlds[0].blocks),available=canUse(s,useTarget,worlds[0].blocks);
+ const target=s.carried<0&&available?useTarget:nextTarget(s);
+ const eye=[s.x,s.y+CONFIG.eye+bob,s.z];
  const pose=choreography(s,eye,available,moving,keys.has('ShiftLeft')||keys.has('ShiftRight'),s.elapsed);
+ pose.actors=hauntLayers(s);pose.clock=s.elapsed;
  renderer.render(eye,facing,parcelPositions(s,pose.hidden),pose,settings.scale);
  const mark=$('#waypoint'),p=$('#prompt'),brackets=$('#target-brackets');
  let msg='';brackets.hidden=true;mark.hidden=true;
@@ -138,8 +145,8 @@ function frame(now){if(mode!=='game')return;const dt=Math.min(.1,Math.max(0,(now
   if(clip&&Math.abs(clip[0])<.92&&Math.abs(clip[1])<.84){mark.hidden=false;mark.style.left=(clip[0]+1)*50+'%';mark.style.top=(1-clip[1])*50+'%';mark.textContent='◆ '+label+' · '+Math.round(distance)+' m';}
   else msg=label+' / '+areaNames[target.area]+' · '+Math.round(distance)+' m';
   if(available){
-   msg='<kbd>E</kbd> '+(target.dock?'상자 내려놓기':'상자 들기');
-   const box=targetCorners(target.pos,target.dock);
+   msg='<kbd>E</kbd> '+(useTarget.dock?'배송하기':useTarget.drop?'상자 내려놓기':'상자 들기');
+   const box=targetCorners(useTarget.pos,useTarget.dock);
    if(box){brackets.hidden=false;['left','top','width','height'].forEach((k,i)=>brackets.style[k]=box[i]+'%');}
   }
  }
