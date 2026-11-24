@@ -57,7 +57,7 @@ void main(){
 const fs=`#version 300 es
 precision highp float;precision highp sampler2DArray;
 in vec3 P,N;in vec2 UV,tile;in vec4 C,Q,shadowPos;
-uniform sampler2DArray atlas;uniform sampler2D shadowMap,floorTex;uniform vec3 eye,lamps[8];uniform float shadowStep,hand,clock,torchPower,clay,character,actorOpacity;uniform vec3 torchPos,torchDir,core;uniform vec4 footprints[2];
+uniform sampler2DArray atlas;uniform sampler2D shadowMap,floorTex;uniform vec3 eye,lamps[8];uniform float lampRed[8];uniform float shadowStep,hand,clock,torchPower,clay,character,actorOpacity;uniform vec3 torchPos,torchDir,core;uniform vec4 footprints[2];
 out vec4 outColor;
 float visibility(vec3 n){
  if(hand>.5||shadowStep==0.)return 1.;vec3 s=shadowPos.xyz/shadowPos.w*.5+.5;
@@ -82,8 +82,8 @@ void main(){
  vec3 base=clay>.5?vec3(.79,.77,.735):sampleC.rgb*C.rgb;float edge=min(min(UV.x,1.-UV.x),min(UV.y,1.-UV.y));
  if(Q.w==1.)base*=.89+.11*smoothstep(.0,.038,edge);
  float shade=visibility(n);vec3 L=normalize(vec3(.35,.81,-.28));
- vec3 amb=mix(vec3(.28,.29,.34),vec3(.66,.73,.89),n.y*.5+.5);
- vec3 lit=amb+vec3(.25,.31,.41)*max(dot(n,L),0.)*(.22+.78*shade);
+ vec3 amb=mix(vec3(.15,.16,.20),vec3(.40,.44,.54),n.y*.5+.5);
+ vec3 lit=amb+vec3(.17,.20,.27)*max(dot(n,L),0.)*(.22+.78*shade);
  float sheen=0.,mist=0.;vec3 v=normalize(eye-P);
  if(hand>.5){vec3 key=normalize(vec3(-.55,.76,.45));lit=vec3(.48,.49,.55)+vec3(.74,.65,.51)*max(dot(n,key),0.)+vec3(.15,.17,.24)*max(dot(n,normalize(vec3(.8,.25,-.4))),0.);sheen=pow(max(dot(n,normalize(v+key)),0.),32.)*Q.y*.4;}
  else{
@@ -91,8 +91,8 @@ void main(){
    vec3 d=lamps[i]-P;float ds=dot(d,d);vec3 l=d*inversesqrt(max(.01,ds));
    vec3 toLamp=lamps[i]-eye;float along=dot(toLamp,-v);float gap=length(toLamp+along*v);
    if(along>0.&&along<distance(eye,P)+.14)mist+=.17*exp(-2.8*gap*gap)+.19*exp(-18.*gap*gap);
-   float beam=smoothstep(-.05,.89,l.y);float falloff=34./(ds+8.)*beam;
-   lit+=vec3(1.,.72,.44)*falloff*(.14+.86*max(dot(n,l),0.))*(.35+.65*shade);
+   float beam=smoothstep(-.05,.89,l.y);float red=lampRed[i];float pulse=1.-red*.12*(.5+.5*sin(clock*2.2+float(i)*1.7));float falloff=mix(25.,36.,red)/(ds+8.)*beam*pulse;
+   lit+=mix(vec3(1.,.72,.44),vec3(1.,.075,.035),red)*falloff*(.14+.86*max(dot(n,l),0.))*(.35+.65*shade);
    sheen+=pow(max(0.,dot(n,normalize(v+l))),mix(13.,29.,grit))*falloff*Q.y*.13;
   }
  }
@@ -134,9 +134,9 @@ void main(){
   float rim=pow(1.-abs(dot(n,v)),2.3);
   col+=vec3(.36,.74,.54)*rim*(.72+.08*sin(clock*1.8));
  }
- if(hand<.5){float dist=distance(eye,P);col=mix(col,vec3(.28,.32,.41),1.-exp(-dist*(P.x< -15.2?.020:.011)));}
+ if(hand<.5){float dist=distance(eye,P);col=mix(col,vec3(.10,.115,.15),1.-exp(-dist*(P.x< -15.2?.020:.011)));}
   // Leave low-light contrast intact while rolling off overlapping lamps and hot materials.
- vec3 hdr=max(vec3(0.),col+vec3(1.,.76,.45)*mist);
+ vec3 hdr=max(vec3(0.),col+vec3(.60,.45,.34)*mist);
  vec3 highlight=max(hdr-.70,vec3(0.));
  float opacity=Q.w==4.&&clay<.5?mix(.67,.89,pow(1.-abs(dot(n,v)),1.5)):1.;
  outColor=vec4(min(hdr,.70)+.30*(1.-exp(-3.33*highlight)),opacity);
@@ -157,9 +157,9 @@ export class Renderer{
  constructor(canvas){
   this.canvas=canvas;this.gl=canvas.getContext('webgl2',{alpha:false,antialias:true,powerPreference:'high-performance'});if(!this.gl)throw Error('WebGL 2 is unavailable. Enable graphics acceleration in desktop Chrome, then reload.');
   const gl=this.gl;this.program=compile(gl,vs,fs);this.depthProgram=compile(gl,vs,depthFS);
-  this.loc={};for(let p of [this.program,this.depthProgram]){let u={};for(let k of ['VP','offset','lightVP','worldObject','objectMatrix','clock','core','clay','character','actorOpacity','atlas','shadowMap','floorTex','eye','lamps','shadowStep','hand','torchPower','torchPos','torchDir','flexPivot','flexForward','flexNormal','flexWidth','flexAmount','digitWidths','knuckles','digitLengths','fingerAmounts','footprints[0]'])u[k]=gl.getUniformLocation(p,k);this.loc[p===this.program?'main':'depth']=u;}
+  this.loc={};for(let p of [this.program,this.depthProgram]){let u={};for(let k of ['VP','offset','lightVP','worldObject','objectMatrix','clock','core','clay','character','actorOpacity','atlas','shadowMap','floorTex','eye','lamps','lampRed[0]','shadowStep','hand','torchPower','torchPos','torchDir','flexPivot','flexForward','flexNormal','flexWidth','flexAmount','digitWidths','knuckles','digitLengths','fingerAmounts','footprints[0]'])u[k]=gl.getUniformLocation(p,k);this.loc[p===this.program?'main':'depth']=u;}
   this.buffers={};
-  const lv=cameraView([0,39,-9],[-14,-39,9]);const ortho=new Float32Array([1/37,0,0,0,0,1/32,0,0,0,0,-2/95,0,0,0,-1,1]);this.lightVP=multiply(ortho,lv);
+  const lv=cameraView([-8,75,11],[-10,-75,5]);const ortho=new Float32Array([1/50,0,0,0,0,1/56,0,0,0,0,-2/150,0,0,0,-1,1]);this.lightVP=multiply(ortho,lv);
  }
  meshBuffer(shape){
   if(!this.buffers[shape]){
@@ -256,15 +256,15 @@ export class Renderer{
   const gl=this.gl,c=this.canvas;const ratio={HIGH:Math.min(devicePixelRatio,1.5),BALANCED:1,PERFORMANCE:.7}[this.quality]*scale;
   const width=Math.max(2,Math.round(c.clientWidth*ratio)),height=Math.max(2,Math.round(c.clientHeight*ratio));if(c.width!==width||c.height!==height){c.width=width;c.height=height;}
   const aspect=width/height,proj=perspective(78*Math.PI/180,aspect,.045,95),vp=multiply(proj,cameraView(eye,forward));this.vp=vp;
-  gl.viewport(0,0,width,height);gl.clearColor(.19,.23,.31,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.useProgram(this.program);
+  gl.viewport(0,0,width,height);gl.clearColor(.07,.08,.11,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.useProgram(this.program);
   const u=this.loc.main;gl.uniform1f(u.character,0);gl.uniform1f(u.clay,0);gl.uniformMatrix4fv(u.VP,false,vp);gl.uniformMatrix4fv(u.lightVP,false,this.lightVP);gl.uniform3fv(u.eye,eye);const right=unit(cross(forward,[0,1,0])),up=cross(right,forward),off=pose.torchOffset??[0,0,0];
   // A viewmodel can overlap nearby geometry; the light origin stays near the eye
   // to avoid placing a light source on the far side of a wall.
   const local=pose.torchLocal?.position??[.325,-.283,-.887],dir=pose.torchLocal?.direction??[-.045,-.025,-1];
   const torch=eye.map((v,i)=>v+right[i]*(local[0]+off[0])+up[i]*(local[1]+off[1])-forward[i]*(local[2]+off[2]));
-  gl.uniform3fv(u.torchPos,torch);gl.uniform3fv(u.torchDir,unit(forward.map((v,i)=>v*(-dir[2])+right[i]*dir[0]+up[i]*dir[1])));gl.uniform1f(u.torchPower,pose.flashlight||0);const lights=eye[0]<-17?[...this.lights].sort((a,b)=>
-   Math.hypot(a[0]-eye[0],a[2]-eye[2])-Math.hypot(b[0]-eye[0],b[2]-eye[2])):this.lights;
-  gl.uniform3fv(u.lamps,new Float32Array(lights.slice(0,8).flat()));
+  gl.uniform3fv(u.torchPos,torch);gl.uniform3fv(u.torchDir,unit(forward.map((v,i)=>v*(-dir[2])+right[i]*dir[0]+up[i]*dir[1])));gl.uniform1f(u.torchPower,pose.flashlight||0);const lights=[...this.lights].sort((a,b)=>Math.hypot(a[0]-eye[0],a[2]-eye[2])-Math.hypot(b[0]-eye[0],b[2]-eye[2])).slice(0,8);
+  while(lights.length<8)lights.push([0,10000,0,0]);
+  gl.uniform3fv(u.lamps,new Float32Array(lights.flatMap(l=>l.slice(0,3))));gl.uniform1fv(u['lampRed[0]'],new Float32Array(lights.map(l=>l[3]??0)));
   const footprints=(pose.actors??[]).flatMap(actor=>actor.footprint?[actor.footprint]:[]).slice(0,2);
   while(footprints.length<2)footprints.push([0,0,1,0]);
   gl.uniform4fv(u['footprints[0]'],footprints.flat());
