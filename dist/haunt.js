@@ -185,9 +185,9 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
   }else if(heard){actor.state='search';actor.timer=5;}
   else if(actor.state==='search'&&!actor.timer){actor.state='patrol';actor.lastKnown=null;}
   const chasing=actor.pursuit&&['alert','search','charge','recovery','windup'].includes(actor.state);
-  if(actor.state==='search'&&actor.lastKnown&&Math.hypot(actor.x-actor.lastKnown[0],actor.z-actor.lastKnown[1])<.75){
+  if(actor.state==='search'&&actor.lastKnown&&(actor.searchPoint||Math.hypot(actor.x-actor.lastKnown[0],actor.z-actor.lastKnown[1])<.75)){
    actor.searchDelay=(actor.searchDelay??0)-dt;
-   if(!actor.searchPoint||actor.searchDelay<=0){
+   if(!actor.searchPoint||actor.searchDelay<=0||Math.hypot(actor.x-actor.searchPoint[0],actor.z-actor.searchPoint[1])<.65){
     actor.searchDelay=1.4;
     const phase=(actor.scanPhase??0)+2.40;actor.scanPhase=phase;
     const center=actor.lastKnown;
@@ -223,7 +223,7 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
    const angle=actor.yaw+turn,x=actor.x+Math.sin(angle)*stride,z=actor.z+Math.cos(angle)*stride;
    if(inMap(x,z)&&clear(local,(actor.x+x)/2,(actor.z+z)/2,sizes[i],type.float,bodyHeights[i])&&clear(local,x,z,sizes[i],type.float,bodyHeights[i])){actor.x=x;actor.z=z;moved=true;break;}
   }
-  if(!moved){actor.routeDelay=0;actor.speed*=.82;}
+  if(!moved){actor.routeDelay=Math.min(actor.routeDelay,.075);actor.speed*=.82;}
   const beat=Math.floor(actor.phase/Math.PI);
   actor.phase+=dt*(1+actor.speed*(i===2?5.3:2.4));
   if(previous!==actor.state||beat!==Math.floor(actor.phase/Math.PI)){
