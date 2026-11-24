@@ -4,3 +4,5 @@
 @media(max-width:650px){:root{--s:min(.16vw,.087dvh)}.menu-stage{left:7%}#briefing:before{background:linear-gradient(90deg,#0b0a0b99,transparent)}.loading-strip{width:90vw}.work-compass{width:100px;right:12px}.work-mission{left:12px;top:12px;min-width:130px}}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
 
 #torch-status{position:absolute;pointer-events:none;bottom:65px;right:72px;color:#fff1d4;background:#171617cf;padding:6px 10px;border:1px solid #bfa16a;border-radius:4px;font:600 12px system-ui,sans-serif;text-shadow:0 1px 3px #000}
+
+#world.captured{filter:brightness(.76) contrast(1.28) saturate(1.35) sepia(.18);}
