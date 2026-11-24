@@ -92,6 +92,14 @@ $('#start').onclick=async()=>{
   reportProgress(.96,'첫 화면 준비 중');$('#play').hidden=false;
   const eye=[session.x,session.y+CONFIG.eye,session.z],facing=forward(session);
   const pose=choreography(session,eye,false,false,false,session.elapsed);
+  // Prime each creature's GPU draw path under the loading screen, not on a jump scare.
+  if(renderer.gl&&!renderer.hauntPrimed){
+   for(let kind=0;kind<4;kind++){
+    pose.actors=hauntLayers({...session,haunt:[{kind,x:eye[0]+facing[0]*3,z:eye[2]+facing[2]*3,yaw:0,phase:1,age:1,speed:2,aggression:.5,state:'alert'}]});
+    renderer.render(eye,facing,[],pose,.55);await painted();
+   }
+   renderer.gl.finish();renderer.hauntPrimed=true;pose.actors=[];
+  }
   renderer.render(eye,facing,parcelPositions(session,pose.hidden),pose,settings.scale);
   reportProgress(1,'출근 준비 완료');await painted();
   $('#loading').hidden=true;resume();say('GDG 표식이 있는 상자를 02번 출고대로 운반하세요.',4);
@@ -138,7 +146,7 @@ function targetCorners(pos,dock){
  const xx=points.map(p=>(p[0]+1)*50),yy=points.map(p=>(1-p[1])*50);
  return [Math.min(...xx),Math.min(...yy),Math.max(...xx)-Math.min(...xx),Math.max(...yy)-Math.min(...yy)];
 }
-function frame(now){if(mode!=='game')return;const dt=Math.min(.1,Math.max(0,(now-last)/1000));last=now;const s=session;
+function frame(now){if(mode!=='game')return;const dt=Math.min(.067,Math.max(0,(now-last)/1000));last=now;const s=session;
  if(keys.has('ArrowLeft'))s.yaw+=dt*1.65;if(keys.has('ArrowRight'))s.yaw-=dt*1.65;if(keys.has('ArrowUp'))s.pitch=Math.min(CONFIG.pitchLimit,s.pitch+dt);if(keys.has('ArrowDown'))s.pitch=Math.max(-CONFIG.pitchLimit,s.pitch-dt);
  const was=s.steps;const tick=1/PHYSICS.hz;if(s.encounterHit){keys.clear();jump=false;s.vx=s.vz=s.vy=0;accumulator=0;}else accumulator+=dt;while(accumulator>=tick){step(s,keys,worlds[0].blocks,tick,jump);jump=false;accumulator-=tick;}equipmentClearance(s,worlds[0].blocks,dt,parcelBlocks(s));updateViewmodel(s,dt);
  if(s.pendingUse&&s.flashAmount===0){const target=s.pendingUse;s.pendingUse=null;use(target.drop?dropTarget(s,worlds[0].blocks):target,true);if(!s.handAction&&s.restoreTorch){s.flashlight=true;s.restoreTorch=false;}}
@@ -174,7 +182,11 @@ function frame(now){if(mode!=='game')return;const dt=Math.min(.1,Math.max(0,(now
  const view=brace?forward({...s,pitch:s.pitch-.070*reach}):facing;
  const pose=choreography(s,eye,available,moving,keys.has('ShiftLeft')||keys.has('ShiftRight'),s.elapsed,view);
  pose.actors=[...hauntLayers(s),...workerLegLayers(s)];pose.clock=s.elapsed;
- renderer.render(eye,view,parcelPositions(s,pose.hidden),pose,settings.scale);
+ // Hysteresis: lower render resolution only after sustained slow frames.
+ if(dt>.025){s.slowFrames=(s.slowFrames??0)+1;s.fastFrames=0;}else if(dt<.018){s.fastFrames=(s.fastFrames??0)+1;s.slowFrames=0;}else{s.slowFrames=0;s.fastFrames=0;}
+ if((s.slowFrames??0)>=10){s.adaptiveScale=Math.max(.65,(s.adaptiveScale??1)-.10);s.slowFrames=0;}
+ if((s.fastFrames??0)>=180){s.adaptiveScale=Math.min(1,(s.adaptiveScale??1)+.05);s.fastFrames=0;}
+ renderer.render(eye,view,parcelPositions(s,pose.hidden),pose,settings.scale*(s.adaptiveScale??1));
  if(s.showTraversal||document.querySelector('#traversal-debug'))drawTraversalDebug(s,worlds[0].blocks,renderer,pose,eye,view);
  const mark=$('#waypoint'),p=$('#prompt'),brackets=$('#target-brackets');
  let msg=s.climbHint>s.elapsed?'높은 선반에 오르려면 E로 상자를 내려놓으세요.':'';brackets.hidden=true;mark.hidden=true;
