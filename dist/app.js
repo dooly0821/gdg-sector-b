@@ -143,6 +143,7 @@ function frame(now){if(mode!=='game')return;const dt=Math.min(.1,Math.max(0,(now
  const was=s.steps;const tick=1/PHYSICS.hz;if(s.encounterHit){keys.clear();jump=false;s.vx=s.vz=s.vy=0;accumulator=0;}else accumulator+=dt;while(accumulator>=tick){step(s,keys,worlds[0].blocks,tick,jump);jump=false;accumulator-=tick;}equipmentClearance(s,worlds[0].blocks,dt,parcelBlocks(s));updateViewmodel(s,dt);
  if(s.pendingUse&&s.flashAmount===0){const target=s.pendingUse;s.pendingUse=null;use(target.drop?dropTarget(s,worlds[0].blocks):target,true);if(!s.handAction&&s.restoreTorch){s.flashlight=true;s.restoreTorch=false;}}
  if(s.grounded&&Math.floor(s.steps/1.12)>Math.floor(was/1.12))beep(95,.08,'sine',.04);
+ if(s.zoneScare){const zone=s.zoneScare;s.zoneScare=null;if(zone==='lab'||zone==='waste'){beep(zone==='lab'?64:43,.42,'triangle',.095);if(zone==='lab')say('경고: 격리 설비의 접근 제한이 해제되었습니다.',2.6);}}
  const moving=s.steps>was+.002;const bob=settings.motion&&moving&&s.grounded?Math.sin(s.steps*5.5)*.014:0;
  const active=s.handAction;
  if(active){const result=advanceHandling(s,worlds[0].blocks,dt);if(result)onHandling(result,now,active.target.id);}
