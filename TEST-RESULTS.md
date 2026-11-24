@@ -30,3 +30,12 @@ Node v22.16.0.
 - PASS: offline CPU renderer output at 1100×619 for empty, torch, and carry poses. These are not WebGL browser screenshots.
 - Source mesh checks: see modeling/mesh-report.json.
 - Not verified: real browser rendering, GPU frame rate, pointer lock, embedding, full contest eligibility.
+
+# V3.5 glove articulation follow-up — 2026-11-24
+- Base: `7ee6224b34c62af0b4d732ccc8b5ea77d17f1b8c` (`main`).
+- PASS: restored missing `check-physics.mjs` and `check-mission.mjs`. Five parcel pickup/delivery flows at 30/60/120 Hz, including upper parcel, Q during carry, distinct dock slots, cancellation and duplicate guards. Mission tests position the player at collision-free approaches; they do not simulate all walking routes. Separate physics checks exercise ramp ascent/descent, wall collision, jump height, airborne momentum and buffered bunny hop.
+- PASS: existing contact-motion (242 phases), hand-timing and dual-carry tests; 3,175,846 sampled transfer vertices. Finger-motion: 471,408 samples across both relaxed gloves, fixed palm and continuous two-joint bends.
+- PASS: packed static mesh contact samples. Minimum clearance: carry 3.99 mm, support 3.34 mm, torch barrel 4.96 mm; guard/switch have no penetrating samples. All glove meshes remain connected and watertight. These samples do not establish continuous triangle collision freedom or cover arbitrary world geometry; the original foreground viewmodel depth behavior remains.
+- PASS: actual headless Chromium WebGL2 startup, compiled shaders, Q keyboard equip and screenshots inspected at 1280×720; no page errors. SwiftShader was used, so hardware GPU performance, subjective smoothness, and complete browser-driven delivery routes remain unverified.
+- Browser reproduction: serve `dist` at port 8090, run `node scripts/check-browser.mjs` with Playwright available and `/usr/bin/chromium` installed; optional `QA_CAPTURE_DIR` saves screenshots. No runtime dependency or deployment setting was added.
+- Preserved: map, UI, all existing texture files, mission and movement source, Vercel configuration, and paths within `dist`.

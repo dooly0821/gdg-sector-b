@@ -19,6 +19,14 @@ def chain(p,pts,rs):
  d=np.full(p.shape[:-1],1.); 
  for a,b,r,s in zip(pts[:-1],pts[1:],rs[:-1],rs[1:]):d=sm(d,cap(p,a,b,r,s),.0018)
  return d
+def padded_chain(p, digit):
+ # Reinforced fabric over PIP/DIP joints; retain the authored contact surface.
+ pts,rs=digit
+ d=chain(p,pts,rs)
+ for i in [3,6]:
+  d=sm(d,ell(p,pts[i],[rs[i]*1.14,rs[i]*1.14,rs[i]*1.14]),.0015)
+ return d
+
 def surface(field,lo,hi,step=.0031):
  grid=[np.arange(a,b+step,step,dtype=np.float32) for a,b in zip(lo,hi)]; p=np.stack(np.meshgrid(*grid,indexing='ij'),-1); f=gaussian_filter(field(p),.55)
  v,faces,_,_=marching_cubes(f,0,spacing=(step,)*3,allow_degenerate=False); v+=A(lo);m=trimesh.Trimesh(v,faces,process=False);trimesh.repair.fix_normals(m);return m
@@ -82,7 +90,7 @@ def relaxed(pose,side,wrist,F,carry=False):
   d=sm(d,ell(p,[-.030,-.004,.040],[.029,.027,.032]),.010)
   d=sm(d,ell(p,[.024,-.003,.042],[.025,.023,.029]),.008)
   d=sm(d,ell(p,[0,.009,.096],[.042,.018,.026]),.007)
-  for digit in digits:d=sm(d,chain(p,*digit),.0044 if carry else .0040)
+  for digit in digits:d=sm(d,padded_chain(p,digit),.0044 if carry else .0040)
   return sm(d,chain(p,*thumb),.0075)
  m=surface(field,[-.11,-.108,-.050],[.083,.064,.222])
  x,y,z=m.triangles_center.T;lab=np.full(len(x),'canvas',dtype='<U10')
@@ -93,6 +101,10 @@ def relaxed(pose,side,wrist,F,carry=False):
  lab[(y>.011)&(p<1.18)]='seam';lab[(y>.011)&(p<.93)]='patch'
  lab[(y>.011)&(p>.93)&(p<1.18)&(np.sin(np.arctan2((z-.056)/.044,x/.031)*34)>.25)]='thread'
  lab[(y>.0065)&(abs(z-(.101-.155*abs(x)))<.0018)&(abs(x)<.045)]='seam'
+ for pts,rs in digits:
+  for i in [3,6]:
+   dist=np.linalg.norm(m.triangles_center-pts[i],axis=1)
+   lab[(abs(dist-rs[i]*1.08)<.0012)&(y>.006)]='seam'
  emit(pose,'glove',m,lab,fn)
  flexes[pose]={'pivot':fn(A([0,0,.087])).tolist(),'forward':F.tolist(),'normal':N.tolist(),'width':W.tolist()}
 for s,p in [(-1,'emptyL'),(1,'emptyR')]:
@@ -112,7 +124,7 @@ def carryhand(pose,side):
  def field(p):
   d=sm(ell(p,[.274,-.480,-.661],[.042,.057,.056]),cap(p,wrist,[.283,-.502,-.636],.039,.043),.011)
   d=sm(d,ell(p,[.264,-.448,-.651],[.032,.034,.038]),.008)
-  for digit in digits:d=sm(d,chain(p,*digit),.0028)
+  for digit in digits:d=sm(d,padded_chain(p,digit),.0028)
   d=sm(d,chain(p,*thumb),.005)
   return np.maximum(d,.004-box_sdf(p+A([0,.047,0])))
  m=surface(field,[.14,-.615,-.82],[.374,-.374,-.515],.0028)
@@ -130,7 +142,7 @@ for j,(x,z,l,r) in enumerate([(-.033,.089,.075,.014),(-.009,.099,.086,.015),(.01
 thumb=curve(inv(A([[-.205,-.647,-.615],[-.178,-.615,-.638],[-.146,-.585,-.659],[-.132,-.550,-.665]])),[.020,.018,.015,.013])
 def supportfield(p):
  d=sm(ell(p,[0,0,.056],[.053,.032,.060]),ell(p,[0,.003,.008],[.037,.029,.035]),.012)
- for digit in digits:d=sm(d,chain(p,*digit),.004)
+ for digit in digits:d=sm(d,padded_chain(p,digit),.004)
  d=sm(d,chain(p,*thumb),.006)
  return np.maximum(d,.003-box_sdf(fn(p)))
 # Lift wrist to position the inner palm directly against the lower surface (y=-.584).
@@ -143,13 +155,13 @@ angle=.43;c,s=np.cos(angle),np.sin(angle);rot=A([[c,0,s],[0,1,0],[-s,0,c]])
 pivot=A([.340,-.312,-.700]);shift=A([.018,-.030,.137]);tilt=-.24;ct,st=np.cos(tilt),np.sin(tilt);tiltR=A([[ct,-st,0],[st,ct,0],[0,0,1]]);rot=tiltR@rot;base_tf=lambda p:1.12*(p-pivot)@rot.T+pivot+shift
 x0,y0=.318,-.272;digits=[];roll=.58;cr,sr=np.cos(roll),np.sin(roll);rr=A([[cr,-sr,0],[sr,cr,0],[0,0,1]]);axis=A([x0,y0,0]);tf=lambda p:base_tf((p-axis)@rr.T+axis);gf=tf
 for j,z in enumerate([-.747,-.715,-.684,-.654]):
- r=[.0148,.0152,.0139,.0124][j];theta=np.deg2rad([-12,-53,-99,-145,-190]);radii=.0355+np.array([r,r*.98,r*.92,r*.82,r*.72])+.002
+ r=[.0148,.0152,.0139,.0124][j];theta=np.deg2rad([-12,-53,-99,-145,-190])+np.deg2rad([3,0,-3,-7][j]);radii=.0355+np.array([r,r*.98,r*.92,r*.82,r*.72])+.002
  pts=np.column_stack([x0+radii*np.cos(theta),y0+radii*np.sin(theta),z+np.array([0,0,.001,.004,.007])]);digits.append(curve(pts,[r,r*.98,r*.92,r*.82,r*.72]))
 thumb=curve([[.383,-.250,-.691],[.367,-.230,-.720],[.337,-.217,-.738],[.307,-.222,-.750]],[.017,.015,.013,.011]);wrist=A([.426,-.347,-.610])
 def gripfield(p):
  d=sm(ell(p,[.381,-.274,-.696],[.035,.047,.061]),cap(p,wrist,[.396,-.290,-.662],.039,.039),.011)
  d=sm(d,ell(p,[.377,-.250,-.687],[.030,.031,.045]),.007)
- for digit in digits:d=sm(d,chain(p,*digit),.0023)
+ for digit in digits:d=sm(d,padded_chain(p,digit),.0023)
  d=sm(d,chain(p,*thumb),.005)
  # Clearance around barrel; thumb and fingertip contacts stay outside hard surface.
  radial=np.hypot(p[...,0]-x0,p[...,1]-y0)

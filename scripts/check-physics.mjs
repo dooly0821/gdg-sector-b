@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {newShift,step,surface} from '../dist/mission.js';
+import {PHYSICS as P} from '../dist/movement.js';
+const dt=1/P.hz,none=new Set(),w=new Set(['KeyW']);
+let s=newShift();s.yaw=0;for(let i=0;i<120;i++)step(s,w,[],dt);assert.ok(Math.abs(Math.hypot(s.vx,s.vz)-P.walk)<.01);
+const speed=Math.hypot(s.vx,s.vz);step(s,none,[],dt,true);assert.ok(!s.grounded);assert.ok(Math.abs(Math.hypot(s.vx,s.vz)-speed)<1e-6);
+let apex=s.y,buffered=false,hopped=false;for(let i=0;i<180;i++){const request=!buffered&&s.vy<0&&s.y<.15;if(request)buffered=true;const was=s.grounded;step(s,none,[],dt,request);apex=Math.max(apex,s.y);if(buffered&&was&&!s.grounded){hopped=true;break;}}assert.ok(apex>.94&&apex<1.01);assert.ok(hopped,'buffered bunny hop');
+s=newShift();s.x=12.5;s.z=15.1;s.yaw=0;for(let i=0;i<300;i++)step(s,w,[],dt);assert.ok(s.y>3.59,'ramp to upper deck');s.yaw=Math.PI;for(let i=0;i<400;i++)step(s,w,[],dt);assert.ok(s.y<.01,'ramp descent');
+s=newShift();s.x=0;s.z=2;s.yaw=0;for(let i=0;i<180;i++)step(s,w,[[-2,-.5,2,.5,0,2]],dt);assert.ok(s.z>=.5+P.radius-.002,'wall collision');
+assert.equal(surface(13,-4,3.6),3.6);console.log('PASS: walk speed, airborne momentum, jump apex, buffered bunny hop, upper ramp round trip, wall collision');

@@ -37,3 +37,9 @@
 - Added original material textures, improved torch mesh, grip pose, viewmodel lighting, and packed runtime geometry.
 - Preserved V3 movement and mission logic; Q toggle and E interlock unchanged.
 - Added editable GLB/OBJ assets and generator. No finger skinning yet.
+
+## V3.5 glove articulation follow-up
+- Split relaxed/reaching finger curl into two serial joint regions in WebGL and CPU fallback, keeping the palm and cuff stationary.
+- Added rounded joint reinforcement and seam accents using existing glove materials/textures; regenerated source OBJ/GLB and packed runtime meshes.
+- Staggered flashlight finger wrap angles for the finger cascade; kept hand/tool transforms and authored contact clearance.
+- Restored missing mission/physics regression scripts and added finger continuity and Chromium smoke checks. See TEST-RESULTS.md for measured coverage and limits.

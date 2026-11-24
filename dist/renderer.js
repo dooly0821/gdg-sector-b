@@ -9,7 +9,19 @@ uniform mat4 VP,lightVP;uniform vec3 offset;uniform vec3 flexPivot,flexForward,f
 out vec3 P,N;out vec2 UV,tile;out vec4 C,Q,shadowPos;
 void main(){
  mat3 m=mat3(ax,ay,az);vec3 pp=p,nn=n;
- if(abs(flexAmount)>.00001){vec3 rel=p-flexPivot;float z=dot(rel,flexForward),y=dot(rel,flexNormal),w=dot(rel,flexWidth);float a=flexAmount*smoothstep(.006,.075,z)*(1.+.20*clamp(w/.05,-1.,1.));float c=cos(a),s=sin(a);pp+=flexForward*(z*c+y*s-z)+flexNormal*(y*c-z*s-y);float nz=dot(n,flexForward),ny=dot(n,flexNormal);nn+=flexForward*(nz*c+ny*s-nz)+flexNormal*(ny*c-nz*s-ny);}
+ // Two serial joints; palm and cuff remain fixed. Match software.js.
+ if(abs(flexAmount)>.00001){
+  for(int j=0;j<2;j++){
+   float joint=j==0?.006:.046;
+   vec3 pivot=flexPivot+flexForward*joint,rel=pp-pivot;
+   float z=dot(rel,flexForward),y=dot(rel,flexNormal),w=dot(rel,flexWidth);
+   float weight=smoothstep(0.,.018,z),a=flexAmount*(j==0?.55:.45)*weight*(1.+.20*clamp(w/.05,-1.,1.));
+   float c=cos(a),s=sin(a);
+   pp+=flexForward*(z*c+y*s-z)+flexNormal*(y*c-z*s-y);
+   float nz=dot(nn,flexForward),ny=dot(nn,flexNormal);
+   nn+=flexForward*(nz*c+ny*s-nz)+flexNormal*(ny*c-nz*s-ny);
+  }
+ }
  P=origin+m*pp+offset;
  N=normalize(mat3(ax/dot(ax,ax),ay/dot(ay,ay),az/dot(az,az))*nn);
  vec3 scale=vec3(length(ax),length(ay),length(az));vec3 an=abs(n);
