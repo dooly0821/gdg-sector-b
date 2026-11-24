@@ -24,12 +24,14 @@ function plan(){
  const X=x=>8+(x+43)*5,Y=z=>8+(z+22)*5;
  const rect=(x,z,w,d,fill)=>'<rect x="'+X(x)+'" y="'+Y(z)+'" width="'+w*5+'" height="'+d*5+'" fill="'+fill+'" stroke="#77746a" stroke-width=".6"/>';
  const label=(x,z,name)=>'<text x="'+X(x)+'" y="'+Y(z)+'" font-size="8" fill="#d4c7a7">'+name+'</text>';
- let shapes=rect(-43,-9,28,30,'#303031')+rect(-15,-22,30,44,'#232820')+rect(-43,21,28,33,'#322729')+rect(-15,22,30,32,'#303331');
+ let shapes=rect(-43,-9,28,30,'#303031')+rect(-15,-22,30,44,'#232820')+rect(-43,21,28,33,'#322729')+rect(-15,22,30,32,'#303331')+rect(-43,54,28,24,'#352d26')+rect(-15,54,30,24,'#42292d');
  for(const r of [[-4.8,-16,4,9],[-4.8,-3.48,4,7.48],[-13,-16,3,9.45],[-13,-3.48,3,12.48],[3,-17,4,3],[-27,6.3,4,1.4],[-40,27.2,5,1.6],[-37.3,43.2,4.6,1.6],[-25.3,28.2,4.6,1.6],[-25.3,46.2,4.6,1.6],[-11.3,27.2,4.6,1.6],[-11.3,43.2,4.6,1.6],[2.7,28.2,4.6,1.6],[2.7,45.2,4.6,1.6]])shapes+=rect(...r,'#55594f');
- shapes+=rect(-15.7,12,1.4,4,'#bd9852')+rect(-3,21.6,6,1,'#bd9852')+rect(-33,20.6,6,1,'#bd9852')+rect(-15.5,34,1,6,'#bd9852');
- shapes+=label(-40,-5,'C-01 분류동')+label(-13,-18,'B 메인 창고')+label(-40,24,'D-03 반품동')+label(-13,24,'D-02 이송동');
+ shapes+=rect(-15.7,12,1.4,4,'#bd9852')+rect(-3,21.6,6,1,'#bd9852')+rect(-33,20.6,6,1,'#bd9852')+rect(-15.5,34,1,6,'#bd9852')+rect(-33,53.6,6,1,'#bd9852')+rect(-3,53.6,6,1,'#bd9852')+rect(-15.5,63,1,6,'#bd9852');
+ for(const [x,z] of [[-37,65],[-22,74],[-7,65],[8,74]])shapes+=rect(x-1.35,z-1,2.7,2,'#55594f');
+ for(const [x,z] of [[-32,68],[-2,68]])shapes+=rect(x-1.5,z-1.5,3,3,'#71988b');
+ shapes+=label(-40,-5,'C-01 분류동')+label(-13,-18,'B 메인 창고')+label(-40,24,'D-03 반품동')+label(-13,24,'D-02 이송동')+label(-40,56,'C-02 폐기물 처리동')+label(-13,56,'D-04 격리실험동');
  const lines=(session?.cargo??PARCELS).map((p,i)=>{if(session&&session.states[i]!=='AVAILABLE')return '';const pos=session?.parked?.[i]??p.pos;return '<circle cx="'+X(pos[0])+'" cy="'+Y(pos[2])+'" r="2" fill="#f3bd51"/>';}).join('');
- return '<svg class="map-drawing" viewBox="0 0 306 396" aria-label="GDG 시설 평면도">'+shapes+lines+'<rect x="'+(X(DOCK[0])-4)+'" y="'+(Y(DOCK[2])-2)+'" width="8" height="4" fill="#9bc8cf"/><circle cx="'+X(session?.x??1.7)+'" cy="'+Y(session?.z??15)+'" r="3" fill="#f1f1e2"/></svg><div class="map-key"><span>● 화물</span><span style="color:#9bc8cf">■ 출고대</span><span>● 작업자</span></div>';
+ return '<svg class="map-drawing" viewBox="0 0 306 516" aria-label="GDG 시설 평면도">'+shapes+lines+'<rect x="'+(X(DOCK[0])-4)+'" y="'+(Y(DOCK[2])-2)+'" width="8" height="4" fill="#9bc8cf"/><circle cx="'+X(session?.x??1.7)+'" cy="'+Y(session?.z??15)+'" r="3" fill="#f1f1e2"/></svg><div class="map-key"><span>● 화물</span><span style="color:#9bc8cf">■ 출고대</span><span>● 작업자</span></div>';
 }
 function panel(name,body,title,eyebrow='GDG / 근무 안내'){
  pane=name;$('#eyebrow').textContent=eyebrow;$('#paneTitle').textContent=title;$('#paneBody').innerHTML=body;$('#modal').hidden=false;$('#close').focus();
@@ -37,7 +39,7 @@ function panel(name,body,title,eyebrow='GDG / 근무 안내'){
 function openPane(name){
  if(mode==='game'){pauseShift(false);}
  if(name==='quit')panel(name,'<p>현재 근무를 종료할까요? 진행 중인 배송은 초기화됩니다.</p><div class="panel-actions">'+action('quit','근무 종료',true)+action('brief','계속하기')+'</div>','게임 종료','GDG / 야간 근무');
- if(name==='manual')panel(name,'<p>GDG 상자 30개를 한 개씩 02번 출고대로 운반하세요. 상자에 가까이 다가가 조준선에 노란 테두리가 생기면 E로 집습니다. E를 다시 눌러 앞의 빈 바닥이나 받침대에 내려놓거나 출고대에서 배송하세요. 서쪽 입구는 C-01 야간 분류 구역으로 이어집니다.</p>'+rows.map(([k,l])=>'<div class="row"><span>'+l+'</span><kbd>'+k+'</kbd></div>').join('')+'<p>C를 누르면 앉습니다. 빈 선반 칸 앞에서 C + W로 진입하고, 선반을 향해 W + Space를 누르면 자동으로 몸을 접어 오릅니다. B-12 측면의 계단식 발판을 이용하면 최상층까지 오를 수 있습니다. 높은 선반은 상자를 내려놓고 오르세요. 상층 캣워크는 동쪽 계단으로 올라갑니다. 마우스가 고정되지 않으면 왼쪽 버튼을 누른 채 드래그하거나 방향키로 시점을 돌릴 수 있습니다.</p>'+ '<div class="panel-actions">'+action('map','구역 지도')+'</div>'+links,'조작 방법','WORK 모드 / 근무자 매뉴얼');
+ if(name==='manual')panel(name,'<p>GDG 상자 30개를 한 개씩 02번 출고대로 운반하세요. 상자에 가까이 다가가 조준선에 노란 테두리가 생기면 E로 집습니다. E를 다시 눌러 앞의 빈 바닥이나 받침대에 내려놓거나 출고대에서 배송하세요. 서쪽 입구는 C-01 야간 분류 구역으로 이어집니다.</p>'+rows.map(([k,l])=>'<div class="row"><span>'+l+'</span><kbd>'+k+'</kbd></div>').join('')+'<p>C를 누르면 앉습니다. 빈 선반 칸 앞에서 C + W로 진입하고, 선반을 향해 W + Space를 누르면 자동으로 몸을 접어 오릅니다. B-12 측면의 계단식 발판을 이용하면 최상층까지 오를 수 있습니다. 높은 선반은 상자를 내려놓고 오르세요. 상층 캣워크는 동쪽 계단으로 올라갑니다. ESCAPE DECK 표지의 높은 발판은 피신 지점입니다. 귀신은 은신처를 조사하고 돌아올 수 있으니 발소리와 손전등에 주의하세요. 마우스가 고정되지 않으면 왼쪽 버튼을 누른 채 드래그하거나 방향키로 시점을 돌릴 수 있습니다.</p>'+ '<div class="panel-actions">'+action('map','구역 지도')+'</div>'+links,'조작 방법','WORK 모드 / 근무자 매뉴얼');
  if(name==='map')panel(name,plan()+'<p>직원 입고대에서 중앙 통로를 따라 북쪽으로 가면 출고대가 나옵니다. 동쪽 계단은 상층 화물로 연결됩니다.</p>','구역 지도','SECTOR B / 시설 평면도');
  if(name==='settings')panel(name,'<small>그래픽 품질</small><div class="presets">'+['HIGH','BALANCED','PERFORMANCE'].map(q=>'<button class="preset '+(q===settings.quality?'active':'')+'" data-quality="'+q+'">'+q+'</button>').join('')+'</div><label class="row">렌더 해상도 <output id="scaleVal">'+Math.round(settings.scale*100)+'%</output><input id="scale" type="range" min=".55" max="1" step=".05" value="'+settings.scale+'"></label><label class="row">마우스 감도 <output id="sensVal">'+settings.sensitivity.toFixed(1)+'×</output><input id="sens" type="range" min=".4" max="1.8" step=".1" value="'+settings.sensitivity+'"></label><div class="row">걸을 때 시점 흔들림<button class="toggle '+(settings.motion?'on':'')+'" data-toggle="motion">'+(settings.motion?'ON':'OFF')+'</button></div><div class="row">창고 소리<button class="toggle '+(settings.audio?'on':'')+'" data-toggle="audio">'+(settings.audio?'ON':'OFF')+'</button></div>','설정','SECTOR B / 환경 설정');
  if(name==='pause')panel(name,'<div class="row"><span>배송 완료</span><b>'+deliveryCount(session)+' / '+MISSION_TOTAL+'</b></div><div class="panel-actions">'+action('resume','근무 재개',true)+action('map','구역 지도')+action('settings','설정')+action('manual','조작 방법')+action('brief','메인 메뉴')+'</div>','일시 정지','GDG / 대기 중');
@@ -127,7 +129,7 @@ function onHandling(result,now,id){
  }
 }
 let finishAt=null;
-const areaNames={'Employee intake':'직원 입고대','Storage cross aisle':'보관 통로','Conveyor sorting':'컨베이어 분류대','Upper catwalk':'상층 캣워크','Loading aisle':'하역 통로','Outbound dispatch':'02번 출고대','Annex freight':'C-01 적재 화물','Annex rack':'C-01 선반','High storage':'B-12 상층 선반','Transfer hall':'D-02 이송동','Returns hall':'D-03 반품동'};
+const areaNames={'Employee intake':'직원 입고대','Storage cross aisle':'보관 통로','Conveyor sorting':'컨베이어 분류대','Upper catwalk':'상층 캣워크','Loading aisle':'하역 통로','Outbound dispatch':'02번 출고대','Annex freight':'C-01 적재 화물','Annex rack':'C-01 선반','High storage':'B-12 상층 선반','Transfer hall':'D-02 이송동','Returns hall':'D-03 반품동','Waste processing':'C-02 폐기물 처리동','Containment lab':'D-04 격리실험동'};
 function targetCorners(pos,dock){
  const w=dock?1.25:CONFIG.parcelWidth/2,h=dock?.12:CONFIG.parcelWidth*.88,d=dock?.82:CONFIG.parcelWidth*.41;
  const points=[];for(const x of [-w,w])for(const y of [0,h])for(const z of [-d,d]){
