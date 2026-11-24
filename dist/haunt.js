@@ -61,23 +61,34 @@ const inMap=(x,z)=>x>-42.5&&x<14.35&&z>-21.1&&z<53.5&&(x>=-15||z>-8.65);
 const sizes=[.35,.34,.44,.32];
 function detour(actor,target,blocks){
  const cell=.65,r=sizes[actor.kind],y=cast[actor.kind].float,h=bodyHeights[actor.kind];
- const local=blocks.filter(b=>b[2]>actor.x-14&&b[0]<actor.x+14&&b[3]>actor.z-14&&b[1]<actor.z+14);
- const gx=Math.round((target[0]-actor.x)/cell),gz=Math.round((target[1]-actor.z)/cell);
- const queue=[[0,0,null,0]],visited=new Set(['0,0']);
- for(let n=0;queue.length&&n<340;n++){
-  queue.sort((a,b)=>b[3]-a[3]);
-  const [cx,cz,first]=queue.pop();
-  if(Math.abs(cx-gx)+Math.abs(cz-gz)<=1)return first;
-  for(const [dx,dz] of [[1,0],[0,1],[-1,0],[0,-1]]){
+ const local=blocks.filter(b=>b[2]>actor.x-18&&b[0]<actor.x+18&&b[3]>actor.z-18&&b[1]<actor.z+18);
+ const gx=(target[0]-actor.x)/cell,gz=(target[1]-actor.z)/cell;
+ const heuristic=(x,z)=>Math.hypot(x-gx,z-gz);
+ const queue=[{x:0,z:0,g:0,first:null,f:heuristic(0,0)}],cost=new Map([['0,0',0]]);
+ const walkable=new Map();let best=null,bestDist=heuristic(0,0);
+ const open=(cx,cz)=>{
+  const key=cx+','+cz;if(walkable.has(key))return walkable.get(key);
+  const x=actor.x+cx*cell,z=actor.z+cz*cell;
+  const ok=inMap(x,z)&&clear(local,x,z,r+.015,y,h);walkable.set(key,ok);return ok;
+ };
+ for(let n=0;queue.length&&n<600;n++){
+  queue.sort((a,b)=>b.f-a.f);const node=queue.pop(),{x:cx,z:cz,g,first}=node;
+  if(g>(cost.get(cx+','+cz)??Infinity))continue;
+  const d=heuristic(cx,cz);
+  if(first&&d<bestDist){bestDist=d;best=first;}
+  if(first&&d<1.35)return first;
+  for(const [dx,dz] of [[1,0],[0,1],[-1,0],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]]){
    const nx=cx+dx,nz=cz+dz,key=nx+','+nz;
-   if(visited.has(key))continue;
-   visited.add(key);
+   if(Math.abs(nx)>25||Math.abs(nz)>25||!open(nx,nz))continue;
+   if(dx&&dz&&(!open(cx+dx,cz)||!open(cx,cz+dz)))continue;
    const x=actor.x+nx*cell,z=actor.z+nz*cell;
-   if(!inMap(x,z)||Math.abs(nx)>19||Math.abs(nz)>19||!clear(local,x,z,r,y,h)||!clear(local,x-dx*cell/2,z-dz*cell/2,r,y,h))continue;
-   queue.push([nx,nz,first??[x,z],Math.hypot(nx-gx,nz-gz)+.18*Math.hypot(nx,nz)]);
+   if(!clear(local,x-dx*cell/2,z-dz*cell/2,r,y,h))continue;
+   const next=g+Math.hypot(dx,dz);
+   if(next>=(cost.get(key)??Infinity))continue;cost.set(key,next);
+   queue.push({x:nx,z:nz,g:next,first:first??[x,z],f:next+heuristic(nx,nz)*1.15});
   }
  }
- return null;
+ return best;
 }
 function updateSpawns(s,blocks,forward,dt,rng){
  const director=s.hauntDirector??={delay:1.8+rng()*2.8,bag:[]};
@@ -131,70 +142,88 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
  if(!mapCache.has(blocks))mapCache.set(blocks,blocks.concat(worldBounds));
  blocks=mapCache.get(blocks).concat(s.states?parcelBlocks(s):[]);
  s.haunt??=[];
- if(s.encounterHit){
-  s.encounterHit.time-=dt;
-  if(s.encounterHit.time<=0){
-   const name=s.encounterHit.name;s.encounterHit=null;
-   s.handAction=null;s.pendingUse=null;s.vault=null;s.jumpBuffer=0;s.vx=s.vz=0;s.vy=0;s.failed=true;
-   return name;
-  }
-  return null;
- }
  if(s.failed)return null;
  updateSpawns(s,blocks,forward,dt,rng);
  s.hauntCooldown=Math.max(0,(s.hauntCooldown??0)-dt);
+ let captured=null;
  s.haunt.forEach(actor=>{
-  if(actor.state==='disappear')return;
+  if(captured||actor.state==='disappear')return;
   const previous=actor.state;
   const i=actor.kind,type=cast[i],delta=[s.x-actor.x,s.z-actor.z],dist=Math.hypot(...delta);
   const local=blocks.filter(b=>b[2]>Math.min(actor.x,s.x)-2&&b[0]<Math.max(actor.x,s.x)+2&&b[3]>Math.min(actor.z,s.z)-2&&b[1]<Math.max(actor.z,s.z)+2);
-  const seen=dist<type.range*(s.bodyHeight<1.2&&!s.flashlight? .62:1)&&line(local,actor,s);
-  const noise=s.noise;
-  const heard=noise&&s.elapsed-noise.time<.55&&Math.hypot(noise.x-actor.x,noise.z-actor.z,noise.y-eyeHeights[i])<noise.radius*(seen?1:.62);
-  if(seen)actor.lastKnown=[s.x,s.z];else if(heard)actor.lastKnown=[noise.x,noise.z];
-  if(actor.state==='patrol'&&heard&&!seen){actor.state='search';actor.timer=2.6;}
-  if(actor.state==='alert'&&!seen){actor.state='search';actor.timer=5.2;}
-  if(actor.state==='alert'&&seen)actor.timer=3.0;
-  if(i===3&&s.horrorEvent?.type==='drop'&&s.elapsed-s.horrorEvent.time<.55&&dist<4){actor.state='disappear';return;}
-  if(actor.age>.65&&actor.state==='alert'&&seen&&dist<(i===2?2.65:1.65)&&s.y<eyeHeights[i]+.24){
-   actor.state='windup';actor.timer=[.32,.39,.48,.37][i];actor.chargeTarget=[s.x,s.z];
+  const pursuit=actor.pursuit??false,detectRange=type.range*(s.bodyHeight<1.2&&!s.flashlight?.62:1);
+  const seen=dist<(pursuit?24:detectRange)&&line(local,actor,s);
+  const noise=s.noise,hearing=[1.12,1.55,.85,.95][i];
+  const heard=noise&&s.elapsed-noise.time<.55&&Math.hypot(noise.x-actor.x,noise.z-actor.z,noise.y-eyeHeights[i])<noise.radius*hearing;
+  if(seen){actor.lastKnown=[s.x,s.z];actor.lost=0;actor.pursuit=true;actor.searchPoint=null;}
+  else {actor.lost=(actor.lost??0)+dt;if(heard){actor.lastKnown=[noise.x,noise.z];actor.searchPoint=null;}}
+  // Do not give up just because one frame of sight was blocked.
+  // Once acquired, continue to the last seen position and sweep the area.
+  if(actor.pursuit&&dist>23&&(actor.lost??0)>3.2){
+   actor.pursuit=false;actor.state='patrol';actor.lastKnown=null;actor.corner=null;
   }
+  if(i===3&&s.horrorEvent?.type==='drop'&&s.elapsed-s.horrorEvent.time<.55&&dist<4){actor.state='disappear';return;}
   const lit=seen&&s.flashAmount>.8&&dist>0&&dot(forward,[-delta[0]/dist,0,-delta[1]/dist])>.9;
   actor.timer=Math.max(0,actor.timer-dt);
-  if(actor.state==='windup'&&!actor.timer){actor.state='charge';actor.timer=.7;}
-  else if(actor.state==='charge'&&!actor.timer){actor.state='recovery';actor.timer=[.68,.9,1.25,.72][i];}
-  else if((['retreat','alert','search','recovery'].includes(actor.state))&&!actor.timer)actor.state='patrol';
-  if(lit&&(i===0||i===3)&&actor.state!=='retreat'){actor.state='retreat';actor.timer=1.3;}
-  if(seen&&(actor.state==='patrol'||actor.state==='search')){
-   actor.state='alert';actor.timer=3;
+  if(lit&&(i===0||i===3)){
+   actor.state='retreat';actor.timer=.9;
+  }else if(actor.state==='retreat'){
+   if(!actor.timer)actor.state=actor.pursuit?'alert':'patrol';
+  }else if(actor.state==='windup'){
+   if(seen&&actor.timer>.065)actor.chargeTarget=[s.x,s.z];
+   if(!actor.timer){actor.state='charge';actor.timer=.62;}
+  }else if(actor.state==='charge'){
+   if(seen&&actor.timer>.30)actor.chargeTarget=[s.x,s.z];
+   if(!actor.timer){actor.state='recovery';actor.timer=[.12,.16,.23,.11][i];}
+  }else if(actor.state==='recovery'){
+   if(!actor.timer)actor.state=actor.pursuit?'alert':heard?'search':'patrol';
+  }else if(actor.pursuit){
+   actor.state=seen?'alert':'search';
+   if(actor.age>.65&&seen&&dist<(i===2?2.75:1.80)&&s.y<eyeHeights[i]+.24){
+    actor.state='windup';actor.timer=[.18,.22,.28,.17][i];actor.chargeTarget=[s.x,s.z];
+   }
+  }else if(heard){actor.state='search';actor.timer=5;}
+  else if(actor.state==='search'&&!actor.timer){actor.state='patrol';actor.lastKnown=null;}
+  const chasing=actor.pursuit&&['alert','search','charge','recovery','windup'].includes(actor.state);
+  if(actor.state==='search'&&actor.lastKnown&&Math.hypot(actor.x-actor.lastKnown[0],actor.z-actor.lastKnown[1])<.75){
+   actor.searchDelay=(actor.searchDelay??0)-dt;
+   if(!actor.searchPoint||actor.searchDelay<=0){
+    actor.searchDelay=1.4;
+    const phase=(actor.scanPhase??0)+2.40;actor.scanPhase=phase;
+    const center=actor.lastKnown;
+    for(let k=0;k<8;k++){const angle=phase+k*Math.PI/4,r=1.5+(k%3)*.85,x=center[0]+Math.sin(angle)*r,z=center[1]+Math.cos(angle)*r;
+     if(inMap(x,z)&&clear(blocks,x,z,sizes[i],type.float,bodyHeights[i])){actor.searchPoint=[x,z];break;}}
+   }
   }
-  const chasing=seen&&(actor.state==='alert'||actor.state==='charge');
   const path=actor.path;
-  actor.aggression=approach(actor.aggression,chasing?1:actor.state==='windup'?.35:0,dt*3.7);
+  actor.aggression=approach(actor.aggression,chasing?1:actor.state==='windup'?.75:0,dt*5.5);
   if(actor.state==='patrol'&&Math.hypot(path[actor.pathIndex][0]-actor.x,path[actor.pathIndex][1]-actor.z)<.5)
    actor.pathIndex=(actor.pathIndex+actor.direction+path.length)%path.length;
-  const target=actor.state==='charge'?actor.chargeTarget:actor.state==='search'&&actor.lastKnown?actor.lastKnown:chasing?[s.x,s.z]:path[actor.pathIndex];
-  const retreat=actor.state==='retreat'&&lit;
+  const target=(actor.state==='charge'||actor.state==='windup')?(actor.chargeTarget??actor.lastKnown??[s.x,s.z]):actor.state==='search'&&actor.lastKnown?(actor.searchPoint??actor.lastKnown):chasing?(seen?[s.x,s.z]:(actor.lastKnown??[s.x,s.z])):path[actor.pathIndex];
+  const retreat=actor.state==='retreat';
   actor.routeDelay=(actor.routeDelay??0)-dt;
   if(actor.routeDelay<=0){
-   actor.routeDelay=.32+i*.046;
+   actor.routeDelay=.20+i*.035;
    const h=type.float+.45;
    const obstruction=blocks.some(b=>traceBox([actor.x,h,actor.z],[target[0],h,target[1]],b,sizes[i])<1);
-   actor.corner=obstruction&&actor.state!=='charge'?detour(actor,target,blocks):null;
+   actor.corner=obstruction&&!retreat?detour(actor,target,blocks):null;
   }
+  if(actor.corner&&Math.hypot(actor.corner[0]-actor.x,actor.corner[1]-actor.z)<.38){actor.corner=null;actor.routeDelay=0;}
   const aim=actor.corner??target;
   const desired=retreat?Math.atan2(-delta[0],-delta[1]):Math.atan2(aim[0]-actor.x,aim[1]-actor.z);
-  actor.yaw+=clamp(Math.atan2(Math.sin(desired-actor.yaw),Math.cos(desired-actor.yaw)),-dt*7,dt*7);
+  actor.yaw+=clamp(Math.atan2(Math.sin(desired-actor.yaw),Math.cos(desired-actor.yaw)),-dt*(chasing?12:7),dt*(chasing?12:7));
   const pressure=1+Math.min(1,(s.states?.filter(k=>k==='DELIVERED').length??0)/30)*.19;
   // Different chase rhythms; the telegraphed charge is faster than sprinting.
   const pulse=i===0?.88+.22*Math.sin(actor.phase*.73):i===1?.91+.18*Math.sin(actor.phase*.46):i===2?.94+.10*Math.sin(actor.phase*.31):.87+.26*Math.pow(.5+.5*Math.sin(actor.phase*.69),3);
-  const goalSpeed=['windup','recovery'].includes(actor.state)?0:actor.state==='charge'?type.speed*1.23*pressure:chasing?type.speed*pressure*pulse:actor.state==='search'?2.65:retreat?3.2:1.35;
+  const goalSpeed=retreat?3.3:actor.state==='windup'?type.speed*.38:actor.state==='charge'?type.speed*1.32*pressure:actor.state==='recovery'?type.speed*.72:chasing?type.speed*pressure*pulse*(actor.state==='search'?.88:1):actor.state==='search'?2.8:1.35;
   actor.speed=approach(actor.speed,goalSpeed,dt*(actor.state==='charge'?18:chasing?[15,11,9,17][i]:7));
   const stride=actor.speed*dt;
-  for(const turn of [0,.68,-.68,1.36,-1.36]){
+  let moved=false;
+  for(const turn of [0,.42,-.42,.82,-.82,1.35,-1.35,1.85,-1.85]){
    const angle=actor.yaw+turn,x=actor.x+Math.sin(angle)*stride,z=actor.z+Math.cos(angle)*stride;
-   if(inMap(x,z)&&clear(local,(actor.x+x)/2,(actor.z+z)/2,sizes[i],type.float,bodyHeights[i])&&clear(local,x,z,sizes[i],type.float,bodyHeights[i])){actor.x=x;actor.z=z;break;}
+   if(inMap(x,z)&&clear(local,(actor.x+x)/2,(actor.z+z)/2,sizes[i],type.float,bodyHeights[i])&&clear(local,x,z,sizes[i],type.float,bodyHeights[i])){actor.x=x;actor.z=z;moved=true;break;}
   }
+  if(!moved){actor.routeDelay=0;actor.speed*=.82;}
   const beat=Math.floor(actor.phase/Math.PI);
   actor.phase+=dt*(1+actor.speed*(i===2?5.3:2.4));
   if(previous!==actor.state||beat!==Math.floor(actor.phase/Math.PI)){
@@ -207,12 +236,12 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
   const vertical=Math.max(0,s.y-strikeHeight,strikeHeight-s.y-(s.bodyHeight??1.70));
   const hitDx=s.x-actor.x,hitDz=s.z-actor.z,hitDist=Math.hypot(hitDx,hitDz);
   const aligned=(Math.sin(actor.yaw)*hitDx+Math.cos(actor.yaw)*hitDz)/Math.max(.001,hitDist);
-  if(striking&&!s.encounterHit&&actor.age>.65&&actor.timer<.57&&line(local,actor,s)&&aligned>.40&&visible(local,[actor.x,strikeHeight,actor.z],[s.x,clamp(strikeHeight,s.y+.1,s.y+(s.bodyHeight??1.7)-.1),s.z])&&Math.hypot(hitDist,vertical)<armReach[i]&&s.hauntCooldown===0){
-   s.hauntCooldown=4;actor.speed=0;
-   s.encounterHit={name:type.name,time:.40,kind:i};
+  if(striking&&!captured&&actor.age>.65&&actor.timer<.56&&line(local,actor,s)&&aligned>.40&&visible(local,[actor.x,strikeHeight,actor.z],[s.x,clamp(strikeHeight,s.y+.1,s.y+(s.bodyHeight??1.7)-.1),s.z])&&Math.hypot(hitDist,vertical)<armReach[i]&&s.hauntCooldown===0){
+   actor.speed=0;captured=type.name;
+   s.handAction=null;s.pendingUse=null;s.vault=null;s.jumpBuffer=0;s.vx=s.vz=s.vy=0;s.failed=true;s.capturedBy=i;
   }
  });
- return null;
+ return captured;
 }
 
 export const ACTOR_START=11;
@@ -240,12 +269,21 @@ export function hauntLayers(s){
    [.15*Math.cos(a.phase*.74)-reach*.16,0,-.07],[.15*Math.sin(a.phase*.74)-reach*.16,0,.07],
    [.23*Math.sin(a.phase*.97)+reach*.12,.16*Math.cos(a.phase*.67),.22*Math.sin(a.phase*.78)]
   ];
-  const coil=a.state==='windup'?1-a.timer/[.32,.39,.48,.37][i]:0;
-  const strike=a.state==='charge'?Math.sin(Math.PI*Math.min(1,(.7-a.timer)/.53)):0;
-  if(a.state==='alert'||a.state==='charge'){
-   angles[0][0]+=[.13,.48,.54,.20][i]*reach;angles[1][2]+=[.26,.10,.06,.38][i]*Math.sin(a.phase*1.71)*reach;
-   angles[2][0]-=[.31,.48,.24,.67][i]*reach;angles[3][0]-=[.36,.31,.24,.44][i]*reach;
-   angles[1][1]+=[.28,.12,.04,.35][i]*Math.sin(a.phase*.83)*reach;
+  const coil=a.state==='windup'?clamp(1-a.timer/[.18,.22,.28,.17][i],0,1):0;
+  const strike=a.state==='charge'?Math.sin(Math.PI*clamp((.62-a.timer)/.57,0,1)):0;
+  if(a.pursuit||a.state==='charge'||a.state==='alert'){
+   // Independent pose rhythms, bounded joint angles, continuous animation.
+   const twitch=Math.sin(a.phase*1.7)*.65+Math.sin(a.phase*3.37)*.35;
+   const lurch=Math.pow(.5+.5*Math.sin(a.phase*.79),3);
+   angles[0][0]+=[.18,.54,.65,.30][i]*reach;
+   angles[0][2]+=[.24,.18,.08,.27][i]*Math.sin(a.phase*.52)*reach;
+   angles[1][2]+=[.62,.30,.14,.73][i]*twitch*reach;
+   angles[1][1]+=[.48,.18,.12,.58][i]*Math.sin(a.phase*.83)*reach;
+   angles[2][0]-=[.48,.65,.34,.78][i]*reach;
+   angles[3][0]-=[.62,.45,.37,.61][i]*reach;
+   angles[2][2]-=[.32,.21,.12,.37][i]*lurch*reach;
+   angles[3][2]+=[.22,.35,.17,.42][i]*(1-lurch)*reach;
+   angles[6][0]-=.24*lurch*reach;angles[7][0]-=.25*(1-lurch)*reach;
   }
   if(i===0){
    angles[0][1]+=.22*Math.sin(a.phase*.41);angles[12][0]+=.32*Math.sin(a.phase*.41-.9);
