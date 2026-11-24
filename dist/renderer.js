@@ -82,16 +82,16 @@ void main(){
  vec3 base=clay>.5?vec3(.79,.77,.735):sampleC.rgb*C.rgb;float edge=min(min(UV.x,1.-UV.x),min(UV.y,1.-UV.y));
  if(Q.w==1.)base*=.89+.11*smoothstep(.0,.038,edge);
  float shade=visibility(n);vec3 L=normalize(vec3(.35,.81,-.28));
- vec3 amb=mix(vec3(.15,.16,.20),vec3(.40,.44,.54),n.y*.5+.5);
- vec3 lit=amb+vec3(.17,.20,.27)*max(dot(n,L),0.)*(.22+.78*shade);
+ vec3 amb=mix(vec3(.065,.075,.10),vec3(.20,.23,.29),n.y*.5+.5);
+ vec3 lit=amb+vec3(.085,.105,.145)*max(dot(n,L),0.)*(.14+.86*shade);
  float sheen=0.,mist=0.;vec3 v=normalize(eye-P);
  if(hand>.5){vec3 key=normalize(vec3(-.55,.76,.45));lit=vec3(.48,.49,.55)+vec3(.74,.65,.51)*max(dot(n,key),0.)+vec3(.15,.17,.24)*max(dot(n,normalize(vec3(.8,.25,-.4))),0.);sheen=pow(max(dot(n,normalize(v+key)),0.),32.)*Q.y*.4;}
  else{
   for(int i=0;i<8;i++){
    vec3 d=lamps[i]-P;float ds=dot(d,d);vec3 l=d*inversesqrt(max(.01,ds));
    vec3 toLamp=lamps[i]-eye;float along=dot(toLamp,-v);float gap=length(toLamp+along*v);
-   if(along>0.&&along<distance(eye,P)+.14)mist+=.17*exp(-2.8*gap*gap)+.19*exp(-18.*gap*gap);
-   float beam=smoothstep(-.05,.89,l.y);float red=lampRed[i];float pulse=1.-red*.12*(.5+.5*sin(clock*2.2+float(i)*1.7));float falloff=mix(25.,36.,red)/(ds+8.)*beam*pulse;
+   if(along>0.&&along<distance(eye,P)+.14)mist+=.075*exp(-2.8*gap*gap)+.13*exp(-18.*gap*gap);
+   float beam=smoothstep(-.05,.89,l.y);float red=lampRed[i];float pulse=1.-red*.12*(.5+.5*sin(clock*2.2+float(i)*1.7));float falloff=mix(14.,32.,red)/(ds+8.)*beam*pulse;
    lit+=mix(vec3(1.,.72,.44),vec3(1.,.075,.035),red)*falloff*(.14+.86*max(dot(n,l),0.))*(.35+.65*shade);
    sheen+=pow(max(0.,dot(n,normalize(v+l))),mix(13.,29.,grit))*falloff*Q.y*.13;
   }
@@ -99,7 +99,7 @@ void main(){
  if(hand<.5&&torchPower>.001){
   vec3 delta=P-torchPos;float d=length(delta);vec3 ray=delta/max(d,.001);
   float spot=smoothstep(.87,.975,dot(ray,torchDir));
-  float atten=22./(d*d+2.5);float diffuse=max(dot(n,-ray),0.);
+  float atten=25./(d*d+2.5);float diffuse=max(dot(n,-ray),0.);
   lit+=vec3(1.,.88,.67)*torchPower*spot*atten*(.08+.92*diffuse);
   sheen+=pow(max(dot(n,normalize(v-ray)),0.),25.)*spot*atten*Q.y*.2*torchPower;
  }
@@ -115,7 +115,7 @@ void main(){
   float pulse=.85+.15*sin(clock*2.1);
   lit+=vec3(1.,.15,.10)*pulse*(9./(d2+3.))*(.3+.7*max(0.,dot(n,normalize(vent))));
   float blue=exp(-.045*pow(P.x+26.,2.))*smoothstep(-7.,2.,P.z);
-  lit+=vec3(.13,.25,.42)*blue*max(n.y,0.);
+  lit+=vec3(.055,.105,.19)*blue*max(n.y,0.);
  }
  if(hand<.5&&n.y>.65&&(Q.w==3.||Q.w==0.)){
   // Low-angle highlights follow worn tracks without replacing the floor texture.
@@ -134,7 +134,7 @@ void main(){
   float rim=pow(1.-abs(dot(n,v)),2.3);
   col+=vec3(.36,.74,.54)*rim*(.72+.08*sin(clock*1.8));
  }
- if(hand<.5){float dist=distance(eye,P);col=mix(col,vec3(.10,.115,.15),1.-exp(-dist*(P.x< -15.2?.020:.011)));}
+ if(hand<.5){float dist=distance(eye,P);col=mix(col,vec3(.035,.042,.060),1.-exp(-dist*(P.x< -15.2?.020:.011)));}
   // Leave low-light contrast intact while rolling off overlapping lamps and hot materials.
  vec3 hdr=max(vec3(0.),col+vec3(.60,.45,.34)*mist);
  vec3 highlight=max(hdr-.70,vec3(0.));
@@ -256,7 +256,7 @@ export class Renderer{
   const gl=this.gl,c=this.canvas;const ratio={HIGH:Math.min(devicePixelRatio,1.5),BALANCED:1,PERFORMANCE:.7}[this.quality]*scale;
   const width=Math.max(2,Math.round(c.clientWidth*ratio)),height=Math.max(2,Math.round(c.clientHeight*ratio));if(c.width!==width||c.height!==height){c.width=width;c.height=height;}
   const aspect=width/height,proj=perspective(78*Math.PI/180,aspect,.045,95),vp=multiply(proj,cameraView(eye,forward));this.vp=vp;
-  gl.viewport(0,0,width,height);gl.clearColor(.07,.08,.11,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.useProgram(this.program);
+  gl.viewport(0,0,width,height);gl.clearColor(.025,.032,.046,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.useProgram(this.program);
   const u=this.loc.main;gl.uniform1f(u.character,0);gl.uniform1f(u.clay,0);gl.uniformMatrix4fv(u.VP,false,vp);gl.uniformMatrix4fv(u.lightVP,false,this.lightVP);gl.uniform3fv(u.eye,eye);const right=unit(cross(forward,[0,1,0])),up=cross(right,forward),off=pose.torchOffset??[0,0,0];
   // A viewmodel can overlap nearby geometry; the light origin stays near the eye
   // to avoid placing a light source on the far side of a wall.
