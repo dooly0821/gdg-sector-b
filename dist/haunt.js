@@ -257,7 +257,7 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
     return direct??options[0]??actor.lockerAway??here;
    };
    if(actor.state==='lockerSearch'&&(Math.hypot(actor.x-entry[0],actor.z-entry[1])<.65||!actor.timer)){
-    actor.state='lockerWait';actor.timer=(torchOn?7:4.5)+rng()*2;actor.navDelay=0;
+    actor.state='lockerWait';actor.timer=(torchOn?7:4.5)+rng()*2;actor.lockerPaceOrigin=[actor.x,actor.z];actor.navDelay=0;
    }else if(actor.state==='lockerWait'&&!actor.timer){
     actor.lockerAway=chooseAway();actor.state='lockerLeave';actor.timer=12;actor.navDelay=0;actor.navJob=null;actor.navPath=null;actor.recoverPoint=null;
    }else if(actor.state==='lockerLeave'&&Math.hypot(actor.x-hiding.x,actor.z-hiding.z)>10){
@@ -328,9 +328,9 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
   actor.aggression=approach(actor.aggression,chasing?1:actor.state==='windup'?.75:0,dt*5.5);
   if(actor.state==='patrol'&&Math.hypot(path[actor.pathIndex][0]-actor.x,path[actor.pathIndex][1]-actor.z)<.5)
    actor.pathIndex=(actor.pathIndex+actor.direction+path.length)%path.length;
-  const target=actor.state==='lockerSearch'?entry:actor.state==='lockerWait'?[actor.x,actor.z]:['lockerLeave','lockerAway'].includes(actor.state)?(actor.lockerAway??[actor.x,actor.z]):actor.state==='guard'?(actor.guardPoint??[actor.x,actor.z]):actor.state==='fakeLeave'?(actor.fakeTarget??[actor.x,actor.z]):actor.state==='ambush'?[actor.x,actor.z]:actor.inspect&&(actor.state==='search'||actor.state==='inspect')?actor.inspect:(actor.state==='charge'||actor.state==='windup')?(actor.chargeTarget??actor.lastKnown??[s.x,s.z]):actor.state==='search'&&actor.lastKnown?(actor.searchPoint??actor.lastKnown):chasing?(seen?[s.x,s.z]:(actor.lastKnown??[s.x,s.z])):path[actor.pathIndex];
+  const target=actor.state==='lockerSearch'?entry:actor.state==='lockerWait'?[(actor.lockerPaceOrigin?.[0]??actor.x)+Math.sin(actor.age*2.1)*.36,actor.lockerPaceOrigin?.[1]??actor.z]:['lockerLeave','lockerAway'].includes(actor.state)?(actor.lockerAway??[actor.x,actor.z]):actor.state==='guard'?(actor.guardPoint??[actor.x,actor.z]):actor.state==='fakeLeave'?(actor.fakeTarget??[actor.x,actor.z]):actor.state==='ambush'?[actor.x,actor.z]:actor.inspect&&(actor.state==='search'||actor.state==='inspect')?actor.inspect:(actor.state==='charge'||actor.state==='windup')?(actor.chargeTarget??actor.lastKnown??[s.x,s.z]):actor.state==='search'&&actor.lastKnown?(actor.searchPoint??actor.lastKnown):chasing?(seen?[s.x,s.z]:(actor.lastKnown??[s.x,s.z])):path[actor.pathIndex];
   const retreat=actor.state==='retreat';
-  const body={r:sizes[i],y:type.float,h:bodyHeights[i]},still=actor.state==='inspect'||actor.state==='ambush'||actor.state==='lockerWait';
+  const body={r:sizes[i],y:type.float,h:bodyHeights[i]},still=actor.state==='inspect'||actor.state==='ambush';
   if(actor.navState!==actor.state){actor.navState=actor.state;actor.navDelay=0;actor.navDirect=false;if(still||retreat){actor.navPath=null;actor.navJob=null;actor.recoverPoint=null;}}
   const seek=retreat?[actor.x-delta[0]/Math.max(.01,dist)*2,actor.z-delta[1]/Math.max(.01,dist)*2]:target;
   const resolved=!still&&recover(actor,nav,body,seek,dt);
@@ -343,7 +343,7 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
   const rage=lit&&(i===1||i===2)?1.14:1;
   // Different chase rhythms; the telegraphed charge is faster than sprinting.
   const pulse=i===0?.88+.22*Math.sin(actor.phase*.73):i===1?.91+.18*Math.sin(actor.phase*.46):i===2?.94+.10*Math.sin(actor.phase*.31):.87+.26*Math.pow(.5+.5*Math.sin(actor.phase*.69),3);
-  const goalSpeed=actor.state==='lockerWait'?0:actor.state==='lockerSearch'?3.0:['lockerLeave','lockerAway'].includes(actor.state)?2.8:actor.state==='ambush'||actor.state==='inspect'?0:actor.state==='fakeLeave'?2.3:actor.state==='guard'?Math.hypot(actor.x-target[0],actor.z-target[1])>1.3?2.5:0:retreat?3.3:actor.state==='windup'?type.speed*.38:actor.state==='charge'?type.speed*1.32*pressure:actor.state==='recovery'?type.speed*.72:chasing?type.speed*pressure*pulse*rage*(actor.state==='search'?.88:1):actor.state==='search'?2.8:1.35;
+  const goalSpeed=actor.state==='lockerWait'?.70:actor.state==='lockerSearch'?3.0:['lockerLeave','lockerAway'].includes(actor.state)?2.8:actor.state==='ambush'||actor.state==='inspect'?0:actor.state==='fakeLeave'?2.3:actor.state==='guard'?Math.hypot(actor.x-target[0],actor.z-target[1])>1.3?2.5:0:retreat?3.3:actor.state==='windup'?type.speed*.38:actor.state==='charge'?type.speed*1.32*pressure:actor.state==='recovery'?type.speed*.72:chasing?type.speed*pressure*pulse*rage*(actor.state==='search'?.88:1):actor.state==='search'?2.8:1.35;
   actor.speed=approach(actor.speed,aim?goalSpeed:0,dt*(actor.state==='charge'?18:chasing?[23,22,20,25][i]:7));
   const before=[actor.x,actor.z],distance=aim?Math.hypot(aim[0]-actor.x,aim[1]-actor.z):0;
   const stride=Math.min(actor.speed*dt,distance);
@@ -351,7 +351,7 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
   if(aim&&stride>1e-5&&!resolved&&goalSpeed>0){
    // Travel towards the collision-checked waypoint, independently of cosmetic body yaw.
    for(const turn of [0,.32,-.32,.68,-.68,1.1,-1.1]){
-    const angle=desired+turn,p=[actor.x+Math.sin(angle)*stride,actor.z+Math.cos(angle)*stride];
+    const angle=(actor.state==='lockerWait'?Math.atan2(heading[0]-actor.x,heading[1]-actor.z):desired)+turn,p=[actor.x+Math.sin(angle)*stride,actor.z+Math.cos(angle)*stride];
     if(segmentFree(nav,before,p,body,0)){actor.x=p[0];actor.z=p[1];moved=true;break;}
    }
   }
