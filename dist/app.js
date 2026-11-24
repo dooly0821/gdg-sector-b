@@ -104,7 +104,7 @@ function failShift(name){
  if(document.pointerLockElement===canvas)document.exitPointerLock();
  beep(69,.55,'sawtooth',.12);audioOn();
  session=null;$('#play').hidden=true;
- panel('failed','<div class="row"><span>배송 완료</span><b>'+delivered+' / 5</b></div><div class="row"><span>생존 시간</span><b>'+Math.floor(elapsed/60)+'분 '+Math.floor(elapsed%60)+'초</b></div><p>근무자 신호 소실 — '+name+'</p><div class="panel-actions">'+action('retry','다시 근무하기',true)+action('brief','메인 메뉴')+'</div>','근무 실패','GDG / GAME OVER');
+ panel('failed','<div class="row"><span>배송 완료</span><b>'+delivered+' / '+MISSION_TOTAL+'</b></div><div class="row"><span>생존 시간</span><b>'+Math.floor(elapsed/60)+'분 '+Math.floor(elapsed%60)+'초</b></div><p>근무자 신호 소실 — '+name+'</p><div class="panel-actions">'+action('retry','다시 근무하기',true)+action('brief','메인 메뉴')+'</div>','근무 실패','GDG / GAME OVER');
 }
 function complete(){pauseShift(false);beep(630,.3);panel('complete','<div class="row"><span>출고 내역</span><b>30 / 30건 배송 완료</b></div><div class="row"><span>근무 시간</span><b>'+Math.floor(session.elapsed/60)+'분 '+Math.floor(session.elapsed%60)+'초</b></div><p>화물 30개의 배송을 마쳤습니다. 야간 근무에서 살아남았습니다.</p><div class="panel-actions">'+action('brief','근무 마치기',true)+action('resume','창고 둘러보기')+'</div>','전체 배송 완료','출고 02 / 근무 확인서');}
 let receiptUntil=0;
