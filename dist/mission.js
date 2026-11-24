@@ -38,6 +38,10 @@ export const shiftParcel=(s,i)=>s?.cargo?.[i]??PARCELS[i];
 const sceneBlocks=new WeakSet();
 export function createScene(){
  const w=new World();buildArchitecture(w);buildStorage(w);buildMachinery(w);stageFreight(w);buildAnnex(w);
+ const emergency=w.mat('emergency-red-lens','#e52c29','plain',1.65),housing=w.mat('emergency-housing','#33363a','metal');
+ for(const [x,z] of [[-7,1],[3,-11],[-20,13],[-32,4],[0,23],[-10,38],[8,47],[-30,23],[-38,40],[-19,37]]){
+  w.box(x,4.1,z,.36,.18,.32,housing);w.cyl(x,3.91,z,.14,.22,.14,emergency);w.lights.push([x,3.8,z,1]);
+ }
  const steel=w.mat('dispatch-steel','#566168','metal'),edge=w.mat('bench-edge','#a58a53','paint'),plank=w.mat('dispatch-pine','#a58462','wood');
  const black=w.mat('bay-charcoal','#4b4b46','paint'),amber=w.mat('amber-traffic-paint','#c59a43','paint');
  for(const p of PARCELS.filter(p=>p.id!=='B-03')){
