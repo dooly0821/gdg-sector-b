@@ -180,7 +180,7 @@ export function buildStorage(w) {
             const variant = prominent && (k + lane) % 4 === 1 ? 0.03 : rand();
             // Reserve the middle B-12 bay as a clear traversal / hiding route.
             // Keep all decks and uprights collidable; only omit cargo in this bay.
-            if (id === 'B-12' && j === 1) continue;
+            if (id === 'B-12' && (j === 1 || (j === 2 && k === 3))) continue;
             stack(x, base, loadZ, halfWidth - 0.19, bayLen * 0.465 - 0.05, k === 3 ? 1.35 : 1.49, variant);
           }
         }
@@ -198,4 +198,16 @@ export function buildStorage(w) {
   rack(-13, -10, -16, -6.55, 3, 'B-09');
   rack(-13, -10, -3.48, 9.0, 4, 'B-07');
   rack(3, 7, -17, -14, 1, 'B-18');
+  // Staggered service footholds outside B-12, with real steel decks and supports.
+  for(let i=0;i<6;i++){
+    const x=.02,z=-2.9+i*1.05,y=.72+i*.82;
+    box(x,y-.08,z,1.12,.16,.96,innerSteel);
+    box(x+.55,y-.08,z,.045,.16,.96,orangeEdge);
+    w.block(x-.56,z-.48,x+.56,z+.48,y-.16,y,'climb');
+    for(const dx of [-.50,.50])for(const dz of [-.42,.42]){
+      box(x+dx,y/2-.08,z+dz,.055,y-.16,.055,steel);
+      w.block(x+dx-.0275,z+dz-.0275,x+dx+.0275,z+dz+.0275,0,y-.16);
+    }
+  }
+  w.sign(.60,1.05,-3.13,.45,.18,'B-12 / CLIMB','#443123','#f5ca83',Math.PI/2);
 }
