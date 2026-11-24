@@ -84,7 +84,7 @@ export function navigate(actor,target,nav,body,dt,budget=48){
  if(actor.navDirect){const d=Math.hypot(target[0]-actor.x,target[1]-actor.z);const next=d>.65?here.map((v,i)=>v+(target[i]-v)*.65/d):target;if(segmentFree(nav,here,next,body))return target;actor.navDirect=false;actor.navDelay=0;}
  if(actor.navJob){
   if(actor.navJob.nav!==nav){actor.navJob=null;actor.navDelay=0;}
-  else {const path=advance(actor.navJob,budget);if(path){actor.navPath=path;actor.navJob=null;actor.navDelay=.24;}}
+  else {const path=advance(actor.navJob,budget);if(path){actor.navPath=path;actor.navJob=null;actor.navDelay=.24;actor.stuck=0;}}
  }
  if(actor.navPath?.length){
   while(actor.navPath.length&&Math.hypot(actor.x-actor.navPath[0][0],actor.z-actor.navPath[0][1])<.21)actor.navPath.shift();
@@ -106,6 +106,9 @@ export function recover(actor,nav,body,target,dt){
   if(best){actor.x=best[0];actor.z=best[1];actor.navDelay=0;return true;}
  }
  if(actor.stuck<.60||actor.recoverPoint)return false;
+ // Do not discard an actively expanding route just because a large barrier
+ // takes several frames to solve. Physical overlap recovery above still runs.
+ if(actor.navJob&&!actor.navPath?.length&&actor.navJob.visited>0&&actor.navJob.visited<10000)return false;
  // Backtrack or sidestep to regain clearance, including moving away from target.
  const choices=[];for(const r of [.75,1.25,1.75])for(let k=0;k<16;k++){
   const a=k*Math.PI/8,p=[here[0]+Math.sin(a)*r,here[1]+Math.cos(a)*r];
