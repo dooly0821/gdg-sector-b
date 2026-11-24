@@ -66,14 +66,15 @@ function wrapping(mesh,m,a,b,r,count){
 function hand(mesh,mat,side,p,scale,ghost){
  const s=(x,y,z)=>point(p,side*x*scale,y*scale,z*scale);
  mesh.sweep(mat,[section(s(-.018,.055,-.026),.014*scale),section(s(0,.008,0),.09*scale,.063*scale),
-  section(s(.023,-.052,.042),.117*scale,.072*scale),section(s(.027,-.08,.072),.087*scale,.051*scale),
-  section(s(.027,-.109,.079),.011*scale)],{fold:.15,steps:4});
+  section(s(.018,-.042,.038),.115*scale,.079*scale),section(s(.027,-.08,.072),.087*scale,.051*scale),
+  section(s(.027,-.109,.079),.011*scale)],{sides:22,fold:.055,steps:4});
  const lengths=ghost?[.14,.208,.227,.184]:[.102,.145,.159,.125];
  for(let i=0;i<4;i++){
   const x=(i-1.5)*.052,l=lengths[i],r=(.024+Math.sin(i/3*Math.PI)*.007)*scale;
   mesh.sweep(mat,[section(s(x,-.054,.065),r*.81),section(s(x*1.10,-.095,l*.62+.05),r),
-   section(s(x*1.16,-l*.72,l+.049),r*.88),section(s(x*1.06,-l*.99,l*.94+.034),r*.64),
-   section(s(x*.9,-l*1.09,l*.77+.024),.0008)],{sides:12,steps:3,fold:.11});
+   section(s(x*1.14,-l*.58,l+.043),r*.97,r*.89),section(s(x*1.16,-l*.76,l+.050),r*.86),
+   section(s(x*1.06,-l*.96,l*.94+.034),r*.77,r*.68),
+   section(s(x*.9,-l*1.09,l*.77+.024),.0008)],{sides:16,steps:3,fold:.046});
  }
  mesh.sweep(mat,[section(s(-.064,-.009,.01),.022*scale),section(s(-.113,-.045,.043),.037*scale),
   section(s(-.13,-.098,.103),.025*scale),section(s(-.112,-.12,.14),.001)],{sides:12,steps:3,fold:.05});

@@ -49,7 +49,10 @@ export function buildAnnex(w){
    const y=.78+level*1.5;
    w.box(x,y,z,2.86,.15,1.39,rib);
    w.block(x-1.43,z-.695,x+1.43,z+.695,y-.075,y+.075,'shelf');
-   if(x===-25&&(level===0||z===7&&level===1))continue;
+   if(x===-25&&(level===0||z===7&&level===1)){
+    if(z===7&&level===0)solid(x-.57,y+.075,z-.40,.95,1.19,.43,parcel,'climb');
+    continue;
+   }
    w.block(x-1.32,z-.47,x+1.32,z+.47,y+.08,y+.82,'climb');
    for(let i=0;i<4;i++)w.box(x+(i-1.5)*.68,y+.45,z,.59,.74,.94,parcel,0,.04*(i-1),0);
   }

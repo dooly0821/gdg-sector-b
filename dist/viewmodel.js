@@ -1,3 +1,4 @@
+import {cross,dot,unit} from './world.js';
 import {POSES,MATERIALS,TORCH_LOCAL,SOCKETS,FINGER_FLEX} from "./viewmodel-mesh-data.js";
 export {TORCH_LOCAL,SOCKETS,FINGER_FLEX};
 const PI=Math.PI;
@@ -32,3 +33,19 @@ export function buildHands(w,carrying){
  else{model(w,'emptyL','left');model(w,'emptyR','right');}
 }
 export function buildFlashlight(w){model(w,'torch','right');}
+
+// Place the actual sculpted glove in another rig by its wrist and finger axes.
+export function gloveMatrix(pose,wrist,direction,lateral,scale){
+ const f=FINGER_FLEX[pose],forward=unit(direction);
+ const width=unit(lateral.map((v,i)=>v-dot(lateral,forward)*forward[i]));
+ const handedness=Math.sign(dot(cross(f.width,f.forward),f.normal));
+ const normal=cross(width,forward).map(v=>v*handedness);
+ const axes=[0,1,2].map(i=>[0,1,2].map(j=>scale*(width[j]*f.width[i]+normal[j]*f.normal[i]+forward[j]*f.forward[i])));
+ const pos=wrist.map((v,j)=>v-axes.reduce((sum,a,i)=>sum+a[j]*SOCKETS[pose].wrist[i],0));
+ return new Float32Array([...axes[0],0,...axes[1],0,...axes[2],0,...pos,1]);
+}
+export function buildInspectionGlove(w,pose){
+ model(w,pose,'glove');
+ w.parts=w.parts.filter(p=>p.shape.includes('_glove_')||p.shape.endsWith('_sleeve_cuff'));
+ return w;
+}

@@ -26,3 +26,12 @@ const forwardKeys=new Set(['KeyW']);
 for(let i=0;i<50;i++)step(pallet,forwardKeys,blocks,dt);
 step(pallet,forwardKeys,blocks,dt,true);
 assert.equal(pallet.vault?.landing,1.0295,'mantle from contact with the protruding pallet board');
+
+// Crouch behind the actual C-01 shelf load, then peek sideways into view.
+for(const [x,hidden] of [[-25.6,true],[-24.25,false]]){
+ const player=Object.assign(newShift(),{x,y:.855,z:7.24,bodyHeight:1.06,showTraversal:true});
+ const watcher={...ghost,x:-25.6,z:4,state:'patrol',lastKnown:null};
+ player.haunt=[watcher];
+ updateHaunt(player,blocks,[0,0,1],dt);
+ assert.equal(watcher.rays.every(ray=>!ray.open),hidden,'C-01 shelf sight lines');
+}

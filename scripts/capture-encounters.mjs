@@ -43,6 +43,21 @@ try{
   await page.screenshot({path:out+'/upper-shelf.jpg'});
   await page.keyboard.up('Control');
   await page.keyboard.down('s');await page.waitForFunction(()=>getShift().y<.01);await page.keyboard.up('s');
+  // Record actual crouched lateral movement from complete cover into the open.
+  await page.keyboard.down('Control');
+  await page.evaluate(()=>{
+   const s=getShift();
+   Object.assign(s,{x:-25.6,y:.855,z:7.24,grounded:true,bodyHeight:1.06,yaw:0,pitch:0,showTraversal:true,vx:0,vz:0,vy:0});
+   s.haunt=[{kind:1,x:-25.6,z:4,yaw:0,phase:0,age:2,life:40,speed:0,timer:6,state:'recovery',
+    path:[[-25.6,4],[-25.6,4.4]],pathIndex:0,direction:1,aggression:0}];
+  });
+  await page.waitForFunction(()=>getShift().haunt[0]?.rays?.length===3&&getShift().haunt[0].rays.every(r=>!r.open));
+  await page.screenshot({path:out+'/shelf-cover.jpg',quality:88});
+  await page.keyboard.down('d');
+  try{await page.waitForFunction(()=>getShift().haunt[0]?.rays?.some(r=>r.open),null,{timeout:25000});}
+  finally{await page.keyboard.up('d');}
+  await page.screenshot({path:out+'/shelf-peek.jpg',quality:88});
+  await page.keyboard.up('Control');
  }
  if(!baseline)await saveRecording(page,out+'/encounters.webm');
  console.log(JSON.stringify(stats));await writeFile(out+'/'+(baseline?'before':'after')+'-timing.json',JSON.stringify(stats));

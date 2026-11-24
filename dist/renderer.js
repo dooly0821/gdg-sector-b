@@ -1,6 +1,6 @@
 import {defaultFingers} from './hand-motion.js';
 import {CORE} from './annex.js';
-import {geometry,customShapes} from './geometry.js';
+import {geometry} from './geometry.js';
 import {cameraView,perspective,multiply,unit,dot,cross} from './world.js';
 const vs=`#version 300 es
 precision highp float;
@@ -31,7 +31,19 @@ void main(){
    float nz=dot(nn,flexForward),ny=dot(nn,flexNormal);
    nn+=flexForward*(nz*c+ny*s-nz)+flexNormal*(ny*c-nz*s-ny);
   }
-  pp+=flexForward*(z-z0)+flexNormal*(y-y0);
+  float thumbMask=smoothstep(0.,.029,digitWidths.x-.009-w)*smoothstep(0.,.037,z0+.075);
+  for(int j=0;j<2;j++){
+   float joint=j==0?-.020:-.050,delta=z-joint;
+   float a=flexAmount*(j==0?.24:.19)*thumbMask*smoothstep(0.,.018,delta);
+   float c=cos(a),s=sin(a),nz=dot(nn,flexForward),ny=dot(nn,flexNormal);
+   z=joint+delta*c+y*s;y=y*c-delta*s;
+   nn+=flexForward*(nz*c+ny*s-nz)+flexNormal*(ny*c-nz*s-ny);
+  }
+  float angle=flexAmount*.88*thumbMask,c=cos(angle),s=sin(angle);
+  float tw=w-digitWidths.x,th=y+.009;
+  pp+=flexForward*(z-z0)+flexNormal*(y-y0+tw*s+th*(c-1.))+flexWidth*(tw*(c-1.)-th*s);
+  float nw=dot(nn,flexWidth),nh=dot(nn,flexNormal);
+  nn+=flexWidth*(nw*(c-1.)-nh*s)+flexNormal*(nw*s+nh*(c-1.));
  }
  P=origin+m*pp+offset;
  N=normalize(mat3(ax/dot(ax,ax),ay/dot(ay,ay),az/dot(az,az))*nn);
@@ -45,7 +57,7 @@ void main(){
 const fs=`#version 300 es
 precision highp float;precision highp sampler2DArray;
 in vec3 P,N;in vec2 UV,tile;in vec4 C,Q,shadowPos;
-uniform sampler2DArray atlas;uniform sampler2D shadowMap,floorTex;uniform vec3 eye,lamps[8];uniform float shadowStep,hand,clock,torchPower;uniform vec3 torchPos,torchDir,core;uniform vec4 footprints[2];
+uniform sampler2DArray atlas;uniform sampler2D shadowMap,floorTex;uniform vec3 eye,lamps[8];uniform float shadowStep,hand,clock,torchPower,clay,character;uniform vec3 torchPos,torchDir,core;uniform vec4 footprints[2];
 out vec4 outColor;
 float visibility(vec3 n){
  if(hand>.5||shadowStep==0.)return 1.;vec3 s=shadowPos.xyz/shadowPos.w*.5+.5;
@@ -57,9 +69,11 @@ float visibility(vec3 n){
 void main(){
  vec3 n=normalize(N);float e=Q.x;vec2 st=Q.w>0.?UV:tile;
  vec4 sampleC=Q.w==3.?texture(floorTex,UV):texture(atlas,vec3(st,C.w));if(sampleC.a<.4)discard;
+ if(Q.w==5.||(character>.5&&Q.w!=2.))sampleC.rgb=mix(vec3(.90),sampleC.rgb,.21);
+ if(clay>.5){sampleC=vec4(1.);e=0.;}
  float grit=dot(sampleC.rgb,vec3(.299,.587,.114));
  if(Q.w==0.||Q.w==3.||(hand>.5&&Q.w==2.)){vec3 T=cross(dFdy(P),n),B=cross(n,dFdx(P));float det=dot(dFdx(P),T);if(abs(det)>.0000001)n=normalize(n-sign(det)*clamp((dFdx(grit)*T+dFdy(grit)*B)/abs(det),vec3(-.13),vec3(.13))*.27);}
- vec3 base=sampleC.rgb*C.rgb;float edge=min(min(UV.x,1.-UV.x),min(UV.y,1.-UV.y));
+ vec3 base=clay>.5?vec3(.79,.77,.735):sampleC.rgb*C.rgb;float edge=min(min(UV.x,1.-UV.x),min(UV.y,1.-UV.y));
  if(Q.w==1.)base*=.89+.11*smoothstep(.0,.038,edge);
  float shade=visibility(n);vec3 L=normalize(vec3(.35,.81,-.28));
  vec3 amb=mix(vec3(.28,.29,.34),vec3(.66,.73,.89),n.y*.5+.5);
@@ -102,8 +116,15 @@ void main(){
   float tracks=pow(.5+.5*sin(P.x*3.6+sin(P.z*1.1)*.3),7.);
   sheen+=tracks*grit*pow(1.-max(dot(n,v),0.),4.)*.065;
  }
+ if(character>.5)sheen*=.4;
+ if(clay>.5){
+  vec3 key=normalize(vec3(-.48,.72,.50));
+  float fill=.5+.5*dot(n,normalize(v+vec3(.15,.45,0.)));
+  lit=vec3(.43,.44,.46)+vec3(.34)*fill+vec3(.54,.52,.49)*max(dot(n,key),0.)*(.29+.71*shade)+vec3(.10)*max(dot(n,normalize(vec3(.7,.16,-.55))),0.);
+  sheen=0.;mist=0.;
+ }
  vec3 col=base*lit+vec3(1.,.80,.55)*sheen+base*e;
- if(Q.w==4.){
+ if(Q.w==4.&&clay<.5){
   float rim=pow(1.-abs(dot(n,v)),2.3);
   col+=vec3(.36,.74,.54)*rim*(.72+.08*sin(clock*1.8));
  }
@@ -111,7 +132,7 @@ void main(){
   // Leave low-light contrast intact while rolling off overlapping lamps and hot materials.
  vec3 hdr=max(vec3(0.),col+vec3(1.,.76,.45)*mist);
  vec3 highlight=max(hdr-.70,vec3(0.));
- float opacity=Q.w==4.?mix(.67,.89,pow(1.-abs(dot(n,v)),1.5)):1.;
+ float opacity=Q.w==4.&&clay<.5?mix(.67,.89,pow(1.-abs(dot(n,v)),1.5)):1.;
  outColor=vec4(min(hdr,.70)+.30*(1.-exp(-3.33*highlight)),opacity);
 }`;
 const depthFS='#version 300 es\nprecision highp float;void main(){}';
@@ -119,19 +140,43 @@ function compile(gl,vert,frag){const sh=(type,src)=>{let s=gl.createShader(type)
 const rgb=s=>{if(s.length===4)s='#'+[...s.slice(1)].map(v=>v+v).join('');return [1,3,5].map(i=>parseInt(s.slice(i,i+2),16)/255);};
 function signArt(m){const c=document.createElement('canvas');c.width=512;c.height=Math.max(64,Math.round(512/m.aspect));const g=c.getContext('2d');g.fillStyle=m.bg;g.fillRect(0,0,c.width,c.height);g.strokeStyle=m.fg;g.lineWidth=2;g.strokeRect(5,5,c.width-10,c.height-10);g.fillStyle=m.fg;g.textAlign='center';g.textBaseline='middle';g.font='bold '+Math.floor(c.height*.63)+'px Arial';g.fillText(m.label,256,c.height*.53,470);return c;}
 async function bitmap(url){let im=new Image();im.src=url;await im.decode();return im;}
+function glFlex(gl,u,flex){
+ gl.uniform1f(u.flexAmount,flex?.amount??0);
+ if(!flex)return;
+ for(const [name,value] of [['flexPivot',flex.pivot],['flexForward',flex.forward],['flexNormal',flex.normal],['flexWidth',flex.width]])gl.uniform3fv(u[name],value);
+ for(const name of Object.keys(defaultFingers))gl.uniform4fv(u[name],flex[name]??defaultFingers[name]);
+ gl.uniform4fv(u.fingerAmounts,flex.fingerAmounts??[1,1,1,1]);
+}
 export class Renderer{
  constructor(canvas){
   this.canvas=canvas;this.gl=canvas.getContext('webgl2',{alpha:false,antialias:true,powerPreference:'high-performance'});if(!this.gl)throw Error('WebGL 2 is unavailable. Enable graphics acceleration in desktop Chrome, then reload.');
   const gl=this.gl;this.program=compile(gl,vs,fs);this.depthProgram=compile(gl,vs,depthFS);
-  this.loc={};for(let p of [this.program,this.depthProgram]){let u={};for(let k of ['VP','offset','lightVP','worldObject','objectMatrix','clock','core','atlas','shadowMap','floorTex','eye','lamps','shadowStep','hand','torchPower','torchPos','torchDir','flexPivot','flexForward','flexNormal','flexWidth','flexAmount','digitWidths','knuckles','digitLengths','fingerAmounts','footprints[0]'])u[k]=gl.getUniformLocation(p,k);this.loc[p===this.program?'main':'depth']=u;}
-  this.buffers={};for(const shape of ['box','face','sphere','cylinder','forearm',...customShapes])this.meshBuffer(shape);
+  this.loc={};for(let p of [this.program,this.depthProgram]){let u={};for(let k of ['VP','offset','lightVP','worldObject','objectMatrix','clock','core','clay','character','atlas','shadowMap','floorTex','eye','lamps','shadowStep','hand','torchPower','torchPos','torchDir','flexPivot','flexForward','flexNormal','flexWidth','flexAmount','digitWidths','knuckles','digitLengths','fingerAmounts','footprints[0]'])u[k]=gl.getUniformLocation(p,k);this.loc[p===this.program?'main':'depth']=u;}
+  this.buffers={};
   const lv=cameraView([0,39,-9],[-14,-39,9]);const ortho=new Float32Array([1/37,0,0,0,0,1/32,0,0,0,0,-2/95,0,0,0,-1,1]);this.lightVP=multiply(ortho,lv);
  }
  meshBuffer(shape){
   if(!this.buffers[shape]){
    const gl=this.gl,vertices=geometry(shape),buffer=gl.createBuffer();
-   gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,vertices,gl.STATIC_DRAW);
-   this.buffers[shape]=[buffer,vertices.length/8];
+   // Share identical position/normal/UV tuples, preserving seams and hard edges.
+   const count=vertices.length/8,lookup=new Map(),unique=new Float32Array(vertices.length);
+   const words=new Uint16Array(vertices.buffer,vertices.byteOffset,vertices.length*2);
+   const indices=new Uint32Array(count);
+   for(let i=0;i<count;i++){
+    const key=String.fromCharCode(...words.subarray(i*16,i*16+16));
+    let index=lookup.get(key);
+    if(index===undefined){
+     index=lookup.size;lookup.set(key,index);
+     unique.set(vertices.subarray(i*8,i*8+8),index*8);
+    }
+    indices[i]=index;
+   }
+   const short=lookup.size<=65536,indexBuffer=gl.createBuffer();
+   gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+   gl.bufferData(gl.ARRAY_BUFFER,unique.subarray(0,lookup.size*8),gl.STATIC_DRAW);
+   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,indexBuffer);
+   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,short?new Uint16Array(indices):indices,gl.STATIC_DRAW);
+   this.buffers[shape]={buffer,indexBuffer,verts:count,indexType:short?gl.UNSIGNED_SHORT:gl.UNSIGNED_INT};
   }
   return this.buffers[shape];
  }
@@ -167,16 +212,16 @@ export class Renderer{
    const cell=chunked?[Math.floor(pos[0]/10),Math.floor(pos[2]/10),staticShadow?1:0].join(':'):'one';
    const key=shape+cell;if(!batches.has(key))batches.set(key,{shape,staticShadow,translucent:!!m.rim,values:[],min:[Infinity,Infinity,Infinity],max:[-Infinity,-Infinity,-Infinity]});
    const b=batches.get(key);for(let k=0;k<3;k++){const rad=axes.reduce((s,v,j)=>s+Math.abs(v[k])*(shape==='sphere'||shape==='cylinder'&&j!==1?1:.5),0);b.min[k]=Math.min(b.min[k],pos[k]-rad);b.max[k]=Math.max(b.max[k],pos[k]+rad);}
-   const kind=m.type,cart=kind==='carton',fit=m.rim?4:m.name==='building-slab'?3:cart?1:kind==='sign'||kind==='image'?2:0;
+   const kind=m.type,cart=kind==='carton',fit=/^vm_/.test(m.name)&&kind==='image'&&!/metal|rim/.test(m.name)?5:m.rim?4:m.name==='building-slab'?3:cart?1:kind==='sign'||kind==='image'?2:0;
    let tex=cart?'carton'+(num++%6):kind==='image'?m.url:kind==='sign'?m.name:kind;let color=rgb(m.color);if(cart)color=color.map(v=>.83+.17*v);
    let uv=m.uvScale*({concrete:.27,metal:.65,wood:1.3,cardboard:1.2,paint:.75,cloth:5}[kind]??1);
    b.values.push(...pos,...axes.flat(),...color,slots.get(tex)?.index??0,m.emission,m.sheen??(kind==='metal'||/vm_(metal|rim)/.test(m.name)?1:kind==='paint'?.55:.1),uv,fit);
   }
-  return [...batches.values()].map(b=>{let vao=gl.createVertexArray();gl.bindVertexArray(vao);const [buf,verts]=this.meshBuffer(b.shape);gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+  return [...batches.values()].map(b=>{let vao=gl.createVertexArray();gl.bindVertexArray(vao);const {buffer,indexBuffer,verts,indexType}=this.meshBuffer(b.shape);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,indexBuffer);
    for(const [i,size,off] of [[0,3,0],[1,3,12],[2,2,24]]){gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,size,gl.FLOAT,false,32,off);}
    let inst=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,inst);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(b.values),gl.STATIC_DRAW);
    for(const [i,size,off] of [[3,3,0],[4,3,3],[5,3,6],[6,3,9],[7,4,12],[8,4,16]]){gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,size,gl.FLOAT,false,80,4*off);gl.vertexAttribDivisor(i,1);}
-   let center=b.min.map((v,i)=>(v+b.max[i])*.5);return {vao,verts,shape:b.shape,count:b.values.length/20,staticShadow:b.staticShadow,translucent:b.translucent,center,radius:Math.hypot(...b.max.map((v,i)=>v-center[i]))};});
+   let center=b.min.map((v,i)=>(v+b.max[i])*.5);return {vao,verts,indexType,shape:b.shape,count:b.values.length/20,staticShadow:b.staticShadow,translucent:b.translucent,center,radius:Math.hypot(...b.max.map((v,i)=>v-center[i]))};});
  }
  setQuality(name){
   const gl=this.gl;this.quality=name;const sizes={HIGH:2048,BALANCED:1024,PERFORMANCE:512};this.size=sizes[name];
@@ -184,13 +229,29 @@ export class Renderer{
   this.fb=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,this.fb);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.TEXTURE_2D,this.depth,0);gl.drawBuffers([gl.NONE]);gl.readBuffer(gl.NONE);
   gl.viewport(0,0,this.size,this.size);gl.enable(gl.DEPTH_TEST);gl.clear(gl.DEPTH_BUFFER_BIT);gl.useProgram(this.depthProgram);const u=this.loc.depth;gl.uniformMatrix4fv(u.VP,false,this.lightVP);gl.uniform3f(u.offset,0,0,0);for(const b of this.groups[0])if(b.staticShadow)this.draw(b);gl.bindFramebuffer(gl.FRAMEBUFFER,null);
  }
- draw(b){const gl=this.gl;gl.bindVertexArray(b.vao);gl.drawArraysInstanced(gl.TRIANGLES,0,b.verts,b.count);}
+ draw(b){const gl=this.gl;gl.bindVertexArray(b.vao);gl.drawElementsInstanced(gl.TRIANGLES,b.verts,b.indexType,0,b.count);}
+ studioShadow(actors){
+  const gl=this.gl,u=this.loc.depth;
+  gl.bindFramebuffer(gl.FRAMEBUFFER,this.fb);gl.viewport(0,0,this.size,this.size);
+  gl.clear(gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.useProgram(this.depthProgram);
+  gl.uniformMatrix4fv(u.VP,false,this.lightVP);gl.uniform1i(u.worldObject,1);
+  gl.uniform3f(u.offset,0,0,0);
+  for(const actor of actors){
+   gl.uniformMatrix4fv(u.objectMatrix,false,actor.matrix);
+   for(const b of this.groups[actor.group]){this.setFlex(u,actor.flex,b);this.draw(b);}
+  }
+  gl.uniform1i(u.worldObject,0);gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+ }
+ setFlex(u,flex,batch){
+  const enabled=flex&&batch.shape.includes('_glove_');
+  glFlex(this.gl,u,enabled?flex:null);
+ }
  render(eye,forward,items,pose,scale=1){
   const gl=this.gl,c=this.canvas;const ratio={HIGH:Math.min(devicePixelRatio,1.5),BALANCED:1,PERFORMANCE:.7}[this.quality]*scale;
   const width=Math.max(2,Math.round(c.clientWidth*ratio)),height=Math.max(2,Math.round(c.clientHeight*ratio));if(c.width!==width||c.height!==height){c.width=width;c.height=height;}
   const aspect=width/height,proj=perspective(78*Math.PI/180,aspect,.045,95),vp=multiply(proj,cameraView(eye,forward));this.vp=vp;
   gl.viewport(0,0,width,height);gl.clearColor(.19,.23,.31,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.useProgram(this.program);
-  const u=this.loc.main;gl.uniformMatrix4fv(u.VP,false,vp);gl.uniformMatrix4fv(u.lightVP,false,this.lightVP);gl.uniform3fv(u.eye,eye);const right=unit(cross(forward,[0,1,0])),up=cross(right,forward),off=pose.torchOffset??[0,0,0];
+  const u=this.loc.main;gl.uniform1f(u.character,0);gl.uniform1f(u.clay,0);gl.uniformMatrix4fv(u.VP,false,vp);gl.uniformMatrix4fv(u.lightVP,false,this.lightVP);gl.uniform3fv(u.eye,eye);const right=unit(cross(forward,[0,1,0])),up=cross(right,forward),off=pose.torchOffset??[0,0,0];
   // A viewmodel can overlap nearby geometry; the light origin stays near the eye
   // to avoid placing a light source on the far side of a wall.
   const local=pose.torchLocal?.position??[.325,-.283,-.887],dir=pose.torchLocal?.direction??[-.045,-.025,-1];
@@ -209,24 +270,27 @@ export class Renderer{
   if(pose.actors?.length){
    gl.uniform3f(u.offset,0,0,0);
    gl.uniform1i(u.worldObject,1);
+   gl.uniform1f(u.character,1);gl.uniform1f(u.clay,pose.clay?1:0);
    const transparent=[];
    for(const actor of pose.actors){
     gl.uniformMatrix4fv(u.objectMatrix,false,actor.matrix);
     for(const b of this.groups[actor.group]){
-     if(b.translucent){
+     if(actor.flex)this.setFlex(u,actor.flex,b);
+     if(b.translucent&&!pose.clay){
       const m=actor.matrix,c=b.center;
       const depth=forward.reduce((d,f,i)=>d+f*(m[i]*c[0]+m[4+i]*c[1]+m[8+i]*c[2]+m[12+i]-eye[i]),0);
       transparent.push({b,m,depth});
      }else this.draw(b);
     }
    }
+   gl.uniform1f(u.flexAmount,0);
    if(transparent.length){
     transparent.sort((a,b)=>b.depth-a.depth);gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
     for(const {b,m} of transparent){gl.uniformMatrix4fv(u.objectMatrix,false,m);this.draw(b);}
     gl.depthMask(true);gl.disable(gl.BLEND);
    }
-   gl.uniform1i(u.worldObject,0);
+   gl.uniform1i(u.worldObject,0);gl.uniform1f(u.character,0);gl.uniform1f(u.clay,0);
   }
   if(pose.flight&&!pose.assembly){gl.uniformMatrix4fv(u.VP,false,multiply(vp,pose.flight));gl.uniform3f(u.offset,0,0,0);gl.uniform1f(u.hand,1);for(const b of this.groups[1])this.draw(b);}
   gl.uniformMatrix4fv(u.VP,false,proj);

@@ -1,3 +1,4 @@
+import {buildInspectionGlove,gloveMatrix} from './viewmodel.js';
 // Warehouse uniform, facing +Z. Ring profiles are measured in world metres.
 import {World} from './world.js';
 import {Sculpt} from './creature-mesh.js';
@@ -13,13 +14,26 @@ export function buildLegs(){
   const loft=(m,rows,fold)=>mesh.sweep(m,rows,{sides:28,steps:3,fold});
   const thread=(m,points,r)=>mesh.sweep(m,points.map((p,i)=>[...p,i===0||i===points.length-1?r*.25:r,r*.8]),{sides:9,steps:2,fold:.01});
   loft(fabric,[[x,.15,0,.086,.085],[x,.194,-.01,.115,.117],[x,.235,.013,.112,.115],[x,.288,-.004,.101,.093],[x,.37,.013,.116,.114],[x,.49,0,.124,.112],[x,.63,0,.126,.126],[x,.68,0,.104,.112]],.055);
-  bulb(rubber,x,.047,.036,.122,.048,.165);bulb(leather,x,.111,.040,.117,.087,.156);
+  loft(rubber,[[x,.014,.038,.096,.139],[x,.022,.041,.123,.163],
+   [x,.050,.043,.126,.166],[x,.062,.044,.120,.159]],.012);
+  loft(leather,[[x,.058,.043,.120,.16],[x,.084,.047,.121,.16],
+   [x,.111,.049,.119,.153],[x,.138,.035,.115,.139],[x,.163,.012,.104,.113],
+   [x,.194,-.017,.09,.083]],.012);
+  thread(trim,Array.from({length:17},(_,i)=>{
+   const a=(i/16-.5)*Math.PI*1.38;
+   return [x+.120*Math.sin(a),.082+.004*Math.cos(a),.045+.160*Math.cos(a)];
+  }),.003);
   for(const y of [.105,.13])thread(trim,[[x-.075,y,.147],[x,y+.023,.152],[x+.074,y,.148]],.009);
   // Bellows pocket, overlapping flap and stitch line follow each trouser leg.
-  mesh.panel(fabric,[[side*.226,.328,-.052],[side*.247,.334,.088],[side*.257,.475,.096],[side*.242,.484,-.064]],{edge:trim,thickness:.019});
-  mesh.panel(trim,[[side*.25,.446,-.061],[side*.263,.435,.089],[side*.257,.48,.095],[side*.247,.486,-.066]],{thickness:.009});
+  loft(fabric,[[side*.221,.319,.011,.007,.033],[side*.224,.328,.012,.018,.058],
+   [side*.229,.354,.013,.026,.068],[side*.229,.423,.009,.025,.067],
+   [side*.223,.47,.003,.015,.061],[side*.221,.476,.003,.007,.050]],.035);
+  loft(trim,[[side*.238,.427,.006,.008,.053],[side*.242,.437,.006,.015,.068],
+   [side*.240,.458,.004,.016,.070],[side*.232,.47,.004,.012,.064]],.016);
   thread(trim,[[side*.21,.32,.063],[side*.25,.36,.077],[side*.25,.451,.075]],.004);
-  for(const dz of [-.07,.01,.09])bulb(rubber,x,.032,dz,.121,.027,.033);
+  for(const dx of [-.086,.086])for(const dz of [-.055,.023,.097]){
+   bulb(rubber,x+dx,.017,dz,.034,.012,.032);
+  }
   w.parts.push(...mesh.layers('worker_leg_'+side,registerGeometry));
   return w;
  });
@@ -31,7 +45,7 @@ export function buildWorker(){
  const fabric=mat('indigo','#393652','cloth'),trim=mat('cap binding','#504661','cloth'),stripe=mat('reflector','#e5a631','paint');
  const hair=mat('chestnut','#583327','plain'),curl=mat('hair highlights','#714133','plain');
  const skin=mat('face','#edb487','plain'),lip=mat('smile','#8a4a3c','plain'),iris=mat('iris','#372421','plain'),white=mat('ivory','#fff0d9','plain');
- const rubber=mat('tread','#333039','rubber'),leather=mat('toecap','#544846','rubber'),glove=mat('glove','#bea875','cloth');
+ const rubber=mat('tread','#333039','rubber'),leather=mat('toecap','#544846','rubber');
  const bulb=(m,x,y,z,a,b,c)=>mesh.ellipsoid(m,[x,y,z],[a,b,c],.006);
  function loft(m,rows,fold=.025){mesh.sweep(m,rows,{sides:28,steps:3,fold});}
  function thread(m,points,r){mesh.sweep(m,points.map((p,i)=>[...p,i===0||i===points.length-1?r*.25:r,r*.8]),{sides:9,steps:2,fold:.01});}
@@ -46,9 +60,11 @@ export function buildWorker(){
   const x=side*.115;
   loft(fabric,[[side*.208,1.01,0,.085,.085],[side*.244,.96,0,.094,.099],[side*.261,.875,.003,.080,.09],[side*.269,.842,.005,.082,.09]]);
   loft(skin,[[side*.263,.853,.004,.063,.066],[side*.274,.795,.012,.061,.061],[side*.282,.721,.029,.046,.052]]);
-  bulb(glove,side*.284,.687,.035,.064,.069,.056);
-  for(let j=0;j<4;j++)bulb(glove,side*(.245+j*.025),.645,.048,.016,.042-j*.003,.019);
-  bulb(glove,side*.229,.684,.074,.022,.039,.025);
+  const pose=side<0?'emptyL':'emptyR';
+  const glove=buildInspectionGlove(new World(),pose);
+  const transform=gloveMatrix(pose,[side*.282,.733,.03],[side*.06,-1,.24],[0,0,side],.72);
+  for(const part of glove.parts)w.parts.push({...part,pos:[...transform.slice(12,15)],
+   axes:[0,4,8].map(k=>[...transform.slice(k,k+3)])});
   bulb(skin,side*.25,1.245,-.004,.049,.059,.034);
   bulb(white,side*.099,1.286,.201,.056,.063,.022);bulb(iris,side*.094,1.287,.219,.035,.052,.013);
   thread(iris,[[side*.044,1.315,.208],[side*.075,1.341,.209],[side*.120,1.342,.201],[side*.151,1.315,.189],[side*.165,1.324,.181]],.006);

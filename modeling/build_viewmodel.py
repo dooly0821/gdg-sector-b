@@ -7,7 +7,7 @@ R=pathlib.Path(__file__).resolve().parent.parent; A=np.array
 unit=lambda x:x/np.linalg.norm(x)
 colors={'canvas':'#c2a681','grip':'#5b5049','patch':'#554661','seam':'#907554','thread':'#e0c3a0','uniform':'#51436d','stripe':'#e5b341','cuff':'#40354c','metal':'#37393c','black':'#222428','rim':'#65666b','lens':'#fff0c8'}
 textures={k:'gdg-'+('twill' if k in ['uniform','stripe','cuff'] else 'grip' if k in ['grip','black'] else 'metal' if k in ['metal','rim'] else 'weave') for k in colors};textures['lens']='plain'
-data={}; poses={}; scenes={}; report={}; sockets={}; flexes={}
+data={}; poses={}; scenes={}; report={}; sockets={}; flexes={}; grip_anchors={}
 def sm(a,b,k):return np.minimum(a,b)-np.maximum(k-np.abs(a-b),0)**2/(4*k)
 def ell(p,c,r):
  d=p-A(c);r=A(r);k=np.linalg.norm(d/r,axis=-1);q=np.linalg.norm(d/r**2,axis=-1);return np.where(q>1e-7,k*(k-1)/np.maximum(q,1e-7),-min(r))
@@ -20,15 +20,23 @@ def chain(p,pts,rs):
  for a,b,r,s in zip(pts[:-1],pts[1:],rs[:-1],rs[1:]):d=sm(d,cap(p,a,b,r,s),.0018)
  return d
 def padded_chain(p, digit):
- # Reinforced fabric over PIP/DIP joints; retain the authored contact surface.
+ # Vary the section along the curved digit. Soft fabric bridges the joint;
+ # the two shallow valleys separate broad phalange pads without cutting the shell.
  pts,rs=digit
- d=chain(p,pts,rs)
- for i in [3,6]:
-  d=sm(d,ell(p,pts[i],[rs[i]*1.20,rs[i]*1.20,rs[i]*1.20]),.0015)
+ t=np.linspace(0,1,len(rs))
+ padding=1+.12*np.exp(-((t-.20)/.15)**2)+.13*np.exp(-((t-.56)/.14)**2)+.15*np.exp(-((t-.88)/.15)**2)
+ padding-=.062*np.exp(-((t-.38)/.08)**2)+.045*np.exp(-((t-.72)/.08)**2)
+ d=chain(p,pts,rs*padding)
+ # Fabric tension makes shallow creases across each padded joint. Bound the
+ # distance evaluation to the finger so that neighbouring fingers remain separate.
+ for j in [3,6]:
+  tangent=unit(pts[j+1]-pts[j-1])
+  along=np.sum((p-pts[j])*tangent,axis=-1)
+  d+=.00145*np.exp(-(along/.0027)**2)
  return d
 
 def surface(field,lo,hi,step=.0031):
- grid=[np.arange(a,b+step,step,dtype=np.float32) for a,b in zip(lo,hi)]; p=np.stack(np.meshgrid(*grid,indexing='ij'),-1); f=gaussian_filter(field(p),.55)
+ grid=[np.arange(a,b+step,step,dtype=np.float32) for a,b in zip(lo,hi)]; p=np.stack(np.meshgrid(*grid,indexing='ij'),-1); f=gaussian_filter(field(p),.66)
  v,faces,_,_=marching_cubes(f,0,spacing=(step,)*3,allow_degenerate=False); v+=A(lo);m=trimesh.Trimesh(v,faces,process=False);trimesh.repair.fix_normals(m);return m
 def emit(pose,name,m,lab,fn=lambda p:p):
  m=trimesh.Trimesh(fn(m.vertices),m.faces.copy(),process=False);trimesh.repair.fix_normals(m);
@@ -41,11 +49,11 @@ def emit(pose,name,m,lab,fn=lambda p:p):
   sub=m.submesh([ids],append=True,repair=False);rgb=[int(colors[mat][i:i+2],16) for i in [1,3,5]];sub.visual=trimesh.visual.ColorVisuals(sub,vertex_colors=rgb+[255]);sc.add_geometry(sub,node_name=key,geom_name=key)
  if name=='glove':m.export(R/'modeling'/f'{pose}-joined-glove.obj')
 def sleeve(pose,wrist,elbow):
- wrist,elbow=A(wrist),A(elbow);sockets[pose]={"wrist":wrist.tolist(),"elbow":elbow.tolist()};U=unit(wrist-elbow);W=unit(np.cross(U,[0,1,0]));N=unit(np.cross(W,U));v=[];f=[];m=[];nr=44;ns=40
+ wrist,elbow=A(wrist),A(elbow);sockets[pose]={"wrist":wrist.tolist(),"elbow":elbow.tolist()};U=unit(wrist-elbow);W=unit(np.cross(U,[0,1,0]));N=unit(np.cross(W,U));v=[];f=[];m=[];nr=64;ns=48
  for j in range(nr+1):
   t=j/nr;r=np.interp(t,[0,.25,.55,.77,.9,1],[.105,.098,.089,.078,.059,.050])
   for i in range(ns):
-   a=i/ns*2*np.pi;rr=r+(.0055*np.sin(a*5+t*15)+.0035*np.sin(a*3-t*20))*np.sin(np.pi*t)**.5+.004*np.exp(-((t-.93)/.025)**2)+.0045*np.exp(-((t-.70-.035*np.sin(a*2))/.04)**2)-.003*np.exp(-((t-.64-.035*np.sin(a*2))/.035)**2);v.append(elbow+(wrist-elbow)*t+rr*(W*np.cos(a)+N*np.sin(a)*.85))
+   a=i/ns*2*np.pi;rr=r+.008*np.exp(-((t-.90)/.021)**2)+.007*np.exp(-((t-.974)/.022)**2)-.006*np.exp(-((t-.938)/.020)**2)+(.0055*np.sin(a*5+t*15)+.0035*np.sin(a*3-t*20))*np.sin(np.pi*t)**.5+.004*np.exp(-((t-.93)/.025)**2)+.0045*np.exp(-((t-.70-.035*np.sin(a*2))/.04)**2)-.003*np.exp(-((t-.64-.035*np.sin(a*2))/.035)**2);v.append(elbow+(wrist-elbow)*t+rr*(W*np.cos(a)+N*np.sin(a)*.85))
  for j in range(nr):
   t=(j+.5)/nr;mat='stripe' if .77<t<.87 else 'cuff' if t>.89 else 'uniform'
   for i in range(ns):
@@ -93,7 +101,7 @@ def relaxed(pose,side,wrist,F,carry=False):
   d=sm(d,ell(p,[0,.029,.056],[.036,.013,.041]),.004)
   d=sm(d,ell(p,[0,-.029,.058],[.040,.012,.043]),.004)
   for digit in digits:d=sm(d,padded_chain(p,digit),.0044 if carry else .0040)
-  return sm(d,chain(p,*thumb),.0075)
+  return sm(d,padded_chain(p,thumb),.010)
  m=surface(field,[-.12,-.115,-.055],[.092,.072,.228])
  x,y,z=m.triangles_center.T;lab=np.full(len(x),'canvas',dtype='<U10')
  lab[(y<-.008)&(z>.020)]='grip'
@@ -127,32 +135,35 @@ def carryhand(pose,side):
   digits.append(curve([[.269,y,z],[.252,y+.002,z-l*.34],[.241,y+.001,z-l*.66],[.235,y-.003,z-l*.89]],[r*1.12,r*1.1,r*.98,r*.85]))
  thumb=curve([[.270,-.438,-.653],[.241,-.410,-.645],[.209,-.402,-.651],[.184,-.411,-.667]],[.019,.017,.015,.013])
  def field(p):
-  d=sm(ell(p,[.277,-.480,-.661],[.046,.058,.058]),cap(p,wrist,[.283,-.502,-.636],.039,.043),.011)
+  d=sm(ell(p,[.277,-.480,-.661],[.046,.058,.058]),cap(p,wrist,[.283,-.502,-.636],.042,.046),.014)
   d=sm(d,ell(p,[.264,-.448,-.651],[.032,.034,.038]),.008)
   for digit in digits:d=sm(d,padded_chain(p,digit),.0028)
-  d=sm(d,chain(p,*thumb),.005)
+  d=sm(d,padded_chain(p,thumb),.007)
   return np.maximum(d,.004-box_sdf(p+A([0,.047,0])))
  m=surface(field,[.13,-.624,-.83],[.385,-.370,-.504],.0028)
  x,y,z=m.triangles_center.T;lab=np.full(len(x),'canvas',dtype='<U10');lab[(x<.247)&(z<-.67)]='grip';lab[(z<-.735)]='grip';lab[(x<.224)&(z>-.684)]='grip'
  patch=((y+.48)/.039)**4+((z+.657)/.034)**4;back=x>.284
  lab[back&(patch<1.17)]='seam';lab[back&(patch<.91)]='patch';lab[back&(patch>.91)&(patch<1.17)&(np.sin(np.arctan2((y+.48)/.039,(z+.657)/.034)*31)>.2)]='thread'
  mirror=lambda p:p*A([side,1,1])+A([0,.047,0]);emit(pose,'glove',m,lab,mirror);sleeve(pose,mirror(wrist),elbow*A([side,1,1]))
+ grip_anchors[pose]={name:mirror(pts[-1]).tolist() for name,(pts,rs) in zip(['index','middle','ring','little','thumb'],digits+[thumb])}
 for s,p in [(-1,'carryL'),(1,'carryR')]:carryhand(p,s)
 # One-handed underhand support. Palm faces up; separate finger arcs lie underneath the actual carton.
 wrist=A([-.235,-.652,-.570]);elbow=A([-.72,-.81,-.27]);F=unit(A([.66,0,-.75]));W=unit(A([F[2],0,-F[0]]));N=A([0,-1,0]);origin=wrist
 fn=lambda p:origin+p@A([W,N,F]);inv=lambda p:(p-origin)@A([W,N,F]).T
 digits=[]
-for j,(x,z,l,r) in enumerate([(-.033,.089,.075,.014),(-.009,.099,.086,.015),(.016,.096,.078,.014),(.040,.087,.061,.012)]):
- digits.append(curve([[x,0,z],[x,-.002,z+l*.34],[x,-.010,z+l*.70],[x,-.017,z+l*.94]],[r,r*.96,r*.88,r*.78]))
+for j,(x,z,l,r) in enumerate([(-.033,.089,.085,.014),(-.009,.099,.086,.015),(.016,.096,.078,.014),(.040,.087,.061,.012)]):
+ lift=[.0080,.0010,.0014,.0034][j]
+ digits.append(curve([[x,0,z],[x,-.002,z+l*.34],[x,-.010-lift*.40,z+l*.70],[x,-.017-lift,z+l*.94]],[r,r*.96,r*.88,r*.78]))
 thumb=curve(inv(A([[-.205,-.647,-.615],[-.178,-.615,-.638],[-.146,-.585,-.659],[-.132,-.550,-.665]])),[.020,.018,.015,.013])
 def supportfield(p):
  d=sm(ell(p,[0,.003,.056],[.055,.038,.061]),ell(p,[0,.003,.008],[.037,.029,.035]),.012)
  for digit in digits:d=sm(d,padded_chain(p,digit),.004)
- d=sm(d,chain(p,*thumb),.006)
+ d=sm(d,padded_chain(p,thumb),.008)
  return np.maximum(d,.003-box_sdf(fn(p)))
 # Lift wrist to position the inner palm directly against the lower surface (y=-.584).
 origin=wrist=A([-.235,-.617,-.570]);m=surface(supportfield,[-.125,-.140,-.05],[.095,.080,.222],.0028)
 x,y,z=m.triangles_center.T;lab=np.full(len(x),'canvas',dtype='<U10');lab[y<-.009]='grip';patch=(x/.033)**4+((z-.056)/.037)**4;lab[(y>.012)&(patch<1.18)]='seam';lab[(y>.012)&(patch<.91)]='patch';lab[(y>.012)&(patch>.91)&(patch<1.18)&(np.sin(np.arctan2((z-.056)/.037,x/.033)*34)>.2)]='thread'
+grip_anchors['supportL']={name:fn(pts[-1]).tolist() for name,(pts,rs) in zip(['index','middle','ring','little','thumb'],digits+[thumb])}
 emit('supportL','glove',m,lab,fn);sleeve('supportL',wrist,elbow)
 # A cylindrical grip with explicit finger centre lines around its circumference.
 # Hand and tool share the SAME rigid transform; no separately rotated hand.
@@ -160,20 +171,21 @@ angle=.43;c,s=np.cos(angle),np.sin(angle);rot=A([[c,0,s],[0,1,0],[-s,0,c]])
 pivot=A([.340,-.312,-.700]);shift=A([.018,-.030,.137]);tilt=-.24;ct,st=np.cos(tilt),np.sin(tilt);tiltR=A([[ct,-st,0],[st,ct,0],[0,0,1]]);rot=tiltR@rot;base_tf=lambda p:1.12*(p-pivot)@rot.T+pivot+shift
 x0,y0=.318,-.272;digits=[];roll=.58;cr,sr=np.cos(roll),np.sin(roll);rr=A([[cr,-sr,0],[sr,cr,0],[0,0,1]]);axis=A([x0,y0,0]);tf=lambda p:base_tf((p-axis)@rr.T+axis);gf=tf
 for j,z in enumerate([-.747,-.715,-.684,-.654]):
- r=[.0148,.0152,.0139,.0124][j];theta=np.deg2rad([-12,-53,-99,-145,-190])+np.deg2rad([3,0,-3,-7][j]);radii=.0355+np.array([r,r*.98,r*.92,r*.82,r*.72])+.002
+ r=[.0148,.0152,.0139,.0124][j];theta=np.deg2rad([-12,-53,-99,-145,-190])+np.deg2rad([3,0,-3,-7][j]);radii=.0349+np.array([r,r*.98,r*.92,r*.82,r*.72])+.002
  pts=np.column_stack([x0+radii*np.cos(theta),y0+radii*np.sin(theta),z+np.array([0,0,.001,.004,.007])]);digits.append(curve(pts,[r,r*.98,r*.92,r*.82,r*.72]))
 thumb=curve([[.383,-.250,-.691],[.367,-.230,-.720],[.337,-.217,-.738],[.307,-.222,-.750]],[.017,.015,.013,.011]);wrist=A([.426,-.347,-.610])
 def gripfield(p):
  d=sm(ell(p,[.384,-.274,-.696],[.038,.049,.062]),cap(p,wrist,[.396,-.290,-.662],.039,.039),.011)
  d=sm(d,ell(p,[.377,-.250,-.687],[.030,.031,.045]),.007)
  for digit in digits:d=sm(d,padded_chain(p,digit),.0023)
- d=sm(d,chain(p,*thumb),.005)
+ d=sm(d,padded_chain(p,thumb),.007)
  # Clearance around barrel; thumb and fingertip contacts stay outside hard surface.
  radial=np.hypot(p[...,0]-x0,p[...,1]-y0)
- return np.maximum(d,.0400-radial)
+ return np.maximum(d,.0394-radial)
 m=surface(gripfield,[.235,-.418,-.845],[.505,-.177,-.528],.0028);x,y,z=m.triangles_center.T;lab=np.full(len(x),'canvas',dtype='<U10')
 lab[(x<.327)|(y<-.310)]='grip';p=((z+.69)/.040)**4+((y+.269)/.025)**4;back=(x>.393)
 lab[back&(p<1.20)]='seam';lab[back&(p<.91)]='patch';lab[back&(p>.91)&(p<1.20)&(np.sin(np.arctan2((y+.269)/.025,(z+.69)/.04)*31)>.3)]='thread'
+grip_anchors['torch']={name:gf(pts[-1]).tolist() for name,(pts,rs) in zip(['index','middle','ring','little','thumb'],digits+[thumb])}
 emit('torch','glove',m,lab,gf);sleeve('torch',gf(wrist),base_tf(A([.77,-.68,-.30])))
 def lathe(profile):
  v=[];f=[];m=[];n=48
@@ -195,3 +207,5 @@ for k,t in {'weave':225+12*np.sin(xx*np.pi/3)*np.sin(yy*np.pi/3)+8*np.cos((xx+yy
 (R/'dist/viewmodel-mesh-data.js').write_text('export const MESH_DATA='+json.dumps(data,separators=(',',':'))+';\nexport const POSES='+json.dumps(poses,separators=(',',':'))+';\nexport const MATERIALS='+json.dumps({k:{'color':v,'texture':textures[k]} for k,v in colors.items()},separators=(',',':'))+';\nexport const TORCH_LOCAL='+json.dumps({'position':tf(A([x0,y0,-.870])).tolist(),'direction':(rot@A([0,0,-1])).tolist()})+';\nexport const SOCKETS='+json.dumps(sockets)+';\nexport const FINGER_FLEX='+json.dumps(flexes)+';\n')
 for name,sc in scenes.items():sc.export(R/'modeling'/(name+'.glb'))
 (R/'modeling/mesh-report.json').write_text(json.dumps(report,indent=2));print({k:sum(a['triangles'] for a in v) for k,v in poses.items()})
+
+(R/'modeling/grip-anchors.json').write_text(json.dumps(grip_anchors,indent=2)+'\n')

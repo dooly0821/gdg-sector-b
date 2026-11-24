@@ -1,47 +1,147 @@
 {
   "vm_carryL_glove": {
-    "sample_count": 246652,
+    "sample_count": 257852,
     "min_clearance_m": 0.003989999999999966,
     "penetrating_samples": 0
   },
   "vm_carryR_glove": {
-    "sample_count": 246652,
+    "sample_count": 257852,
     "min_clearance_m": 0.003989999999999966,
     "penetrating_samples": 0
   },
   "vm_carryL_sleeve": {
-    "sample_count": 25200,
-    "min_clearance_m": 0.12195128422858037,
+    "sample_count": 43680,
+    "min_clearance_m": 0.12108728504677937,
     "penetrating_samples": 0
   },
   "vm_carryR_sleeve": {
-    "sample_count": 25200,
-    "min_clearance_m": 0.12195128422858037,
+    "sample_count": 43680,
+    "min_clearance_m": 0.12108728504677937,
     "penetrating_samples": 0
   },
   "vm_supportL_glove": {
-    "sample_count": 163884,
-    "min_clearance_m": 0.0033400000000000374,
+    "sample_count": 169344,
+    "min_clearance_m": 0.002099815468082844,
     "penetrating_samples": 0
   },
   "vm_supportL_sleeve": {
-    "sample_count": 25200,
-    "min_clearance_m": 0.08503286188292147,
+    "sample_count": 43680,
+    "min_clearance_m": 0.08422698558063205,
     "penetrating_samples": 0
   },
   "torch_barrel": {
-    "sample_count": 274089,
-    "min_clearance_m": 0.004969868099174933,
+    "sample_count": 275677,
+    "min_clearance_m": 0.004272801743901792,
     "penetrating_samples": 0
   },
   "guard": {
-    "sample_count": 278180,
-    "min_normalized_radius": 1.0909718234707544,
+    "sample_count": 279748,
+    "min_normalized_radius": 1.0171191201809477,
     "penetrating_samples": 0
   },
   "switch": {
-    "sample_count": 278180,
-    "min_normalized_radius": 1.3254990802091124,
+    "sample_count": 279748,
+    "min_normalized_radius": 1.2245640489551946,
+    "penetrating_samples": 0
+  },
+  "carryL_index": {
+    "sample_count": 4876,
+    "min_clearance_m": 0.0040000000000000036,
+    "penetrating_samples": 0
+  },
+  "carryL_middle": {
+    "sample_count": 5088,
+    "min_clearance_m": 0.0040000000000000036,
+    "penetrating_samples": 0
+  },
+  "carryL_ring": {
+    "sample_count": 4892,
+    "min_clearance_m": 0.0040000000000000036,
+    "penetrating_samples": 0
+  },
+  "carryL_little": {
+    "sample_count": 4974,
+    "min_clearance_m": 0.0040000000000000036,
+    "penetrating_samples": 0
+  },
+  "carryL_thumb": {
+    "sample_count": 5539,
+    "min_clearance_m": 0.003989999999999966,
+    "penetrating_samples": 0
+  },
+  "carryR_index": {
+    "sample_count": 4876,
+    "min_clearance_m": 0.0040000000000000036,
+    "penetrating_samples": 0
+  },
+  "carryR_middle": {
+    "sample_count": 5088,
+    "min_clearance_m": 0.0040000000000000036,
+    "penetrating_samples": 0
+  },
+  "carryR_ring": {
+    "sample_count": 4892,
+    "min_clearance_m": 0.0040000000000000036,
+    "penetrating_samples": 0
+  },
+  "carryR_little": {
+    "sample_count": 4974,
+    "min_clearance_m": 0.0040000000000000036,
+    "penetrating_samples": 0
+  },
+  "carryR_thumb": {
+    "sample_count": 5539,
+    "min_clearance_m": 0.003989999999999966,
+    "penetrating_samples": 0
+  },
+  "supportL_index": {
+    "sample_count": 5092,
+    "min_clearance_m": 0.002099815468082844,
+    "penetrating_samples": 0
+  },
+  "supportL_middle": {
+    "sample_count": 5348,
+    "min_clearance_m": 0.0030499999999999694,
+    "penetrating_samples": 0
+  },
+  "supportL_ring": {
+    "sample_count": 5299,
+    "min_clearance_m": 0.0032500000000000584,
+    "penetrating_samples": 0
+  },
+  "supportL_little": {
+    "sample_count": 5105,
+    "min_clearance_m": 0.0031499999999999584,
+    "penetrating_samples": 0
+  },
+  "supportL_thumb": {
+    "sample_count": 5890,
+    "min_clearance_m": 0.002989999999999965,
+    "penetrating_samples": 0
+  },
+  "torch_index": {
+    "sample_count": 4003,
+    "min_clearance_m": 0.0045042892701528765,
+    "penetrating_samples": 0
+  },
+  "torch_middle": {
+    "sample_count": 4283,
+    "min_clearance_m": 0.004323845545205976,
+    "penetrating_samples": 0
+  },
+  "torch_ring": {
+    "sample_count": 3760,
+    "min_clearance_m": 0.004303270338504726,
+    "penetrating_samples": 0
+  },
+  "torch_little": {
+    "sample_count": 3321,
+    "min_clearance_m": 0.004324765215804444,
+    "penetrating_samples": 0
+  },
+  "torch_thumb": {
+    "sample_count": 4585,
+    "min_clearance_m": 0.004456710472957162,
     "penetrating_samples": 0
   }
 }

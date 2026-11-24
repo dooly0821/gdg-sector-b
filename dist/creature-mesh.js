@@ -25,17 +25,24 @@ export class Sculpt {
  // Variable radial sections interpolated along the centre line. Offset folds are sculpted in the surface.
  sweep(m,sections,{sides=16,steps=4,fold=.05,axis=[0,0,1]}={}){
   const rows=(sections.length-1)*steps,end=sections.length-1;
-  const point=(row,col)=>{
-   const t=Math.max(0,Math.min(end,row/steps)),a=col/sides*Math.PI*2;
-   const p=sample(sections,t);
+  // Transport the cross-section along the centreline. Re-selecting a world
+  // axis at each ring can twist the cross-section around a curved fingertip.
+  let previous;
+  const rings=Array.from({length:rows+1},(_,j)=>{
+   const t=j/steps,p=sample(sections,t);
    const tangent=unit(vsub(sample(sections,Math.min(end,t+.01)).slice(0,3),sample(sections,Math.max(0,t-.01)).slice(0,3)));
-   const u=unit(cross(tangent,Math.abs(dot(tangent,axis))>.98?[0,1,0]:axis)),v=cross(tangent,u);
-   const waves=1+fold*(Math.sin(a*5+t*1.6)+.44*Math.cos(a*9-t*2.2));
-   return vadd(p.slice(0,3),vadd(vmul(u,Math.cos(a)*Math.max(.0003,p[3])*waves),vmul(v,Math.sin(a)*Math.max(.0003,p[4])*waves)));
-  };
-  const grid=Array.from({length:rows+1},(_,j)=>Array.from({length:sides+1},(_,i)=>{
-   const p=point(j,i),v=vsub(point(j+.025,i),point(j-.025,i)),u=vsub(point(j,i+.025),point(j,i-.025));
-   return [p,unit(cross(u,v)),[i/sides*2,j/rows*2]];
+   const u=previous?unit(vsub(previous,vmul(tangent,dot(previous,tangent)))):
+    unit(cross(tangent,Math.abs(dot(tangent,axis))>.98?[0,1,0]:axis));
+   const v=cross(tangent,u);previous=u;
+   return Array.from({length:sides},(_,i)=>{
+    const a=i/sides*Math.PI*2,wave=1+fold*(Math.sin(a*5+t*1.6)+.44*Math.cos(a*9-t*2.2));
+    return vadd(p.slice(0,3),vadd(vmul(u,Math.cos(a)*Math.max(.0003,p[3])*wave),vmul(v,Math.sin(a)*Math.max(.0003,p[4])*wave)));
+   });
+  });
+  const grid=rings.map((ring,j)=>Array.from({length:sides+1},(_,i)=>{
+   const k=i%sides,du=vsub(ring[(k+1)%sides],ring[(k+sides-1)%sides]);
+   const dv=vsub(rings[Math.min(rows,j+1)][k],rings[Math.max(0,j-1)][k]);
+   return [ring[k],unit(cross(du,dv)),[i/sides*2,j/rows*2]];
   }));
   for(let j=0;j<rows;j++)for(let i=0;i<sides;i++){
    for(const v of [grid[j][i],grid[j][i+1],grid[j+1][i+1],grid[j][i],grid[j+1][i+1],grid[j+1][i]])this.vertex(m,...v);

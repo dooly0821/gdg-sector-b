@@ -36,7 +36,20 @@ export function prepareFingerBend(flex){
    const c=Math.cos(angle),s=Math.sin(angle);
    z=joint+localZ*c+y*s;y=y*c-localZ*s;
   }
-  return p.map((v,i)=>v+forward[i]*(z-oldZ)+normal[i]*(y-oldY));
+  // The thumb opposes the palm around its own oblique basal axis.
+  // Fade the rotation into the thenar pad to keep the wrist and palm fixed.
+  const thumbMask=smooth((digitWidths[0]-.009-across)/.029)*smooth((oldZ+.075)/.037);
+  // Bend the interphalangeal and metacarpophalangeal joints before
+  // applying basal opposition. All three axes rotate the existing tissue.
+  for(const [joint,share] of [[-.020,.24],[-.050,.19]]){
+   const local=z-joint,angle=amount*share*thumbMask*smooth(local/.018);
+   const c=Math.cos(angle),s=Math.sin(angle);
+   z=joint+local*c+y*s;y=y*c-local*s;
+  }
+  const thumbAngle=amount*.88*thumbMask;
+  const w=across-digitWidths[0],h=y+.009;
+  const c=Math.cos(thumbAngle),s=Math.sin(thumbAngle);
+  return p.map((v,i)=>v+forward[i]*(z-oldZ)+normal[i]*(y-oldY+w*s+h*(c-1))+width[i]*(w*(c-1)-h*s));
  };
 }
 export function relaxedFingerAmounts(time,step,side){
