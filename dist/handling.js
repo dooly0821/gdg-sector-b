@@ -60,12 +60,14 @@ export function updateViewmodel(s,dt){
  s.motionSpeed=mix(s.motionSpeed??0,speed,a);
  const dyaw=Math.atan2(Math.sin(s.yaw-(s.lastViewYaw??s.yaw)),Math.cos(s.yaw-(s.lastViewYaw??s.yaw)));
  const dpitch=s.pitch-(s.lastViewPitch??s.pitch);
- s.swayX=mix(s.swayX??0,Math.max(-.050,Math.min(.050,-dyaw*2.9)),a);
- s.swayY=mix(s.swayY??0,Math.max(-.042,Math.min(.042,-dpitch*2.7)),a);
+ const rateScale=1/Math.max(1,dt*60);
+ s.swayX=mix(s.swayX??0,Math.max(-.050,Math.min(.050,-dyaw*2.9*rateScale)),a);
+ s.swayY=mix(s.swayY??0,Math.max(-.042,Math.min(.042,-dpitch*2.7*rateScale)),a);
  s.handYawLag=mix(s.handYawLag??0,Math.max(-.028,Math.min(.028,-dyaw*1.8)),1-Math.exp(-dt*10));
  s.handPitchLag=mix(s.handPitchLag??0,Math.max(-.022,Math.min(.022,-dpitch*1.6)),1-Math.exp(-dt*10));
  s.lastViewYaw=s.yaw;s.lastViewPitch=s.pitch;
- if(s.grounded&&s.wasAirborne)s.landKick=.032;
+ if(s.grounded&&s.wasAirborne)s.landKick=Math.min(.055,.012+(s.fallSpeed??0)*.004);
+ s.fallSpeed=Math.max(0,-s.vy);
  s.wasAirborne=!s.grounded;s.landKick=(s.landKick??0)*Math.exp(-dt*13);
  s.airOffset=mix(s.airOffset??0,s.grounded?0:Math.max(-.038,Math.min(.038,-s.vy*.0075)),a);
  // Critically damped spring: inertia driven by actual player velocity, shared by hands and parcel.
@@ -99,6 +101,7 @@ export function choreography(s,eye,near,moving,sprinting,t){
  const stride=Math.min(1.45,(s.motionSpeed??(moving?(sprinting?7:4.5):0))/4.5)*(s.grounded?1:.28);
  const wave=Math.sin(s.steps*4.9),breath=Math.sin(t*1.45)*.003;
  const bob=[wave*.006*stride+(s.swayX??0)*.65,breath+Math.sin(s.steps*9.8+.6)*.0048*stride+(s.swayY??0)*.6+(s.airOffset??0)-(s.landKick??0),Math.cos(s.steps*4.9+.4)*.005*stride];
+ bob[1]-=(s.obstruction??0)*.10;bob[2]+=(s.obstruction??0)*.52;
  // Carry is a rigid assembly: no independent hand or box sway.
  const cargoBob=bob.map((v,i)=>v*(i===1?.55:.65)+[0,.060+.075*brace,-.085+.105*brace][i]+(s.cargoSpring?.[i]??0));
  const idle=[-1,1].map((side,i)=>({group:2+i,offset:[bob[0]+side*wave*.008*stride,bob[1]+side*wave*.012*stride+(i?0:Math.sin(t*1.1)*.002),bob[2]]}));

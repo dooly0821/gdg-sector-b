@@ -193,7 +193,7 @@ export class Renderer{
   // A viewmodel can overlap nearby geometry; the light origin stays near the eye
   // to avoid placing a light source on the far side of a wall.
   const local=pose.torchLocal?.position??[.325,-.283,-.887],dir=pose.torchLocal?.direction??[-.045,-.025,-1];
-  const torch=eye.map((v,i)=>v+right[i]*(local[0]+off[0])*.3+up[i]*(local[1]+off[1])*.3+forward[i]*.12);
+  const torch=eye.map((v,i)=>v+right[i]*(local[0]+off[0])+up[i]*(local[1]+off[1])-forward[i]*(local[2]+off[2]));
   gl.uniform3fv(u.torchPos,torch);gl.uniform3fv(u.torchDir,unit(forward.map((v,i)=>v*(-dir[2])+right[i]*dir[0]+up[i]*dir[1])));gl.uniform1f(u.torchPower,pose.flashlight||0);const lights=eye[0]<-17?[...this.lights].sort((a,b)=>
    Math.hypot(a[0]-eye[0],a[2]-eye[2])-Math.hypot(b[0]-eye[0],b[2]-eye[2])):this.lights;
   gl.uniform3fv(u.lamps,new Float32Array(lights.slice(0,8).flat()));
@@ -215,7 +215,7 @@ export class Renderer{
    gl.uniform1i(u.worldObject,0);
   }
   if(pose.flight&&!pose.assembly){gl.uniformMatrix4fv(u.VP,false,multiply(vp,pose.flight));gl.uniform3f(u.offset,0,0,0);gl.uniform1f(u.hand,1);for(const b of this.groups[1])this.draw(b);}
-  gl.clear(gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(u.VP,false,proj);
+  gl.uniformMatrix4fv(u.VP,false,proj);
   gl.uniform1f(u.hand,1);gl.uniform3f(u.eye,0,0,0);
   for(const layer of pose.hands){
    gl.uniform1i(u.worldObject,Boolean(layer.matrix));
