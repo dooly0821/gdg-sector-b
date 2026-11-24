@@ -208,8 +208,8 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
   const hitDx=s.x-actor.x,hitDz=s.z-actor.z,hitDist=Math.hypot(hitDx,hitDz);
   const aligned=(Math.sin(actor.yaw)*hitDx+Math.cos(actor.yaw)*hitDz)/Math.max(.001,hitDist);
   if(striking&&!s.encounterHit&&actor.age>.65&&actor.timer<.57&&line(local,actor,s)&&aligned>.40&&visible(local,[actor.x,strikeHeight,actor.z],[s.x,clamp(strikeHeight,s.y+.1,s.y+(s.bodyHeight??1.7)-.1),s.z])&&Math.hypot(hitDist,vertical)<armReach[i]&&s.hauntCooldown===0){
-   s.hauntCooldown=4;actor.state='retreat';actor.timer=2;
-   s.encounterHit={name:type.name,time:.40};
+   s.hauntCooldown=4;actor.speed=0;
+   s.encounterHit={name:type.name,time:.40,kind:i};
   }
  });
  return null;
