@@ -7,10 +7,10 @@ import {basis,multiply,dot} from './world.js';
 import {buildCreatureRigs,CREATURE_JOINTS} from './creature-models.js';
 
 const cast=[
- {name:'녹령',kind:'flicker',speed:5.15,range:11,float:.35},
- {name:'함귀',kind:'boxhead',speed:4.95,range:10,float:0},
- {name:'적재귀',kind:'imp',speed:5.85,range:10,float:0},
- {name:'표찰귀',kind:'wraith',speed:5.35,range:11,float:.38}
+ {name:'녹령',kind:'flicker',speed:5.65,range:15,float:.35},
+ {name:'함귀',kind:'boxhead',speed:5.55,range:14,float:0},
+ {name:'적재귀',kind:'imp',speed:6.30,range:13,float:0},
+ {name:'표찰귀',kind:'wraith',speed:5.95,range:15,float:.38}
 ];
 // Shared patrol loops. A creature can start from any of these loops and either direction.
 const routes=[
@@ -50,17 +50,32 @@ const eyeHeights=[1.9,1.8,.80,2.0],armReach=[1.04,.96,.73,1.13];
 function visible(blocks,a,b){
  return !blocks.some(box=>traceBox(a,b,box)<1);
 }
+// Sample several exposed points rather than relying on a single eye ray.
 function line(blocks,actor,s){
- const eye=[actor.x,eyeHeights[actor.kind??0],actor.z],h=s.bodyHeight??1.7;
- const targets=[[0,h-.15],[-.18,h*.56],[.18,h*.56]];
+ const i=actor.kind??0,h=s.bodyHeight??1.7,dx=s.x-actor.x,dz=s.z-actor.z,d=Math.hypot(dx,dz)||1;
+ const side=[dz/d,-dx/d],eyes=[eyeHeights[i],eyeHeights[i]*.73];
+ const targets=[[0,h-.15],[0,h*.54],[-.20,h*.66],[.20,h*.66],[0,h*.30]];
  if(s.showTraversal)actor.rays=[];
  let seen=false;
- for(const [offset,height] of targets){
-  const to=[s.x+offset,s.y+height,s.z],open=visible(blocks,eye,to);
+ for(const y of eyes)for(const [offset,height] of targets){
+  const eye=[actor.x,y,actor.z],to=[s.x+side[0]*offset,s.y+height,s.z+side[1]*offset],open=visible(blocks,eye,to);
   if(s.showTraversal)actor.rays.push({from:eye,to,open});
-  if(open){seen=true;if(!s.showTraversal)break;}
+  if(open){seen=true;if(!s.showTraversal)return true;}
  }
  return seen;
+}
+// The actual 3D beam: vertical aiming, body samples and physical occlusion.
+function lightSense(blocks,actor,s,forward){
+ const power=s.flashAmount??(s.flashlight?1:0);if(power<.25)return 0;
+ const eye=[s.x,s.y+(s.bodyHeight??1.7)-.12,s.z],i=actor.kind;
+ const range=[20,17,16,20][i];let strength=0;
+ for(const y of [eyeHeights[i],eyeHeights[i]*.68,eyeHeights[i]*.35]){
+  const p=[actor.x,y,actor.z],v=p.map((x,k)=>x-eye[k]),d=Math.hypot(...v);
+  if(d>range||d<.01)continue;
+  const angle=dot(forward,v)/d;
+  if(angle>.79&&visible(blocks,eye,p))strength=Math.max(strength,power*clamp((angle-.79)/.13,0,1));
+ }
+ return strength;
 }
 const mapCache=new WeakMap();
 const bodyHeights=[1.85,1.8,.95,1.95];
@@ -159,13 +174,30 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
    return;
   }
   const safe=s.grounded&&REFUGES.some(([x,y,z,r])=>Math.abs(s.y-y)<.09&&Math.hypot(s.x-x,s.z-z)<r);
-  const pursuit=actor.pursuit??false,detectRange=type.range*(s.bodyHeight<1.2&&!s.flashlight?.62:1);
+  const pursuit=actor.pursuit??false,torchOn=(s.flashAmount??0)>.25;
+  const detectRange=type.range*(s.bodyHeight<1.2&&!torchOn?.67:1);
+  const near=dist<5.5,range=pursuit?24:Math.max(5.5,detectRange);
   actor.sightDelay=(actor.sightDelay??0)-dt;
-  if(actor.sightDelay<=0){actor.sightDelay=.085+i*.012;actor.seenCache=dist<(pursuit?24:detectRange)&&line(local,actor,s);}
-  const seen=!safe&&dist<(pursuit?24:detectRange)&&actor.seenCache;
+  // Immediately test entry into the close zone or a newly switched-on light.
+  if(actor.sightDelay<=0||near!==actor.wasNear||torchOn!==actor.wasTorch){
+   actor.sightDelay=near?.035:.075+i*.009;
+   actor.seenCache=dist<Math.max(range,torchOn?20:0)&&line(local,actor,s);
+   actor.beam=lightSense(local,actor,s,forward);
+   actor.wasNear=near;actor.wasTorch=torchOn;
+  }
+  const lit=!safe&&torchOn&&(actor.beam??0)>.25;
+  const seen=!safe&&actor.seenCache&&(dist<range||torchOn&&dist<type.range+4)||lit;
+  const acquired=seen&&!pursuit;
   const noise=s.noise,hearing=[1.12,1.55,.85,.95][i];
   const heard=noise&&s.elapsed-noise.time<.55&&Math.hypot(noise.x-actor.x,noise.z-actor.z,noise.y-eyeHeights[i])<noise.radius*hearing;
-  if(seen){actor.lastKnown=[s.x,s.z];actor.lost=0;actor.pursuit=true;actor.searchPoint=null;actor.inspect=null;actor.checked=[];actor.fakeDone=false;if(['fakeLeave','ambush','inspect','guard'].includes(actor.state)){actor.state='alert';actor.timer=0;}}
+  if(seen){
+   actor.lastKnown=[s.x,s.z];actor.lost=0;actor.pursuit=true;actor.searchPoint=null;actor.inspect=null;actor.checked=[];actor.fakeDone=false;
+   if(acquired||['fakeLeave','ambush','inspect','guard','patrol'].includes(actor.state)){
+    actor.state='alert';actor.timer=0;actor.navDelay=0;actor.navDirect=false;actor.navPath=null;actor.navJob=null;actor.recoverPoint=null;
+    actor.speed=Math.max(actor.speed??0,2.6);actor.aggression=Math.max(actor.aggression??0,.65);
+    actor.reveal=1;
+   }
+  }
   else {actor.lost=(actor.lost??0)+dt;if(heard){actor.lastKnown=[noise.x,noise.z];actor.searchPoint=null;}}
   // Do not give up just because one frame of sight was blocked.
   // Once acquired, continue to the last seen position and sweep the area.
@@ -173,17 +205,20 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
    actor.pursuit=false;actor.state='patrol';actor.lastKnown=null;actor.corner=null;actor.inspect=null;actor.fakeDone=false;
   }
   if(i===3&&s.horrorEvent?.type==='drop'&&s.elapsed-s.horrorEvent.time<.55&&dist<4){actor.state='disappear';return;}
-  const lit=seen&&s.flashAmount>.8&&dist>0&&dot(forward,[-delta[0]/dist,0,-delta[1]/dist])>.9;
+  actor.lightReaction=approach(actor.lightReaction??0,lit?1:0,dt*9);
+  actor.reveal=Math.max(0,(actor.reveal??0)-dt*2.8);
+  const repelled=lit&&(i===0||i===3);
   actor.timer=Math.max(0,actor.timer-dt);
   if(safe&&(actor.pursuit||actor.state==='guard')){
    if(actor.state!=='guard'){actor.state='guard';actor.timer=2.6;actor.guardPoint=actor.lastKnown??[actor.x,actor.z];actor.pursuit=false;actor.corner=null;}
    if(!actor.timer){actor.state='patrol';actor.lastKnown=null;}
   }else if(actor.state==='guard'){
    actor.state='search';actor.pursuit=true;actor.lastKnown=actor.guardPoint;actor.timer=4;
-  }else if(lit&&(i===0||i===3)){
-   actor.state='retreat';actor.timer=.9;
+  }else if(repelled){
+   actor.state='retreat';actor.timer=.20;
   }else if(actor.state==='retreat'){
-   if(!actor.timer)actor.state=actor.pursuit?'alert':'patrol';
+   // Reacquire immediately when the beam leaves the body.
+   if(seen||!actor.timer){actor.state=actor.pursuit?'alert':'patrol';actor.timer=0;actor.navDelay=0;}
   }else if(actor.state==='windup'){
    if(seen&&actor.timer>.065)actor.chargeTarget=[s.x,s.z];
    if(!actor.timer){actor.state='charge';actor.timer=.62;}
@@ -249,10 +284,11 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
   const desired=actor.state==='inspect'||actor.state==='ambush'?actor.yaw+Math.sin(actor.age*2.4)*.09:aim?Math.atan2(heading[0]-actor.x,heading[1]-actor.z):actor.yaw;
   actor.yaw+=clamp(Math.atan2(Math.sin(desired-actor.yaw),Math.cos(desired-actor.yaw)),-dt*(chasing?12:7),dt*(chasing?12:7));
   const pressure=1+Math.min(1,(s.states?.filter(k=>k==='DELIVERED').length??0)/30)*.19;
+  const rage=lit&&(i===1||i===2)?1.14:1;
   // Different chase rhythms; the telegraphed charge is faster than sprinting.
   const pulse=i===0?.88+.22*Math.sin(actor.phase*.73):i===1?.91+.18*Math.sin(actor.phase*.46):i===2?.94+.10*Math.sin(actor.phase*.31):.87+.26*Math.pow(.5+.5*Math.sin(actor.phase*.69),3);
-  const goalSpeed=actor.state==='ambush'||actor.state==='inspect'?0:actor.state==='fakeLeave'?2.3:actor.state==='guard'?Math.hypot(actor.x-target[0],actor.z-target[1])>1.3?2.5:0:retreat?3.3:actor.state==='windup'?type.speed*.38:actor.state==='charge'?type.speed*1.32*pressure:actor.state==='recovery'?type.speed*.72:chasing?type.speed*pressure*pulse*(actor.state==='search'?.88:1):actor.state==='search'?2.8:1.35;
-  actor.speed=approach(actor.speed,aim?goalSpeed:0,dt*(actor.state==='charge'?18:chasing?[15,11,9,17][i]:7));
+  const goalSpeed=actor.state==='ambush'||actor.state==='inspect'?0:actor.state==='fakeLeave'?2.3:actor.state==='guard'?Math.hypot(actor.x-target[0],actor.z-target[1])>1.3?2.5:0:retreat?3.3:actor.state==='windup'?type.speed*.38:actor.state==='charge'?type.speed*1.32*pressure:actor.state==='recovery'?type.speed*.72:chasing?type.speed*pressure*pulse*rage*(actor.state==='search'?.88:1):actor.state==='search'?2.8:1.35;
+  actor.speed=approach(actor.speed,aim?goalSpeed:0,dt*(actor.state==='charge'?18:chasing?[23,22,20,25][i]:7));
   const before=[actor.x,actor.z],distance=aim?Math.hypot(aim[0]-actor.x,aim[1]-actor.z):0;
   const stride=Math.min(actor.speed*dt,distance);
   let moved=resolved;
@@ -275,8 +311,8 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
   if(!moved&&wantsMove){actor.navDelay=Math.min(actor.navDelay??0,.075);actor.speed*=.86;}
   const beat=Math.floor(actor.phase/Math.PI);
   actor.phase+=dt*(1+actor.speed*(i===2?5.3:2.4));
-  if(previous!==actor.state||beat!==Math.floor(actor.phase/Math.PI)){
-   (s.hauntSounds??=[]).push({x:actor.x,z:actor.z,kind:i,accent:previous!==actor.state});
+  if(acquired||previous!==actor.state||beat!==Math.floor(actor.phase/Math.PI)){
+   (s.hauntSounds??=[]).push({x:actor.x,z:actor.z,kind:i,accent:acquired||previous!==actor.state});
    if(s.hauntSounds.length>4)s.hauntSounds.shift();
   }
   if(actor.state!=='charge')actor.strikePoints=null;
@@ -319,6 +355,9 @@ export function hauntLayers(s){
    [.23*Math.sin(a.phase*.97)+reach*.12,.16*Math.cos(a.phase*.67),.22*Math.sin(a.phase*.78)]
   ];
   if(['inspect','ambush','guard'].includes(a.state)){angles[1][1]+=.75*Math.sin(a.age*2.7);angles[1][2]+=.29*Math.cos(a.age*2.1);angles[0][0]+=.13;}
+  const reaction=a.lightReaction??0,reveal=a.reveal??0;
+  if(reaction>0){angles[1][2]+=(i===0||i===3?.48:.25)*reaction*Math.sin(a.phase*2.3);angles[0][0]+=(i===0||i===3?-.20:.18)*reaction;angles[2][0]-=.20*reaction;}
+  angles[1][1]+=.35*reveal*Math.sin(a.phase*2.1);angles[0][0]+=.15*reveal;
   const coil=a.state==='windup'?clamp(1-a.timer/[.18,.22,.28,.17][i],0,1):0;
   const strike=a.state==='charge'?Math.sin(Math.PI*clamp((.62-a.timer)/.57,0,1)):0;
   if(a.pursuit||a.state==='charge'||a.state==='alert'){
