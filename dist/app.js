@@ -17,7 +17,7 @@ let sound,master,hum;
 function audioOn(){try{if(!sound){sound=new AudioContext();master=sound.createGain();master.gain.value=0;master.connect(sound.destination);hum=sound.createOscillator();hum.frequency.value=56;hum.type='sine';hum.connect(master);hum.start();}sound.resume().catch(()=>{});master.gain.setTargetAtTime(settings.audio&&mode==='game'?.026:0,sound.currentTime,.4);}catch{}}
 function beep(hz,time=.12,type='sine',gain=.1){if(!sound||!settings.audio)return;let o=sound.createOscillator(),g=sound.createGain(),now=sound.currentTime;o.type=type;o.frequency.setValueAtTime(hz,now);o.frequency.exponentialRampToValueAtTime(hz*.68,now+time);g.gain.setValueAtTime(gain,now);g.gain.exponentialRampToValueAtTime(.0001,now+time);o.connect(g);g.connect(sound.destination);o.start();o.stop(now+time+.02);}
 function say(line,duration=5){$('#radio').innerHTML='<strong>관제실</strong>'+line;radioUntil=performance.now()+duration*1000;}
-const rows=[['W A S D','이동'],['MOUSE','시점 회전'],['SHIFT','달리기'],['C','앉기 / 낮은 선반 진입'],['SPACE / WHEEL','점프 · 연속 점프 · 방향 입력 중 장애물 넘기'],['Q','손전등 들기 / 내리기'],['E','상자 들기 · 다시 눌러 내려놓기'],['ESC','일시 정지']];
+const rows=[['W A S D','이동'],['MOUSE','시점 회전'],['SHIFT','달리기'],['C','앉기 / 낮은 선반 진입'],['SPACE / WHEEL','점프 · 연속 점프 · 방향 입력 중 장애물 넘기'],['C + SPACE','달리기 중 앉기 점프 · 버니합'],['Q','손전등 들기 / 내리기'],['E','상자 들기 · 다시 눌러 내려놓기'],['ESC','일시 정지']];
 const links='<a class="doc" href="characters.html" target="_blank" rel="noopener">캐릭터 검수실 ↗</a><div class="panel-actions"><a class="doc" href="unity-migration.html" target="_blank" rel="noopener">Unity 이식 가이드 ↗</a></div>';
 function action(name,label,primary=false){return '<button class="'+(primary?'primary':'secondary')+'" data-action="'+name+'">'+label+'</button>';}
 function plan(){
@@ -145,7 +145,7 @@ function frame(now){if(mode!=='game')return;const dt=Math.min(.1,Math.max(0,(now
  const active=s.handAction;
  if(active){const result=advanceHandling(s,worlds[0].blocks,dt);if(result)onHandling(result,now,active.target.id);}
  const facing=forward(s);
- const threat=updateHaunt(s,worlds[0].blocks,facing,dt);
+ let threat=null;const hauntSteps=Math.max(1,Math.ceil(dt*60));for(let k=0;k<hauntSteps&&!threat;k++)threat=updateHaunt(s,worlds[0].blocks,facing,dt/hauntSteps);
  if(threat){canvas.classList.remove('captured');failShift(threat);return;}
  if(s.encounterHit&&!canvas.classList.contains('captured')){canvas.classList.add('captured');beep([130,83,48,190][s.encounterHit.kind]??69,.38,'sawtooth',.17);}
  for(const event of s.hauntSounds??[]){
@@ -165,8 +165,10 @@ function frame(now){if(mode!=='game')return;const dt=Math.min(.1,Math.max(0,(now
  const useTarget=handlingTarget(s,worlds[0].blocks),available=canUse(s,useTarget,worlds[0].blocks);
  const target=s.carried<0&&available?useTarget:nextTarget(s);
  const {reach,brace}=vaultPose(s.vault);
- const eye=[s.x,s.y+(s.bodyHeight??1.70)-.12+bob-.065*brace-(s.landKick??0)*.8,s.z];
- const view=brace?forward({...s,pitch:s.pitch-.125*reach}):facing;
+ const eyeHeight=(s.bodyHeight??1.70)-.12;
+ s.viewHeight=eyeHeight<(s.viewHeight??eyeHeight)?eyeHeight:(s.viewHeight??eyeHeight)+(eyeHeight-(s.viewHeight??eyeHeight))*(1-Math.exp(-dt*19));
+ const eye=[s.x,s.y+s.viewHeight+bob-.040*brace-(s.landKick??0)*.8,s.z];
+ const view=brace?forward({...s,pitch:s.pitch-.070*reach}):facing;
  const pose=choreography(s,eye,available,moving,keys.has('ShiftLeft')||keys.has('ShiftRight'),s.elapsed,view);
  pose.actors=[...hauntLayers(s),...workerLegLayers(s)];pose.clock=s.elapsed;
  renderer.render(eye,view,parcelPositions(s,pose.hidden),pose,settings.scale);
