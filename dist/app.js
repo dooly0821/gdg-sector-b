@@ -1,7 +1,8 @@
 import {drawTraversalDebug} from './traversal-debug.js';
 import {equipmentClearance} from './contact.js';
 import {vaultPose} from './hand-motion.js';
-import {updateHaunt,hauntLayers} from './haunt.js';
+import {updateHaunt,hauntLayers,SPAWN_BALANCE} from './haunt.js';
+import {HIDING_POINTS,REFUGES} from './annex.js';
 import {createScene,CONFIG,PARCELS,DOCK,newShift,step,forward,nextTarget,handlingTarget,dropTarget,canUse,parcelPositions,parcelBlocks,deliveryCount,shiftParcel,MISSION_TOTAL} from './mission.js';
 import {PHYSICS} from "./movement.js";
 import {workerLegLayers,rigs,beginHandling,advanceHandling,choreography,toggleFlashlight,updateViewmodel} from './handling.js';
@@ -17,7 +18,7 @@ let sound,master,hum;
 function audioOn(){try{if(!sound){sound=new AudioContext();master=sound.createGain();master.gain.value=0;master.connect(sound.destination);hum=sound.createOscillator();hum.frequency.value=56;hum.type='sine';hum.connect(master);hum.start();}sound.resume().catch(()=>{});master.gain.setTargetAtTime(settings.audio&&mode==='game'?.026:0,sound.currentTime,.4);}catch{}}
 function beep(hz,time=.12,type='sine',gain=.1){if(!sound||!settings.audio)return;let o=sound.createOscillator(),g=sound.createGain(),now=sound.currentTime;o.type=type;o.frequency.setValueAtTime(hz,now);o.frequency.exponentialRampToValueAtTime(hz*.68,now+time);g.gain.setValueAtTime(gain,now);g.gain.exponentialRampToValueAtTime(.0001,now+time);o.connect(g);g.connect(sound.destination);o.start();o.stop(now+time+.02);}
 function say(line,duration=5){$('#radio').innerHTML='<strong>관제실</strong>'+line;radioUntil=performance.now()+duration*1000;}
-const rows=[['W A S D','이동'],['MOUSE','시점 회전'],['SHIFT','달리기'],['C','앉기 / 낮은 선반 진입'],['SPACE / WHEEL','점프 · 연속 점프 · 방향 입력 중 장애물 넘기'],['C + SPACE','달리기 중 앉기 점프 · 버니합'],['Q','손전등 들기 / 내리기'],['E','상자 들기 · 다시 눌러 내려놓기'],['ESC','일시 정지']];
+const rows=[['W A S D','이동'],['MOUSE','시점 회전'],['SHIFT','달리기'],['C (누르고 유지)','앉기 / 은신'],['C + W A S D','앉은 채 이동 / 낮은 은신처 진입'],['W + SPACE','선반 · 난간 · 상자 등반'],['SPACE / WHEEL','점프 · 연속 점프 · 방향 입력 중 장애물 넘기'],['C + SPACE','달리기 중 앉기 점프 · 버니합'],['Q','손전등 들기 / 내리기'],['E','상자 들기 · 다시 눌러 내려놓기'],['ESC','일시 정지']];
 const links='<a class="doc" href="characters.html" target="_blank" rel="noopener">캐릭터 검수실 ↗</a><div class="panel-actions"><a class="doc" href="unity-migration.html" target="_blank" rel="noopener">Unity 이식 가이드 ↗</a></div>';
 function action(name,label,primary=false){return '<button class="'+(primary?'primary':'secondary')+'" data-action="'+name+'">'+label+'</button>';}
 function plan(){
@@ -30,8 +31,10 @@ function plan(){
  for(const [x,z] of [[-37,65],[-22,74],[-7,65],[8,74]])shapes+=rect(x-1.35,z-1,2.7,2,'#55594f');
  for(const [x,z] of [[-32,68],[-2,68]])shapes+=rect(x-1.5,z-1.5,3,3,'#71988b');
  shapes+=label(-40,-5,'C-01 분류동')+label(-13,-18,'B 메인 창고')+label(-40,24,'D-03 반품동')+label(-13,24,'D-02 이송동')+label(-40,56,'C-02 폐기물 처리동')+label(-13,56,'D-04 격리실험동');
+ for(const [x,z] of HIDING_POINTS)shapes+='<rect x="'+(X(x)-2.3)+'" y="'+(Y(z)-2.3)+'" width="4.6" height="4.6" fill="#a9c6e0"/>';
+ for(const [x,y,z] of REFUGES)shapes+='<circle cx="'+X(x)+'" cy="'+Y(z)+'" r="3.1" fill="#79cda6" stroke="#c5ebd8" stroke-width=".6"/>';
  const lines=(session?.cargo??PARCELS).map((p,i)=>{if(session&&session.states[i]!=='AVAILABLE')return '';const pos=session?.parked?.[i]??p.pos;return '<circle cx="'+X(pos[0])+'" cy="'+Y(pos[2])+'" r="2" fill="#f3bd51"/>';}).join('');
- return '<svg class="map-drawing" viewBox="0 0 306 516" aria-label="GDG 시설 평면도">'+shapes+lines+'<rect x="'+(X(DOCK[0])-4)+'" y="'+(Y(DOCK[2])-2)+'" width="8" height="4" fill="#9bc8cf"/><circle cx="'+X(session?.x??1.7)+'" cy="'+Y(session?.z??15)+'" r="3" fill="#f1f1e2"/></svg><div class="map-key"><span>● 화물</span><span style="color:#9bc8cf">■ 출고대</span><span>● 작업자</span></div>';
+ return '<svg class="map-drawing" viewBox="0 0 306 516" aria-label="GDG 시설 평면도">'+shapes+lines+'<rect x="'+(X(DOCK[0])-4)+'" y="'+(Y(DOCK[2])-2)+'" width="8" height="4" fill="#9bc8cf"/><circle cx="'+X(session?.x??1.7)+'" cy="'+Y(session?.z??15)+'" r="3" fill="#f1f1e2"/></svg><div class="map-key"><span>● 화물</span><span style="color:#9bc8cf">■ 출고대</span><span>● 작업자</span><span style="color:#a9c6e0">■ 은신처 입구</span><span style="color:#79cda6">● 높은 피신 지점</span></div>';
 }
 function panel(name,body,title,eyebrow='GDG / 근무 안내'){
  pane=name;$('#eyebrow').textContent=eyebrow;$('#paneTitle').textContent=title;$('#paneBody').innerHTML=body;$('#modal').hidden=false;$('#close').focus();
@@ -39,7 +42,21 @@ function panel(name,body,title,eyebrow='GDG / 근무 안내'){
 function openPane(name){
  if(mode==='game'){pauseShift(false);}
  if(name==='quit')panel(name,'<p>현재 근무를 종료할까요? 진행 중인 배송은 초기화됩니다.</p><div class="panel-actions">'+action('quit','근무 종료',true)+action('brief','계속하기')+'</div>','게임 종료','GDG / 야간 근무');
- if(name==='manual')panel(name,'<p>GDG 상자 30개를 한 개씩 02번 출고대로 운반하세요. 상자에 가까이 다가가 조준선에 노란 테두리가 생기면 E로 집습니다. E를 다시 눌러 앞의 빈 바닥이나 받침대에 내려놓거나 출고대에서 배송하세요. 서쪽 입구는 C-01 야간 분류 구역으로 이어집니다.</p>'+rows.map(([k,l])=>'<div class="row"><span>'+l+'</span><kbd>'+k+'</kbd></div>').join('')+'<p>C를 누르면 앉습니다. 빈 선반 칸 앞에서 C + W로 진입하고, 선반을 향해 W + Space를 누르면 자동으로 몸을 접어 오릅니다. B-12 측면의 계단식 발판을 이용하면 최상층까지 오를 수 있습니다. 높은 선반은 상자를 내려놓고 오르세요. 상층 캣워크는 동쪽 계단으로 올라갑니다. ESCAPE DECK 표지의 높은 발판은 피신 지점입니다. 귀신은 은신처를 조사하고 돌아올 수 있으니 발소리와 손전등에 주의하세요. 마우스가 고정되지 않으면 왼쪽 버튼을 누른 채 드래그하거나 방향키로 시점을 돌릴 수 있습니다.</p>'+ '<div class="panel-actions">'+action('map','구역 지도')+'</div>'+links,'조작 방법','WORK 모드 / 근무자 매뉴얼');
+ if(name==='manual')panel(name,
+ '<div class="survival-manual"><p>GDG 상자 30개를 한 개씩 02번 출고대로 운반하세요. 가까이 다가가 노란 조준 표시가 생기면 E로 집고, 출고대에서 E로 배송합니다.</p>'+
+ '<h3>01 / 기본 조작</h3>'+rows.map(([k,l])=>'<div class="row"><span>'+l+'</span><kbd>'+k+'</kbd></div>').join('')+
+ '<h3>02 / 은신 방법</h3><p><b>C를 누른 채 W A S D로 이동</b>하여 빈 선반 아래, 상자 뒤 또는 SERVICE / LOW CLEARANCE 표시가 붙은 낮은 은신처 안으로 들어가세요. C를 놓으면 머리 위 공간이 충분할 때 일어납니다. 별도의 은신 상호작용 키는 없습니다.</p>'+
+ '<p>구조물이 귀신과 나 사이의 시야를 가리게 하고, Q로 손전등을 끄세요. 움직임을 멈추면 발소리를 줄일 수 있습니다. 달리기, 점프 착지, 상자 집기·내려놓기는 소음을 발생시킵니다. 앉아 있다고 무적이 되는 것은 아닙니다.</p>'+
+ '<h3>03 / 추격 및 피신</h3><p>귀신은 마지막으로 본 위치와 소리를 기억합니다. 은신처 입구를 확인하고 떠나는 척 다시 돌아올 수도 있습니다. 발소리가 멀어졌다고 바로 뛰어나오지 마세요. 추격을 끊으려면 시야를 차단한 채 거리를 충분히 벌리거나 지정된 높은 피신 지점으로 이동하세요.</p>'+
+ '<p>상자를 내려놓고 발판을 향해 W + SPACE로 연속 등반하세요. B-12 상층 선반과 C-02 폐기물 처리동, D-04 격리실험동의 ESCAPE DECK은 지정 피신 지점입니다. 해당 발판 중앙에 착지하면 일반 지상 추격을 끊을 수 있습니다. 모든 높은 물체가 안전한 것은 아닙니다.</p>'+
+ '<p>새 귀신은 '+SPAWN_BALANCE.minDistance+'~'+SPAWN_BALANCE.maxDistance+'m 거리의 가려진 위치에서 등장하며 '+SPAWN_BALANCE.grace+'초 동안 추격과 공격을 시작하지 않습니다. 관제실 경고와 방향성 위협음을 듣고 도주 경로를 확보하세요. 기존 귀신에게 붙잡히면 즉시 근무 실패입니다.</p>'+
+ '<h3>04 / 개체별 생존 공략</h3>'+
+ '<article class="creature-guide"><h4>녹령 <small>빛 회피형</small></h4><p>평상시 시야를 끊고 조용히 이동하세요. 발견되면 Q로 손전등을 켜 몸을 직접 비추면 물러납니다. 빛을 떼면 다시 추격하므로 그 사이 우회로 또는 높은 피신 지점으로 이동하세요. 빛만 켜 놓는 것은 방어가 아닙니다.</p></article>'+
+ '<article class="creature-guide"><h4>함귀 <small>소음 추적형</small></h4><p>네 개체 중 소음 감도가 가장 높습니다. 가까이 있을 때 달리기와 상자 조작을 피하고 C로 천천히 이동하세요. 직접 비춘 빛에 더 빨라지므로 손전등을 끄고 구조물 뒤로 시야를 끊으세요. 한 번 숨었다고 안심하지 마세요.</p></article>'+
+ '<article class="creature-guide"><h4>적재귀 <small>고속 돌진형</small></h4><p>기본 추격 속도가 가장 빠르고 공격 준비 거리도 깁니다. 정면에서 맞서거나 직선으로만 도망치지 말고 선반과 기둥을 돌아 거리를 벌리세요. 손전등은 오히려 자극합니다. 상자를 내려놓고 파쿠르를 통해 지정 피신 지점으로 이동하세요.</p></article>'+
+ '<article class="creature-guide"><h4>표찰귀 <small>화물 반응형</small></h4><p>직접 비춘 손전등 빛으로 일시적으로 물러나게 할 수 있습니다. 표찰귀가 약 4m 이내에 있을 때 운반 중인 상자를 E로 정상적으로 내려놓으면 사라집니다. 배송 완료가 아닌 임시 적치이며, 내려놓을 공간이 필요합니다. 너무 가까워지기 전에 행동하세요. 격리동에서는 천장 이동 및 하강도 주의하세요.</p></article>'+
+ '<h3>05 / 지도 및 이동 팁</h3><p>구역 지도의 파란 사각형은 은신처 입구, 초록 원은 지정 피신 지점입니다. ESC → 구역 지도로 확인할 수 있습니다. 마우스가 고정되지 않으면 왼쪽 버튼을 누른 채 드래그하거나 방향키로 시점을 돌리세요.</p></div>'+
+ '<div class="panel-actions">'+action('map','구역 지도')+'</div>'+links,'조작 방법 및 공략','WORK 모드 / 근무자 생존 매뉴얼');
  if(name==='map')panel(name,plan()+'<p>직원 입고대에서 중앙 통로를 따라 북쪽으로 가면 출고대가 나옵니다. 동쪽 계단은 상층 화물로 연결됩니다.</p>','구역 지도','SECTOR B / 시설 평면도');
  if(name==='settings')panel(name,'<small>그래픽 품질</small><div class="presets">'+['HIGH','BALANCED','PERFORMANCE'].map(q=>'<button class="preset '+(q===settings.quality?'active':'')+'" data-quality="'+q+'">'+q+'</button>').join('')+'</div><label class="row">렌더 해상도 <output id="scaleVal">'+Math.round(settings.scale*100)+'%</output><input id="scale" type="range" min=".55" max="1" step=".05" value="'+settings.scale+'"></label><label class="row">마우스 감도 <output id="sensVal">'+settings.sensitivity.toFixed(1)+'×</output><input id="sens" type="range" min=".4" max="1.8" step=".1" value="'+settings.sensitivity+'"></label><div class="row">걸을 때 시점 흔들림<button class="toggle '+(settings.motion?'on':'')+'" data-toggle="motion">'+(settings.motion?'ON':'OFF')+'</button></div><div class="row">창고 소리<button class="toggle '+(settings.audio?'on':'')+'" data-toggle="audio">'+(settings.audio?'ON':'OFF')+'</button></div>','설정','SECTOR B / 환경 설정');
  if(name==='pause')panel(name,'<div class="row"><span>배송 완료</span><b>'+deliveryCount(session)+' / '+MISSION_TOTAL+'</b></div><div class="panel-actions">'+action('resume','근무 재개',true)+action('map','구역 지도')+action('settings','설정')+action('manual','조작 방법')+action('brief','메인 메뉴')+'</div>','일시 정지','GDG / 대기 중');
@@ -160,16 +177,17 @@ function frame(now){if(mode!=='game')return;const dt=Math.min(.067,Math.max(0,(n
  if(threat){canvas.classList.remove('captured');failShift(threat);return;}
  if(s.encounterHit&&!canvas.classList.contains('captured')){canvas.classList.add('captured');beep([130,83,48,190][s.encounterHit.kind]??69,.38,'sawtooth',.17);}
  for(const event of s.hauntSounds??[]){
+  if(event.spawnWarning&&event.initial)say('경고: 인근 통로에서 미확인 개체 감지. 도주 경로를 확보하십시오.',2.5);
   if(!settings.audio||!sound)continue;
   const dx=event.x-s.x,dz=event.z-s.z,d=Math.max(1,Math.hypot(dx,dz));
   const pan=sound.createStereoPanner(),gain=sound.createGain(),voice=sound.createOscillator();
   pan.pan.value=Math.max(-1,Math.min(1,(dx*Math.cos(s.yaw)-dz*Math.sin(s.yaw))/d));
   voice.type=['sine','triangle','sine','sawtooth'][event.kind];
-  const f=[208,86,52,307][event.kind]*(event.accent?1.35:1),now=sound.currentTime;
-  voice.frequency.setValueAtTime(f,now);voice.frequency.exponentialRampToValueAtTime(f*.53,now+.16);
-  gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime(.42/(1+d*.52),now+.018);
-  gain.gain.exponentialRampToValueAtTime(.0001,now+.2);
-  voice.connect(gain).connect(pan).connect(master);voice.start();voice.stop(now+.21);
+  const f=[208,86,52,307][event.kind]*(event.spawnWarning?1.12:event.accent?1.35:1),now=sound.currentTime;
+  voice.frequency.setValueAtTime(f,now);voice.frequency.exponentialRampToValueAtTime(f*.53,now+(event.spawnWarning?.28:.16));
+  gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime((event.spawnWarning?.75:.42)/(1+d*.52),now+.018);
+  gain.gain.exponentialRampToValueAtTime(.0001,now+(event.spawnWarning?.38:.2));
+  voice.connect(gain).connect(pan).connect(master);voice.start();voice.stop(now+(event.spawnWarning?.39:.21));
   voice.onended=()=>{voice.disconnect();gain.disconnect();pan.disconnect();};
  }
  if(s.hauntSounds)s.hauntSounds.length=0;
