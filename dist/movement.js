@@ -1,6 +1,6 @@
 import {nearbyBlocks} from './contact.js';
 // Original, Source-inspired movement controller. All units are metres/seconds.
-export const PHYSICS=Object.freeze({hz:120,walk:4.5,sprint:7,groundAccel:11,friction:7,stopSpeed:1.7,airAccel:12,airWish:1.15,bhopCap:9.8,gravity:14,jump:5.25,radius:.255,height:1.70,stepHeight:.25,groundSnap:.16,jumpBuffer:.10,skin:.001});
+export const PHYSICS=Object.freeze({hz:120,walk:4.5,sprint:7,groundAccel:11,friction:7,stopSpeed:1.7,airAccel:16,airWish:2.15,bhopCap:11.2,gravity:14,jump:5.25,radius:.255,height:1.70,stepHeight:.25,groundSnap:.16,jumpBuffer:.10,skin:.001});
 const P=PHYSICS,clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const bounds=[[-16,-23,-14.79,12,-10,20],[-16,16,-14.79,23,-10,20],[14.55,-23,16,23,-10,20],[-16,-23,16,-21.4,-10,20],[-16,21.4,-3,22.15,-10,20],[3,21.4,16,22.15,-10,20],[11,-20,14.9,7,3.12,3.6]];
 function contact(x,z,b,r){const [a,c,d,e]=b;const qx=clamp(x,a,d),qz=clamp(z,c,e),dx=x-qx,dz=z-qz,len=Math.hypot(dx,dz);if(len>=r)return null;if(len>1e-8)return [dx/len,dz/len,r-len];const sides=[[x-a,-1,0],[d-x,1,0],[z-c,0,-1],[e-z,0,1]].sort((a,b)=>a[0]-b[0]);return [sides[0][1],sides[0][2],r+sides[0][0]];}
@@ -126,9 +126,10 @@ function planVault(s,blocks,x,z,surface,wish){
    let clear=true;
    for(let y=top;y>landing;y-=.035){if(blocked(px,y,pz)){clear=false;break;}}
    if(!clear||blocked(px,landing,pz))continue;
-   const entry=clamp(.34+approach*.12,.34,.44),crossing=distance-approach;
-   const desiredExit=shelf?1.15:Math.max(1.65,speed*Math.max(.65,alignment));
-   const duration=high?.90:clamp(2*crossing/((1-entry)*desiredExit),.28,.60);
+   const entry=high?.48:clamp(.34+approach*.12,.34,.44),crossing=distance-approach;
+   const desiredExit=shelf?Math.min(2.5,Math.max(1.35,speed*.55)):Math.max(2.3,speed*Math.max(.78,alignment));
+   const rise=Math.max(0,crest-s.y);
+    const duration=high?clamp(.48+rise*.08,.58,.65):clamp(Math.max(.20+rise*.12,1.65*crossing/((1-entry)*desiredExit)),.25,.46);
    const exitSpeed=Math.min(desiredExit,2.65*crossing/((1-entry)*duration));
    const startTangent=Math.min(speed*duration,2*approach/entry);
    const entryTangent=Math.min(.75*approach/entry,.75*crossing/(1-entry));
@@ -181,27 +182,45 @@ function advanceVault(s,dt){
 }
 export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
  if(dt<=0)return;s.vx??=0;s.vz??=0;s.jumpBuffer??=0;
- if(jump)s.jumpBuffer=P.jumpBuffer;else s.jumpBuffer=Math.max(0,s.jumpBuffer-dt);
+ const duck=keys.has('KeyC'),hopHeld=duck&&keys.has('Space');
+ if((jump||hopHeld)&&!s.vault)s.jumpBuffer=P.jumpBuffer;else s.jumpBuffer=Math.max(0,s.jumpBuffer-dt);
  const blocks=[...nearbyBlocks(staticBlocks,s.x,s.z),...dynamic,...bounds];
- const duck=keys.has('KeyC');
  const current=s.bodyHeight??P.height,target=duck||s.vault?.bodyHeight===1.06?1.06:P.height;
- const height=current+clamp(target-current,-dt*4,dt*4);
+ const height=current+clamp(target-current,-dt*6.8,dt*5.5);
  s.bodyHeight=height<=current||!blocks.some(b=>contact(s.x,s.z,b,P.radius)&&overlaps(s.y,b,s.z,s.x,height))?height:current;
  const up=+keys.has('KeyW')-+keys.has('KeyS'),side=+keys.has('KeyD')-+keys.has('KeyA'),mag=Math.hypot(up,side),wish=s.bodyHeight<P.height-.01?P.walk*.55:keys.has('ShiftLeft')||keys.has('ShiftRight')?P.sprint:P.walk;
  const x=mag?(Math.cos(s.yaw)*side-Math.sin(s.yaw)*up)/mag:0,z=mag?(-Math.sin(s.yaw)*side-Math.cos(s.yaw)*up)/mag:0;
 
  if(s.vault){
   const [px,py,pz]=vaultPoint(s.vault,Math.min(1,(s.vault.time+dt)/s.vault.duration));
-  if(!(s.vault.high&&jump)&&!blocks.some(b=>overlaps(py,b,pz,px,s.bodyHeight)&&contact(px,pz,b,P.radius))){advanceVault(s,dt);return;}
+  if(!blocks.some(b=>overlaps(py,b,pz,px,s.bodyHeight)&&contact(px,pz,b,P.radius))){advanceVault(s,dt);return;}
   s.vault=null;s.vy=Math.min(0,s.vy);s.jumpBuffer=0;
  }
  if(s.grounded&&s.jumpBuffer>0&&mag){
   s.vault=planVault(s,blocks,x,z,surface,wish);
   if(s.vault){s.bodyHeight=s.vault.bodyHeight;s.grounded=false;s.jumpBuffer=0;advanceVault(s,dt);return;}
  }
- if(s.grounded&&s.jumpBuffer>0){s.vy=P.jump;s.grounded=false;s.jumpBuffer=0;}
- if(s.grounded){const speed=Math.hypot(s.vx,s.vz),next=Math.max(0,speed-Math.max(speed,P.stopSpeed)*P.friction*dt);if(speed>0){s.vx*=next/speed;s.vz*=next/speed;}if(mag)accelerate(s,x,z,wish,P.groundAccel,dt);}
- else if(mag)accelerate(s,x,z,P.airWish,P.airAccel,dt);
+ const preSpeed=Math.hypot(s.vx,s.vz);
+ if(s.grounded&&duck&&!s.wasDuck&&preSpeed>P.sprint*.78)s.slideTime=.42;
+ if(!duck)s.slideTime=0;
+ s.wasDuck=duck;
+ s.slideTime=Math.max(0,(s.slideTime??0)-dt);
+ if(s.grounded&&s.jumpBuffer>0){
+  s.vy=P.jump;s.grounded=false;s.jumpBuffer=0;s.hopBoosted=false;
+  s.slideTime=0;
+ }
+ // One small momentum gain per airborne hop, never a per-frame speed exploit.
+ // Crouch-jumping at running speed rewards a forward or strafe input.
+ if(!s.grounded&&duck&&mag&&!s.hopBoosted&&preSpeed>P.sprint*.78&&s.vx*x+s.vz*z>preSpeed*.15){
+  const gain=Math.min(P.bhopCap,preSpeed+.52)/preSpeed;
+  s.vx*=gain;s.vz*=gain;s.hopBoosted=true;
+ }
+ if(s.grounded){
+  const speed=Math.hypot(s.vx,s.vz),sliding=s.slideTime>0&&duck&&speed>P.walk;
+  const friction=sliding?1.6:P.friction,next=Math.max(0,speed-Math.max(speed,P.stopSpeed)*friction*dt);
+  if(speed>0){s.vx*=next/speed;s.vz*=next/speed;}
+  if(mag)accelerate(s,x,z,wish,sliding?3:P.groundAccel,dt);
+ }else if(mag)accelerate(s,x,z,P.airWish,P.airAccel,dt);
  const speed=Math.hypot(s.vx,s.vz);if(speed>P.bhopCap){s.vx*=P.bhopCap/speed;s.vz*=P.bhopCap/speed;}
  const ox=s.x,oz=s.z,wasGrounded=s.grounded;
  const slices=Math.max(1,Math.ceil(Math.hypot(s.vx,s.vz)*dt/.035));for(let i=0;i<slices;i++)solve(s,blocks,s.vx*dt/slices,s.vz*dt/slices,surface);
