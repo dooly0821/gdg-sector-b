@@ -1,3 +1,4 @@
+import {drawTraversalDebug} from './traversal-debug.js';
 import {equipmentClearance} from './contact.js';
 import {vaultPose} from './hand-motion.js';
 import {updateHaunt,hauntLayers} from './haunt.js';
@@ -155,6 +156,7 @@ function frame(now){if(mode!=='game')return;const dt=Math.min(.1,Math.max(0,(now
  const pose=choreography(s,eye,available,moving,keys.has('ShiftLeft')||keys.has('ShiftRight'),s.elapsed,view);
  pose.actors=[...hauntLayers(s),...workerLegLayers(s)];pose.clock=s.elapsed;
  renderer.render(eye,view,parcelPositions(s,pose.hidden),pose,settings.scale);
+ if(s.showTraversal||document.querySelector('#traversal-debug'))drawTraversalDebug(s,worlds[0].blocks,renderer);
  const mark=$('#waypoint'),p=$('#prompt'),brackets=$('#target-brackets');
  let msg=s.climbHint>s.elapsed?'높은 선반에 오르려면 E로 상자를 내려놓으세요.':'';brackets.hidden=true;mark.hidden=true;
  if(target&&!s.handAction){
@@ -182,6 +184,7 @@ function frame(now){if(mode!=='game')return;const dt=Math.min(.1,Math.max(0,(now
 document.addEventListener('keydown',e=>{
  if(e.code==='Escape'){if(mode==='game'){pauseShift();}else if(!$('#modal').hidden){closePane();}return;}
  if(mode!=='game')return;if(['Space','KeyW','KeyA','KeyS','KeyD','KeyE','KeyQ','ShiftLeft','ShiftRight','ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();
+ if(e.code==='F3'){e.preventDefault();if(!e.repeat)session.showTraversal=!session.showTraversal;return;}
  if(e.code==='KeyQ'&&!e.repeat){if(session.handAction){session.restoreTorch=!session.restoreTorch;return;}if(toggleFlashlight(session)){session.pendingUse=false;session.restoreTorch=false;beep(180,.055,'triangle',.025);}else say('상자를 집거나 내려놓는 동안에는 장비 전환을 할 수 없습니다.',2);return;}if(e.code==='KeyE'&&!e.repeat){use();return;}if(e.code==='Space'&&!e.repeat)jump=true;keys.add(e.code);
 });document.addEventListener('keyup',e=>keys.delete(e.code));
 canvas.addEventListener('wheel',e=>{if(mode==='game'){e.preventDefault();jump=true;}},{passive:false});

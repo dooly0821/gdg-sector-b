@@ -33,8 +33,15 @@ function visible(blocks,a,b){
 }
 function line(blocks,actor,s){
  const eye=[actor.x,eyeHeights[actor.kind??0],actor.z],h=s.bodyHeight??1.7;
- return [[0,h-.15],[-.18,h*.56],[.18,h*.56]].some(([offset,height])=>
-  visible(blocks,eye,[s.x+offset,s.y+height,s.z]));
+ const targets=[[0,h-.15],[-.18,h*.56],[.18,h*.56]];
+ if(s.showTraversal)actor.rays=[];
+ let seen=false;
+ for(const [offset,height] of targets){
+  const to=[s.x+offset,s.y+height,s.z],open=visible(blocks,eye,to);
+  if(s.showTraversal)actor.rays.push({from:eye,to,open});
+  if(open){seen=true;if(!s.showTraversal)break;}
+ }
+ return seen;
 }
 const annexCache=new WeakMap();
 const sizes=[.35,.34,.44,.32];
@@ -87,23 +94,47 @@ function updateSpawns(s,blocks,forward,dt,rng){
   state:'patrol',timer:0,speed:0,age:0,life:25+rng()*18,aggression:0});
  director.delay=7+rng()*8-(s.states?.filter(k=>k==='DELIVERED').length??0)*.38;
 }
+// Sample the rendered wrist joints and torso through the active window.
+function attackContact(actor,s,blocks){
+ const layers=hauntLayers({x:s.x,z:s.z,haunt:[actor]}),joints=CREATURE_JOINTS[actor.kind];
+ if(!layers.length)return false;
+ const points=[10,11,0].map(index=>{
+  const m=layers[index].matrix,p=index?joints[index].pivot:[0,eyeHeights[actor.kind]*.57,.11];
+  return [0,1,2].map(k=>m[k]*p[0]+m[4+k]*(p[1]-(index?.06:0))+m[8+k]*(p[2]+(index?.08:0))+m[12+k]);
+ });
+ const old=actor.strikePoints??points;actor.strikePoints=points;
+ return points.some((p,i)=>{
+  const a=old[i],dx=p[0]-a[0],dz=p[2]-a[2],len=dx*dx+dz*dz;
+  const t=len?clamp(((s.x-a[0])*dx+(s.z-a[2])*dz)/len,0,1):1;
+  const x=a[0]+dx*t,z=a[2]+dz*t,y=a[1]+(p[1]-a[1])*t,r=i===2?sizes[actor.kind]:.095;
+  const bodyY=clamp(y,s.y+.22,s.y+(s.bodyHeight??1.70)-.22);
+  return Math.hypot(x-s.x,y-bodyY,z-s.z)<r+.255&&visible(blocks,[x,y,z],[s.x,bodyY,s.z]);
+ });
+}
 export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
  if(s.x>=-16&&!s.haunt)return null;
  if(!annexCache.has(blocks))annexCache.set(blocks,blocks.filter(b=>b[0]<-15));
  blocks=annexCache.get(blocks);
  s.haunt??=[];
+ if(s.encounterHit){
+  s.encounterHit.time-=dt;
+  if(s.encounterHit.time<=0){
+   const name=s.encounterHit.name;s.encounterHit=null;
+   s.handAction=null;s.pendingUse=null;s.vault=null;s.jumpBuffer=0;s.vx=s.vz=0;s.vy=0;s.x=-16.1;s.y=0;s.z=14;s.grounded=true;
+   return name;
+  }
+ }
  updateSpawns(s,blocks,forward,dt,rng);
  s.hauntCooldown=Math.max(0,(s.hauntCooldown??0)-dt);
- let encounter=null;
  s.haunt.forEach(actor=>{
   if(actor.state==='disappear')return;
   const previous=actor.state;
   const i=actor.kind,type=cast[i],delta=[s.x-actor.x,s.z-actor.z],dist=Math.hypot(...delta);
   const local=blocks.filter(b=>b[0]<-15&&b[2]>Math.min(actor.x,s.x)-2&&b[0]<Math.max(actor.x,s.x)+2&&b[3]>Math.min(actor.z,s.z)-2&&b[1]<Math.max(actor.z,s.z)+2);
   const seen=s.x<-16&&dist<type.range*(s.bodyHeight<1.2&&!s.flashlight? .72:1)&&line(local,actor,s);
-  const moving=Math.hypot(s.vx??0,s.vz??0);
-  const heard=s.x<-16&&dist<(moving*.85+(s.vault?2:0))*(seen?1:.65);
-  if(seen||heard)actor.lastKnown=[s.x,s.z];
+  const noise=s.noise;
+  const heard=noise&&s.elapsed-noise.time<.55&&Math.hypot(noise.x-actor.x,noise.z-actor.z,noise.y-eyeHeights[i])<noise.radius*(seen?1:.62);
+  if(seen)actor.lastKnown=[s.x,s.z];else if(heard)actor.lastKnown=[noise.x,noise.z];
   if(actor.state==='patrol'&&heard&&!seen){actor.state='search';actor.timer=2.6;}
   if(actor.state==='alert'&&!seen){actor.state='search';actor.timer=3.1;}
   if(actor.state==='alert'&&seen&&dist<1.38&&s.y<eyeHeights[i]+.24){
@@ -148,16 +179,17 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
    (s.hauntSounds??=[]).push({x:actor.x,z:actor.z,kind:i,accent:previous!==actor.state});
    if(s.hauntSounds.length>4)s.hauntSounds.shift();
   }
+  if(actor.state!=='charge')actor.strikePoints=null;
+  const striking=actor.state==='charge'&&attackContact(actor,s,local);
   const strikeHeight=eyeHeights[i]-.30;
   const vertical=Math.max(0,s.y-strikeHeight,strikeHeight-s.y-(s.bodyHeight??1.70));
   const aligned=(Math.sin(actor.yaw)*delta[0]+Math.cos(actor.yaw)*delta[1])/Math.max(.001,dist);
-  if(actor.state==='charge'&&actor.timer<.57&&seen&&aligned>.40&&visible(local,[actor.x,strikeHeight,actor.z],[s.x,clamp(strikeHeight,s.y+.1,s.y+(s.bodyHeight??1.7)-.1),s.z])&&Math.hypot(dist,vertical)<armReach[i]&&s.hauntCooldown===0){
+  if(striking&&actor.timer<.57&&seen&&aligned>.40&&visible(local,[actor.x,strikeHeight,actor.z],[s.x,clamp(strikeHeight,s.y+.1,s.y+(s.bodyHeight??1.7)-.1),s.z])&&Math.hypot(dist,vertical)<armReach[i]&&s.hauntCooldown===0){
    s.hauntCooldown=4;actor.state='retreat';actor.timer=2;
-   s.handAction=null;s.pendingUse=null;s.vault=null;s.jumpBuffer=0;s.vx=s.vz=0;s.vy=0;s.x=-16.1;s.y=0;s.z=14;s.grounded=true;
-   encounter=type.name;
+   s.encounterHit={name:type.name,time:.13};
   }
  });
- return encounter;
+ return null;
 }
 
 export const ACTOR_START=11;

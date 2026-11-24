@@ -1,3 +1,4 @@
+import {startRecording,saveRecording} from './browser-recording.mjs';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {mkdir} from 'node:fs/promises';
@@ -54,6 +55,7 @@ try{
   return !document.querySelector('#play').hidden&&document.querySelector('#loading').hidden;
  });
  assert.ok(await page.locator('#world').evaluate(canvas=>!!canvas.getContext('webgl2')));
+ if(capture)await startRecording(page);
  await vault('warehouse-catwalk',{x:11.77,y:3.6,z:-18,yaw:Math.PI/2},0,end=>end.x<10.78);
  await vault('warehouse-ramp',{x:12.25,y:1.5975,z:11.45,yaw:Math.PI/2},0,end=>end.x<11.36);
  await vault('warehouse-cargo',{x:9.19,y:0,z:-14.72,yaw:Math.PI},1.0295,end=>end.z>-14);
@@ -90,6 +92,7 @@ try{
  await page.evaluate(()=>Object.assign(qa.shift,{x:-32,z:2,yaw:.38,pitch:.03}));
  await page.waitForFunction(()=>qa.shift.hauntDirector!==undefined);
  await take('containment');
+ if(capture)await saveRecording(page,join(capture,'handling.webm'));
  assert.deepEqual(errors,[]);
  console.log('PASS Chromium WebGL2: actual W/Space in warehouse and C-01, one-hand vault, Q/E floor drop/retrieve and delivery');
 }finally{

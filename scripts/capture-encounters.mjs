@@ -1,3 +1,4 @@
+import {startRecording,saveRecording} from './browser-recording.mjs';
 import {createRequire} from 'node:module';
 import {mkdir,writeFile} from 'node:fs/promises';
 const {chromium}=createRequire(import.meta.url)('playwright');
@@ -15,21 +16,15 @@ try{
  await page.goto(base);await page.click('#start');
  await page.waitForFunction(()=>!document.querySelector('#play').hidden&&document.querySelector('#loading').hidden);
  const stats=await page.evaluate(async()=>{
-  const canvas=document.querySelector('canvas'),stream=canvas.captureStream(60);
-  const chunks=[],rec=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp8'});
-  rec.ondataavailable=e=>chunks.push(e.data);
-  window.finishClip=()=>new Promise(resolve=>{
-   rec.onstop=async()=>{const bytes=new Uint8Array(await new Blob(chunks).arrayBuffer());let data='';for(const n of bytes)data+=String.fromCharCode(n);resolve(btoa(data));stream.getTracks().forEach(t=>t.stop());};
-   rec.stop();
-  });
   const durations=[],s=getShift();let last=performance.now();
   for(let i=0;i<42;i++){await new Promise(requestAnimationFrame);const now=performance.now();if(i>1)durations.push(now-last);last=now;}
-  durations.sort((a,b)=>a-b);rec.start();
+  durations.sort((a,b)=>a-b);
   return {fps:durations.length*1000/durations.reduce((a,b)=>a+b),p95Ms:durations[Math.ceil(durations.length*.95)-1]};
  });
  const baseline=process.env.QA_BASELINE==='1';
  await page.screenshot({path:out+'/'+(baseline?'before':'after')+'-spawn.jpg',quality:88});
  if(!baseline){
+  await startRecording(page);
   for(let kind=0;kind<4;kind++){
    await page.evaluate(kind=>{
     const s=getShift();Object.assign(s,{x:-18.3,y:0,z:14,yaw:Math.PI/2,pitch:-.08,hauntCooldown:0,hauntDirector:{delay:100,bag:[]}});
@@ -49,7 +44,6 @@ try{
   await page.keyboard.up('Control');
   await page.keyboard.down('s');await page.waitForFunction(()=>getShift().y<.01);await page.keyboard.up('s');
  }
- const video=await page.evaluate(()=>finishClip());
- if(!baseline)await writeFile(out+'/encounters.webm',Buffer.from(video,'base64'));
+ if(!baseline)await saveRecording(page,out+'/encounters.webm');
  console.log(JSON.stringify(stats));await writeFile(out+'/'+(baseline?'before':'after')+'-timing.json',JSON.stringify(stats));
 }finally{await browser.close();}

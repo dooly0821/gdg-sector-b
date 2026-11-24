@@ -52,7 +52,14 @@ export function step(s,keys,blocks,dt,jump=false){
   const [w,h,d]=parcelHalf;
   return [[x-w,z-d,x+w,z+d,y,y+h,'climb']];
  }):[];
- return move(s,keys,blocks,dt,jump,surface,dynamic);
+ const grounded=s.grounded,vy=s.vy,previousStep=Math.floor(s.steps/.90),vault=s.vault;
+ move(s,keys,blocks,dt,jump,surface,dynamic);
+ const speed=Math.hypot(s.vx,s.vz);
+ let radius=0;
+ if(!grounded&&s.grounded)radius=2+Math.min(7,Math.abs(vy));
+ else if(!vault&&s.vault)radius=s.vault.rail||s.vault.high?6:4;
+ else if(s.grounded&&Math.floor(s.steps/.90)>previousStep)radius=s.bodyHeight<1.3?1.4:speed*1.1;
+ if(radius)s.noise={x:s.x,y:s.y+.2,z:s.z,radius,time:s.elapsed};
 }
 const parcelPos=(s,i)=>s.parked?.[i]??PARCELS[i].pos;
 const dockTarget=()=>({pos:DOCK,id:'BAY 02',area:'Outbound dispatch',dock:true});
@@ -122,7 +129,8 @@ export function interact(s,target,blocks){
  if(!canUse(s,target,blocks))return null;
  if(target.drop){
   (s.parked??={})[target.index]=target.pos.slice();
-  s.states[target.index]='AVAILABLE';s.carried=-1;return 'dropped';
+  s.states[target.index]='AVAILABLE';s.carried=-1;
+  s.noise={x:target.pos[0],y:target.pos[1],z:target.pos[2],radius:4.5,time:s.elapsed};return 'dropped';
  }
  if(target.dock&&s.carried>=0&&s.states[s.carried]==='CARRIED'){s.deliveryOrder??=s.states.flatMap((v,i)=>v==='DELIVERED'?[i]:[]);s.deliveryOrder.push(s.carried);s.states[s.carried]='DELIVERED';s.carried=-1;return 'delivered';}
  if(!target.dock&&s.carried===-1&&s.states[target.index]==='AVAILABLE'){s.carried=target.index;s.states[target.index]='CARRIED';return 'picked';}

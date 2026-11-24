@@ -111,7 +111,8 @@ void main(){
   // Leave low-light contrast intact while rolling off overlapping lamps and hot materials.
  vec3 hdr=max(vec3(0.),col+vec3(1.,.76,.45)*mist);
  vec3 highlight=max(hdr-.70,vec3(0.));
- outColor=vec4(min(hdr,.70)+.30*(1.-exp(-3.33*highlight)),1.);
+ float opacity=Q.w==4.?mix(.67,.89,pow(1.-abs(dot(n,v)),1.5)):1.;
+ outColor=vec4(min(hdr,.70)+.30*(1.-exp(-3.33*highlight)),opacity);
 }`;
 const depthFS='#version 300 es\nprecision highp float;void main(){}';
 function compile(gl,vert,frag){const sh=(type,src)=>{let s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;};let p=gl.createProgram();gl.attachShader(p,sh(gl.VERTEX_SHADER,vert));gl.attachShader(p,sh(gl.FRAGMENT_SHADER,frag));gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p));return p;}
@@ -164,7 +165,7 @@ export class Renderer{
   for(const o of world.parts){
    const {shape,pos,axes,m}=o,staticShadow=pos[1]<6.1&&shape!=='face'&&m.emission<.01&&!m.name.includes('wall')&&!m.name.includes('slab');
    const cell=chunked?[Math.floor(pos[0]/10),Math.floor(pos[2]/10),staticShadow?1:0].join(':'):'one';
-   const key=shape+cell;if(!batches.has(key))batches.set(key,{shape,staticShadow,values:[],min:[Infinity,Infinity,Infinity],max:[-Infinity,-Infinity,-Infinity]});
+   const key=shape+cell;if(!batches.has(key))batches.set(key,{shape,staticShadow,translucent:!!m.rim,values:[],min:[Infinity,Infinity,Infinity],max:[-Infinity,-Infinity,-Infinity]});
    const b=batches.get(key);for(let k=0;k<3;k++){const rad=axes.reduce((s,v,j)=>s+Math.abs(v[k])*(shape==='sphere'||shape==='cylinder'&&j!==1?1:.5),0);b.min[k]=Math.min(b.min[k],pos[k]-rad);b.max[k]=Math.max(b.max[k],pos[k]+rad);}
    const kind=m.type,cart=kind==='carton',fit=m.rim?4:m.name==='building-slab'?3:cart?1:kind==='sign'||kind==='image'?2:0;
    let tex=cart?'carton'+(num++%6):kind==='image'?m.url:kind==='sign'?m.name:kind;let color=rgb(m.color);if(cart)color=color.map(v=>.83+.17*v);
@@ -175,7 +176,7 @@ export class Renderer{
    for(const [i,size,off] of [[0,3,0],[1,3,12],[2,2,24]]){gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,size,gl.FLOAT,false,32,off);}
    let inst=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,inst);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(b.values),gl.STATIC_DRAW);
    for(const [i,size,off] of [[3,3,0],[4,3,3],[5,3,6],[6,3,9],[7,4,12],[8,4,16]]){gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,size,gl.FLOAT,false,80,4*off);gl.vertexAttribDivisor(i,1);}
-   let center=b.min.map((v,i)=>(v+b.max[i])*.5);return {vao,verts,shape:b.shape,count:b.values.length/20,staticShadow:b.staticShadow,center,radius:Math.hypot(...b.max.map((v,i)=>v-center[i]))};});
+   let center=b.min.map((v,i)=>(v+b.max[i])*.5);return {vao,verts,shape:b.shape,count:b.values.length/20,staticShadow:b.staticShadow,translucent:b.translucent,center,radius:Math.hypot(...b.max.map((v,i)=>v-center[i]))};});
  }
  setQuality(name){
   const gl=this.gl;this.quality=name;const sizes={HIGH:2048,BALANCED:1024,PERFORMANCE:512};this.size=sizes[name];
@@ -208,9 +209,22 @@ export class Renderer{
   if(pose.actors?.length){
    gl.uniform3f(u.offset,0,0,0);
    gl.uniform1i(u.worldObject,1);
+   const transparent=[];
    for(const actor of pose.actors){
     gl.uniformMatrix4fv(u.objectMatrix,false,actor.matrix);
-    for(const b of this.groups[actor.group])this.draw(b);
+    for(const b of this.groups[actor.group]){
+     if(b.translucent){
+      const m=actor.matrix,c=b.center;
+      const depth=forward.reduce((d,f,i)=>d+f*(m[i]*c[0]+m[4+i]*c[1]+m[8+i]*c[2]+m[12+i]-eye[i]),0);
+      transparent.push({b,m,depth});
+     }else this.draw(b);
+    }
+   }
+   if(transparent.length){
+    transparent.sort((a,b)=>b.depth-a.depth);gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
+    for(const {b,m} of transparent){gl.uniformMatrix4fv(u.objectMatrix,false,m);this.draw(b);}
+    gl.depthMask(true);gl.disable(gl.BLEND);
    }
    gl.uniform1i(u.worldObject,0);
   }
