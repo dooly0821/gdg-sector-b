@@ -81,8 +81,23 @@ const mapCache=new WeakMap();
 const bodyHeights=[1.85,1.8,.95,1.95];
 const inMap=(x,z)=>x>-42.5&&x<14.35&&z>-21.1&&z<77.5&&(x>=-15||z>-8.65);
 const sizes=[.35,.34,.44,.32];
+export const SPAWN_BALANCE=Object.freeze({minDistance:16,maxDistance:28,grace:2.5,firstMin:8,intervalMin:12});
+export function hiddenSpawn(s,x,z,kind,blocks,surface=0){
+ const dx=x-s.x,dz=z-s.z,d=Math.hypot(dx,dz)||1,side=[dz/d,-dx/d];
+ const eye=[s.x,s.y+(s.bodyHeight??1.7)-.12,s.z];
+ const heights=surface?[surface-.3,surface-1,surface-1.8]:[cast[kind].float+.18,eyeHeights[kind]*.55,eyeHeights[kind]+.22];
+ for(const h of heights)for(const offset of [-sizes[kind],0,sizes[kind]]){
+  if(visible(blocks,eye,[x+side[0]*offset,h,z+side[1]*offset]))return false;
+ }
+ return true;
+}
+function spawnCue(s,a,initial=false){
+ const cues=s.hauntSounds??=[];
+ cues.push({x:a.x,z:a.z,kind:a.kind,accent:true,spawnWarning:true,initial});
+ if(cues.length>4)cues.shift();
+}
 function updateSpawns(s,blocks,forward,dt,rng){
- const director=s.hauntDirector??={delay:1.8+rng()*2.8,bag:[]};
+ const director=s.hauntDirector??={delay:SPAWN_BALANCE.firstMin+rng()*4,bag:[]};
  for(const actor of s.haunt)actor.age+=dt;
  for(const actor of s.haunt){
   if(actor.age>actor.life&&Math.hypot(s.x-actor.x,s.z-actor.z)>7&&actor.state==='patrol')actor.state='disappear';
@@ -90,9 +105,11 @@ function updateSpawns(s,blocks,forward,dt,rng){
  }
  s.haunt=s.haunt.filter(actor=>(actor.fade??1)>0);
  const event=s.horrorEvent;
- if(event&&event!==director.lastEvent){director.lastEvent=event;if(rng()<(event.type==='delivery'?.85:event.type==='pickup'?.72:.42))director.delay=Math.min(director.delay,.45+rng()*1.1);}
+ if(event&&event!==director.lastEvent){director.lastEvent=event;if(director.lastSpawn!=null&&rng()<(event.type==='delivery'?.85:event.type==='pickup'?.72:.42))director.delay=Math.min(director.delay,3+rng()*2);}
  director.delay-=dt;
  if(director.delay>0||s.haunt.length>=2)return;
+ if(director.lastSpawn!=null&&(s.elapsed??0)-director.lastSpawn<SPAWN_BALANCE.intervalMin)return;
+ if(s.haunt.some(a=>a.state!=='disappear'&&(a.pursuit||Math.hypot(s.x-a.x,s.z-a.z)<12))){director.delay=1.2;return;}
  if(!director.bag.length)director.bag=randomOrder([0,1,2,3],rng);
  const slot=director.bag.findIndex(kind=>!s.haunt.some(actor=>actor.kind===kind));
  if(slot<0)return;
@@ -102,24 +119,27 @@ function updateSpawns(s,blocks,forward,dt,rng){
  const candidates=routes.flatMap((path,route)=>path.map(([x,z],index)=>({path,route,index,x,z})));
  const spawn=randomOrder(candidates,rng).sort((a,b)=>Number(zone(b.x,b.z)===currentZone)-Number(zone(a.x,a.z)===currentZone)).find(candidate=>{
   const {x,z,route}=candidate,dx=x-s.x,dz=z-s.z,dist=Math.hypot(dx,dz);
-  if(!inMap(x,z)||dist<6.2||dist>20||!clear(blocks,x,z,.63,type.float,bodyHeights[kind]))return false;
+  if(!inMap(x,z)||dist<SPAWN_BALANCE.minDistance||dist>SPAWN_BALANCE.maxDistance||!clear(blocks,x,z,.63,type.float,bodyHeights[kind]))return false;
   if(s.haunt.some(a=>a.route===route||Math.hypot(a.x-x,a.z-z)<5))return false;
-  return dot(forward,[dx/dist,0,dz/dist])<.47||!line(blocks,{...candidate,kind},s);
+  const local=queryBlocks(s.navIndex,Math.min(x,s.x)-1,Math.min(z,s.z)-1,Math.max(x,s.x)+1,Math.max(z,s.z)+1);
+  return hiddenSpawn(s,x,z,kind,local);
  });
- if(!spawn){director.delay=.85+rng()*.75;return;}
+ if(!spawn){director.delay=1.8+rng()*1.7;return;}
  director.bag.splice(slot,1);
  const {path,route,index,x,z}=spawn,direction=rng()<.5?-1:1,pathIndex=(index+direction+path.length)%path.length;
  const yaw=Math.atan2(path[pathIndex][0]-x,path[pathIndex][1]-z);
  s.haunt.push({kind,route,path,direction,pathIndex,x,z,yaw,phase:rng()*Math.PI*2,
-  state:'patrol',timer:0,speed:0,age:0,life:25+rng()*18,aggression:0});
+  state:'patrol',timer:0,speed:0,age:0,life:40+rng()*18,aggression:0,spawnGrace:SPAWN_BALANCE.grace});
+ director.lastSpawn=s.elapsed??0;
  // A confined ceiling route in the deep lab. No arbitrary wall penetration.
  if(kind===3&&x>=13&&z>=56&&z<=75&&rng()<.72){
   const a=s.haunt.at(-1);
-  if(clear(blocks,13.85,z,.75,0,7.7)){
+  if(Math.hypot(s.x-13.85,s.z-z)>=SPAWN_BALANCE.minDistance&&Math.hypot(s.x-13.85,s.z-z)<=SPAWN_BALANCE.maxDistance&&clear(blocks,13.85,z,.75,0,7.7)&&hiddenSpawn(s,13.85,z,kind,queryBlocks(s.navIndex,Math.min(13.85,s.x)-1,Math.min(z,s.z)-1,Math.max(13.85,s.x)+1,Math.max(z,s.z)+1),7.55)){
    a.x=13.85;a.state='ceilingStalk';a.surfaceY=7.55;a.surfaceRoll=Math.PI;a.surfaceDir=direction;a.timer=6.5;
   }
  }
- director.delay=Math.max(4,8+rng()*6-Math.min(6,(s.states?.filter(k=>k==='DELIVERED').length??0)*.2));
+ spawnCue(s,s.haunt.at(-1),true);
+ director.delay=SPAWN_BALANCE.intervalMin+5+rng()*7-Math.min(4,(s.states?.filter(k=>k==='DELIVERED').length??0)*.13);
 }
 // Sample the rendered wrist joints and torso through the active window.
 function attackContact(actor,s,blocks){
@@ -155,6 +175,12 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
  let captured=null;
  s.haunt.forEach(actor=>{
   if(captured||actor.state==='disappear')return;
+  if((actor.spawnGrace??0)>0){
+   const old=actor.spawnGrace;actor.spawnGrace=Math.max(0,old-dt);
+   actor.speed=0;actor.phase+=dt*.65;
+   if(old>1.25&&actor.spawnGrace<=1.25)spawnCue(s,actor);
+   return;
+  }
   const previous=actor.state;
   const i=actor.kind,type=cast[i],delta=[s.x-actor.x,s.z-actor.z],dist=Math.hypot(...delta);
   const local=queryBlocks(nav,Math.min(actor.x,s.x)-2,Math.min(actor.z,s.z)-2,Math.max(actor.x,s.x)+2,Math.max(actor.z,s.z)+2);
