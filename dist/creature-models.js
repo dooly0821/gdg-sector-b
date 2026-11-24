@@ -30,12 +30,12 @@ function materials(world,name){
  const m=(id,color,type='cardboard',emission=0,sheen=.11)=>Object.assign(world.mat(name+'-'+id,color,type,emission),{sheen});
  const image=(id,url)=>world.imageMat(name+'-'+id,'assets/'+url+'.webp');
  return {
-  mint:Object.assign(m('mint','#85a99b','skin',.07,.38),{rim:true}),
-  ecto:Object.assign(m('ecto','#aacba5','skin',.09,.44),{rim:true}),
-  violet:m('violet','#9f8aa6','skin',0,.29),clay:m('clay','#89716e','skin',0,.21),
+  mint:Object.assign(m('mint','#526d62','skin',.07,.38),{rim:true}),
+  ecto:Object.assign(m('ecto','#879d78','skin',.09,.44),{rim:true}),
+  violet:m('violet','#9f8aa6','skin',0,.29),clay:m('clay','#65524e','skin',0,.21),
   folds:m('folds','#645561','cloth'),wrap:m('wrap','#9e8874','cloth'),
   boot:m('boot','#4f4245','rubber',0,.19),sole:m('sole','#2f272a','rubber'),
-  pulp:m('pulp','#af825e'),liner:m('liner','#c99d70'),tear:m('tear','#e6c59b'),
+  pulp:m('pulp','#987051'),liner:m('liner','#c99d70'),tear:m('tear','#e6c59b'),
   crease:m('crease','#6b4835'),tape:m('tape','#d5a248','paint',0,.77),tapeEdge:m('tape-edge','#e6c17c','paint',0,.45),
   wood:m('wood','#a06f49','wood'),end:m('grain','#805233','wood'),rivet:m('rivet','#878080','metal',0,.89),
   roller:m('roller','#6c6267','metal',0,.92),black:m('void','#130d16','plain'),mouth:m('mouth','#3b2435','skin',0,.21),
@@ -336,6 +336,42 @@ function wraith(meshes,m,joints){
   papers(meshes[j],m,point(joints[j].pivot,0,-.048,.016),{count:6,width:.105,length:.101,radius:.077,spread:.16});
  }
 }
+// Distort the original logistics silhouettes rather than replace their identities.
+function horrorDetails(meshes,m,joints,i){
+ const [body,head]=meshes;
+ if(i===0){
+  // Uneven hollow face framed by elongated, folded ghost tissue.
+  for(const side of [-1,1]){
+   const a=side===1?.035:0;
+   head.sweep(m.mint,[[side*.14,1.82+a,.08,.035,.022],[side*.22,1.69,.17,.039,.026],[side*.19,1.40,.23,.030,.020],[side*.10,1.17-a,.19,.005,.004]],{sides:12,steps:3,fold:.16});
+   for(let j=0;j<4;j++){const x=side*(.028+j*.024);head.tri(m.tear,[x-.011,1.52,.246],[x+.012,1.52,.247],[x,1.46-(j%2)*.045,.264]);}
+  }
+  for(let j=0;j<5;j++){const y=1.38-j*.092;body.ring(m.violet,[.025*Math.sin(j),y,.12],.16-j*.014,.054,.014,{segments:16});}
+ }else if(i===1){
+  // A dark, uneven face cavity and torn corrugated projections.
+  head.ellipsoid(m.black,[0,1.675,.272],[.125,.075,.027],.14);
+  for(let j=0;j<7;j++){const x=(j-3)*.034;head.tri(m.tear,[x-.015,1.73,.299],[x+.014,1.73,.299],[x+.006,1.665-(j%3)*.026,.32]);}
+  for(const side of [-1,1])for(let j=0;j<3;j++){const x=side*(.26-j*.045),y=2.01+j*.023;head.panel(m.pulp,[[x-.036,y,.02],[x+.037,y,.06],[x+side*.07,y+.13+j*.025,-.02]],{edge:m.tear,thickness:.012});}
+ }else if(i===2){
+  // Splintered load frame and curled metal hooks.
+  for(const side of [-1,1]){
+   body.sweep(m.roller,[[side*.22,.49,-.12,.042],[side*.38,.59,-.13,.038],[side*.43,.82,-.15,.027],[side*.34,.94,-.18,.003]],{sides:10,steps:3});
+   head.panel(m.wood,[[side*.23,.98,-.18],[side*.32,.98,-.14],[side*.40,1.13,-.17]],{edge:m.end,thickness:.027});
+  }
+ }else{
+  // Split paper mask and dangling folded labels.
+  head.ellipsoid(m.black,[0,1.65,.251],[.102,.112,.030],.12);
+  for(const side of [-1,1])head.sweep(m.paper,[[side*.16,1.96,-.03,.025,.015],[side*.24,1.90,.08,.024,.014],[side*.27,1.62,.04,.016,.009],[side*.19,1.43,-.06,.001,.001]],{sides:10,steps:3,fold:.13});
+  papers(meshes[12],m,[0,.75,-.15],{count:9,width:.18,length:.43,radius:.16,spread:.45,phase:1.1});
+ }
+ // Hooked fingertips on the existing wrist bones, preserving skeletal groups.
+ for(const j of [10,11]){
+  const side=j===10?-1:1,p=joints[j].pivot,scale=[1.08,1.14,.68,.85][i],lengths=i===0||i===3?[.14,.208,.227,.184]:[.102,.145,.159,.125];
+  for(let k=0;k<4;k++){const x=(k-1.5)*.052*.9,l=lengths[k],q=(a,b,c)=>point(p,side*a*scale,b*scale,c*scale);
+   meshes[j].sweep(i===2?m.roller:m.crease,[section(q(x,-l*1.02,l*.83+.024),.014*scale),section(q(x,-l*1.19,l*.73+.024),.010*scale),section(q(x,-l*1.27,l*.59+.024),.001)],{sides:8,steps:2});
+  }
+ }
+}
 let cached;
 export function buildCreatureRigs(){
  if(cached)return cached;
@@ -345,6 +381,7 @@ export function buildCreatureRigs(){
   if(i===0)flicker(meshes,m,joints);
   else if(i===3)wraith(meshes,m,joints);
   else wrapped(meshes,m,joints,i===2);
+  horrorDetails(meshes,m,joints,i);
   return meshes.map((mesh,j)=>({materials:world.materials,parts:mesh.layers('creature_'+profile.name+'_'+joints[j].name,registerGeometry)}));
  });
  return cached;
