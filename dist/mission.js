@@ -1,3 +1,4 @@
+import {traceBox} from './contact.js';
 import {PHYSICS,move,worldBounds} from './movement.js';
 import {World,unit,dot,vsub} from './world.js';
 import {buildStorage} from './storage.js';
@@ -117,44 +118,82 @@ export function dropTarget(s,blocks){
  }
  return null;
 }
+// Select the box under the crosshair, not merely the closest objective.
 export function handlingTarget(s,blocks){
- const target=nextTarget(s);
- if(s.carried<0){
-  if(canUse(s,target,blocks))return target;
-  for(let i=0;i<s.states.length;i++){
-   if(s.states[i]!=='AVAILABLE'||i===target?.index)continue;
-   const alternative={...shiftParcel(s,i),index:i,pos:parcelPos(s,i)};
-   if(canUse(s,alternative,blocks))return alternative;
-  }
-  return target;
+ if(s.carried>=0){
+  const target=dockTarget();return canUse(s,target,blocks)?target:dropTarget(s,blocks);
  }
- if(canUse(s,target,blocks))return target;
- return dropTarget(s,blocks);
+ let best=null,score=Infinity;
+ for(let i=0;i<s.states.length;i++){
+  if(s.states[i]!=='AVAILABLE')continue;
+  const target={...shiftParcel(s,i),index:i,pos:parcelPos(s,i)};
+  const hit=pickupContact(s,target,blocks);
+  if(hit&&hit.score<score){best=target;score=hit.score;}
+ }
+ return best??nextTarget(s);
 }
 export function nextTarget(s){
  if(s.carried>=0)return dockTarget();
  let best=null,d=Infinity;for(let i=0;i<s.states.length;i++){if(s.states[i]!=='AVAILABLE')continue;const p={...shiftParcel(s,i),pos:parcelPos(s,i)};let dist=Math.hypot(s.x-p.pos[0],s.z-p.pos[2],(s.y-p.pos[1])*1.8);if(dist<d){best={...p,index:i};d=dist;}}
  return best;
 }
-export function canUse(s,target,blocks=[]){
- if(!target||s.vault)return false;
- if(target.drop&&(!s.grounded||s.carried!==target.index||!placementClear(s,target.pos,blocks)))return false;
- let pos=target.pos.slice();pos[1]+=target.dock?.55:.24;
- const eye=[s.x,s.y+(s.bodyHeight??1.70)-.12,s.z],v=vsub(pos,eye),d=Math.hypot(...v);
- if(target.drop){
-  if(d>1.91||dot(unit([v[0],0,v[2]]),[-Math.sin(s.yaw),0,-Math.cos(s.yaw)])<.73)return false;
- }else if(d>(s.parked?.[target.index]?1.91:CONFIG.reach)||dot(unit(v),forward(s))<.63)return false;
- // Ray segment intersects solid props. Skip the target's own support.
- for(const [x1,z1,x2,z2,y1,y2] of blocks){
-  if(!target.drop&&!s.parked?.[target.index]&&target.area==='Conveyor sorting' && x1<pos[0]&&x2>pos[0]&&z1<pos[2]&&z2>pos[2])continue;
-  let lo=0,hi=.97;
-  for(const [j,a,b] of [[0,x1,x2],[1,y1,y2],[2,z1,z2]]){if(Math.abs(v[j])<.00001){if(eye[j]<a||eye[j]>b){hi=-1;break;}continue;}const t1=(a-eye[j])/v[j],t2=(b-eye[j])/v[j];lo=Math.max(lo,Math.min(t1,t2));hi=Math.min(hi,Math.max(t1,t2));}
-  if(lo<hi)return false;
+const useEye=s=>[s.x,s.y+(s.bodyHeight??1.70)-.12,s.z];
+const cargoBox=([x,y,z])=>[x-parcelHalf[0],z-parcelHalf[2],x+parcelHalf[0],z+parcelHalf[2],y,y+parcelHalf[1]];
+function lineClear(s,target,eye,p,blocks,others=[]){
+ // Only ignore the original conveyor's conservative load collision.
+ for(const b of [...blocks,...worldBounds,...others]){
+  if(target.area==='Conveyor sorting'&&!s.parked?.[target.index]&&!target.drop&&
+     b[0]<target.pos[0]&&b[2]>target.pos[0]&&b[1]<target.pos[2]&&b[3]>target.pos[2]&&b[5]<=target.pos[1]+.14)continue;
+  if(traceBox(eye,p,b)<.985)return false;
  }
  return true;
 }
-export function interact(s,target,blocks){
- if(!canUse(s,target,blocks))return null;
+function pickupContact(s,target,blocks,locked=false){
+ if(!target||s.failed||s.vault||s.carried>=0||s.states[target.index]!=='AVAILABLE')return null;
+ const eye=useEye(s),f=forward(s),[x,y,z]=target.pos,[w,h,d]=parcelHalf;
+ const box=cargoBox(target.pos),limit=locked?2.02:1.80;
+ const nearest=[Math.max(x-w,Math.min(x+w,eye[0])),Math.max(y,Math.min(y+h,eye[1])),Math.max(z-d,Math.min(z+d,eye[2]))];
+ if(Math.hypot(...vsub(nearest,eye))>limit)return null;
+ const nearby=blocks.filter(b=>b[2]>=eye[0]-2.2&&b[0]<=eye[0]+2.2&&b[3]>=eye[2]-2.2&&b[1]<=eye[2]+2.2);
+ const others=s.states.flatMap((state,i)=>i===target.index?[]:state==='AVAILABLE'?[cargoBox(parcelPos(s,i))]:state==='DELIVERED'?[cargoBox(baySlot((s.deliveryOrder??s.states.flatMap((v,j)=>v==='DELIVERED'?[j]:[])).indexOf(i)))]:[]);
+ const end=eye.map((v,i)=>v+f[i]*limit),t=traceBox(eye,end,box);
+ const direct=t<=1?eye.map((v,i)=>v+(end[i]-v)*t):null;
+ // Real visible surfaces: center, front/back, edges and upper/lower faces.
+ const points=[...(direct?[direct]:[]),[x,y+h*.52,z],nearest];
+ for(const dx of [-w*.94,0,w*.94])for(const dy of [h*.12,h*.55,h*.92])for(const dz of [-d*.94,0,d*.94])points.push([x+dx,y+dy,z+dz]);
+ let best=null;
+ for(const p of points){
+  const v=vsub(p,eye),dist=Math.hypot(...v),alignment=dot(unit(v),f);
+  if(dist>limit||(!locked&&alignment<.78))continue;
+  if(!lineClear(s,target,eye,p,nearby,others))continue;
+  const score=dist*.13+(1-alignment)*5-(p===direct?2:0);
+  if(!best||score<best.score)best={point:p,score};
+  if(p===direct)return best;
+ }
+ return best;
+}
+export function canUse(s,target,blocks=[],locked=false){
+ if(!target||s.vault||s.failed)return false;
+ if(!target.dock&&!target.drop)return !!pickupContact(s,target,blocks,locked);
+ if(target.drop&&(!s.grounded||s.carried!==target.index||!placementClear(s,target.pos,blocks)))return false;
+ if(target.dock&&s.carried<0)return false;
+ const eye=useEye(s),f=forward(s),[x,y,z]=target.pos;
+ if(target.drop){
+  const p=[x,y+.24,z],v=vsub(p,eye);
+  if(Math.hypot(...v)>1.91||dot(unit([v[0],0,v[2]]),[-Math.sin(s.yaw),0,-Math.cos(s.yaw)])<.73)return false;
+  return lineClear(s,target,eye,p,blocks);
+ }
+ // The dispatch pallet is a zone. Aim at any visible portion of its top,
+ // including the upper stack, instead of an invisible single point.
+ if(Math.abs(s.y-y)>1.25||Math.hypot(s.x-x,s.z-z)>2.50)return false;
+ for(const dx of [-.92,0,.92])for(const dz of [-.52,0,.52])for(const dy of [.35,.78,1.15]){
+  const p=[x+dx,y+dy,z+dz],v=vsub(p,eye),d=Math.hypot(...v);
+  if(d<=2.1&&(locked||dot(unit(v),f)>.70)&&lineClear(s,target,eye,p,blocks))return true;
+ }
+ return false;
+}
+export function interact(s,target,blocks,locked=false){
+ if(!canUse(s,target,blocks,locked))return null;
  if(target.drop){
   (s.parked??={})[target.index]=target.pos.slice();
   s.states[target.index]='AVAILABLE';s.carried=-1;
