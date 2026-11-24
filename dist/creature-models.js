@@ -355,7 +355,7 @@ function horrorDetails(meshes,m,joints,i){
  }else if(i===2){
   // Splintered load frame and curled metal hooks.
   for(const side of [-1,1]){
-   body.sweep(m.roller,[[side*.22,.49,-.12,.042],[side*.38,.59,-.13,.038],[side*.43,.82,-.15,.027],[side*.34,.94,-.18,.003]],{sides:10,steps:3});
+   body.sweep(m.roller,[[side*.22,.49,-.12,.042,.042],[side*.38,.59,-.13,.038,.038],[side*.43,.82,-.15,.027,.027],[side*.34,.94,-.18,.003,.003]],{sides:10,steps:3});
    head.panel(m.wood,[[side*.23,.98,-.18],[side*.32,.98,-.14],[side*.40,1.13,-.17]],{edge:m.end,thickness:.027});
   }
  }else{
