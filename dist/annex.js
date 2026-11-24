@@ -180,7 +180,7 @@ function buildDeepHalls(w){
  }
  for(const x of [-32,-2]){
   for(let j=0;j<4;j++){const h=.65+j*.62,z=60+j*1.6;solid(x,0,z,1.7,h,1.45,wood,'climb');}
-  solid(x,2.82,68,3,.18,3,steel,'climb');for(const dx of [-1.35,1.35])for(const dz of [-1.35,1.35])solid(x+dx,0,68+dz,.12,2.82,.12,rust);
+  solid(x,2.82,67.65,3,.18,3.7,steel,'climb');for(const dx of [-1.35,1.35])for(const dz of [-1.35,1.35])solid(x+dx,0,68+dz,.12,2.82,.12,rust);
   w.sign(x,3.22,69.48,1.55,.24,'ESCAPE DECK','#483923','#ffe0a1');
  }
  for(const [x,z] of [[-39,59],[-25,62],[-39,73],[-25,69]]){
