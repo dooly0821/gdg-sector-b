@@ -203,7 +203,11 @@ function conveyor(w,m) {
   w.cyl(x-.73,1.277,2.034,.047,.06,.047,m.redSwitch);
   w.cyl(x-.73,1.267,1.818,.024,.034,.024,m.green);
   w.sign(x-.51,.91,4.021,.31,.085,'C–04','#394043','#ddd6b7');
-  w.block(x-.72,zA-.085,x+.72,zB+.09,0,1.64);
+  // Follow the actual roller height rather than a 1.64 m invisible wall.
+  for(let a=zA-.085;a<zB+.09;a+=.35){
+    const b=Math.min(a+.35,zB+.09);
+    w.block(x-.72,a,x+.72,b,0,Math.max(height(a),height(b))+.062,'climb');
+  }
   w.block(x-1.16,2.98,x-.69,3.99,.41,1.11);
   w.shadow(x,(zA+zB)/2,2.08,zB-zA+.36);
 }
