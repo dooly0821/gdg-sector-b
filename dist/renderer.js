@@ -159,7 +159,7 @@ export class Renderer{
   const gl=this.gl;this.program=compile(gl,vs,fs);this.depthProgram=compile(gl,vs,depthFS);
   this.loc={};for(let p of [this.program,this.depthProgram]){let u={};for(let k of ['VP','offset','lightVP','worldObject','objectMatrix','clock','core','clay','character','actorOpacity','atlas','shadowMap','floorTex','eye','lamps','lampRed[0]','shadowStep','hand','torchPower','torchPos','torchDir','flexPivot','flexForward','flexNormal','flexWidth','flexAmount','digitWidths','knuckles','digitLengths','fingerAmounts','footprints[0]'])u[k]=gl.getUniformLocation(p,k);this.loc[p===this.program?'main':'depth']=u;}
   this.buffers={};
-  const lv=cameraView([-8,75,11],[-10,-75,5]);const ortho=new Float32Array([1/50,0,0,0,0,1/56,0,0,0,0,-2/150,0,0,0,-1,1]);this.lightVP=multiply(ortho,lv);
+  const lv=cameraView([-8,88,25],[-10,-88,5]);const ortho=new Float32Array([1/50,0,0,0,0,1/70,0,0,0,0,-2/180,0,0,0,-1,1]);this.lightVP=multiply(ortho,lv);
  }
  meshBuffer(shape){
   if(!this.buffers[shape]){
