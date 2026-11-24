@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {newShift,createScene,step} from '../dist/mission.js';
 import {updateHaunt} from '../dist/haunt.js';
-const [{blocks}]=createScene(),dt=1/120,duck=new Set(['ControlLeft']),go=new Set(['ControlLeft','KeyW']);
+const [{blocks}]=createScene(),dt=1/120,duck=new Set(['KeyC']),go=new Set(['KeyC','KeyW']);
 const s=Object.assign(newShift(),{x:-21,z:7,yaw:Math.PI/2});
 for(let i=0;i<25;i++)step(s,duck,blocks,dt);
 for(const height of [.45,.96,2.355]){
