@@ -25,7 +25,9 @@ const cargoPools=[
  spots('Annex freight',[[-21,.72,10],[-30,.72,17.8],[-37,.72,11],[-29,.72,-3],[-21,0,14],[-38,0,14],[-32,0,3],[-40,0,-6]]),
  [PARCELS[3],...spots('Annex rack',[[-25,.855,7.35],[-24.5,2.355,7]]),...spots('High storage',[[-1.6,3.58,.25],[-1.6,5.27,2.35],[-2,1.88,.25]])],
  spots('Transfer hall',[[-10,0,25],[-3,0,27],[4,0,25],[11,0,32],[-10,0,38],[-1,0,43],[10,0,49],[-6,0,51],[-5.25,1.16,36],[9.75,1.16,35]]),
- spots('Returns hall',[[-39,0,26],[-30,0,25],[-20,0,26],[-40,0,40],[-31,0,46],[-20,0,50],[-37,0,50],[-25,0,35],[-39.25,1.16,35],[-28.25,1.16,38]])
+ spots('Returns hall',[[-39,0,26],[-30,0,25],[-20,0,26],[-40,0,40],[-31,0,46],[-20,0,50],[-37,0,50],[-25,0,35],[-39.25,1.16,35],[-28.25,1.16,38]]),
+ spots('Waste processing',[[-30,0,57],[-34,0,62],[-29,0,67],[-40,0,70],[-20,0,76],[-32,3,68]]),
+ spots('Containment lab',[[0,0,57],[3,0,65],[-5,0,71],[5,0,76],[13,0,72],[-2,3,68]])
 ];
 function shuffle(items,rng){
  const selected=items.slice();
@@ -33,7 +35,7 @@ function shuffle(items,rng){
  return selected;
 }
 export function randomCargo(rng=Math.random){
- return shuffle(cargoPools.flatMap(pool=>shuffle(pool,rng).slice(0,5)),rng).map((p,i)=>({id:'B-'+String(i+1).padStart(2,'0'),area:p.area,pos:p.pos.slice()}));
+ return shuffle(cargoPools.flatMap((pool,i)=>shuffle(pool,rng).slice(0,[4,4,4,4,3,3,4,4][i])),rng).map((p,i)=>({id:'B-'+String(i+1).padStart(2,'0'),area:p.area,pos:p.pos.slice()}));
 }
 export const shiftParcel=(s,i)=>s?.cargo?.[i]??PARCELS[i];
 const sceneBlocks=new WeakSet();
