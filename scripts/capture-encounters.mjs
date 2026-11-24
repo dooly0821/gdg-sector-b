@@ -34,17 +34,17 @@ try{
    await page.screenshot({path:out+'/encounter-'+kind+'.jpg',quality:82});
   }
   await page.evaluate(()=>Object.assign(getShift(),{x:-21,y:0,z:7,yaw:Math.PI/2,pitch:-.35,vx:0,vy:0,vz:0,grounded:true,haunt:[],hauntDirector:{delay:100,bag:[]}}));
-  await page.keyboard.down('Control');await page.waitForFunction(()=>getShift().bodyHeight<1.07);
+  await page.keyboard.down('c');await page.waitForFunction(()=>getShift().bodyHeight<1.07);
   for(const height of [.45,.96,2.355]){
    await page.keyboard.down('w');await page.keyboard.press('Space');
    await page.waitForFunction(()=>!!getShift().vault);await page.keyboard.up('w');
    await page.waitForFunction(h=>getShift().grounded&&Math.abs(getShift().y-h)<.01,height);
   }
   await page.screenshot({path:out+'/upper-shelf.jpg'});
-  await page.keyboard.up('Control');
+  await page.keyboard.up('c');
   await page.keyboard.down('s');await page.waitForFunction(()=>getShift().y<.01);await page.keyboard.up('s');
   // Record actual crouched lateral movement from complete cover into the open.
-  await page.keyboard.down('Control');
+  await page.keyboard.down('c');
   await page.evaluate(()=>{
    const s=getShift();
    Object.assign(s,{x:-25.6,y:.855,z:7.24,grounded:true,bodyHeight:1.06,yaw:0,pitch:0,showTraversal:true,vx:0,vz:0,vy:0});
@@ -57,7 +57,7 @@ try{
   try{await page.waitForFunction(()=>getShift().haunt[0]?.rays?.some(r=>r.open),null,{timeout:25000});}
   finally{await page.keyboard.up('d');}
   await page.screenshot({path:out+'/shelf-peek.jpg',quality:88});
-  await page.keyboard.up('Control');
+  await page.keyboard.up('c');
  }
  if(!baseline)await saveRecording(page,out+'/encounters.webm');
  console.log(JSON.stringify(stats));await writeFile(out+'/'+(baseline?'before':'after')+'-timing.json',JSON.stringify(stats));
