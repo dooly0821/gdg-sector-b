@@ -14,6 +14,7 @@ export const PARCELS=[
  {id:'B-04',area:'Upper catwalk',pos:[13.90,4.32,-4.45]},
  {id:'B-05',area:'Loading aisle',pos:[-7.75,.72,-13.4]}];
 export const DOCK=[4.6,.24,-19.6];
+const sceneBlocks=new WeakSet();
 export function createScene(){
  const w=new World();buildArchitecture(w);buildStorage(w);buildMachinery(w);stageFreight(w);buildAnnex(w);
  const steel=w.mat('dispatch-steel','#566168','metal'),edge=w.mat('bench-edge','#a58a53','paint'),plank=w.mat('dispatch-pine','#a58462','wood');
@@ -34,6 +35,7 @@ export function createScene(){
  w.box(x,1.72,z-1,3.46,.55,.1,black);w.sign(x,1.71,z-.94,3.32,.45,'DISPATCH   /   BAY 02','#b08837','#171b17');
  const parcel=new World(),empty=new World(),carry=new World();buildParcel(parcel,0,0,0,CONFIG.parcelWidth);buildHands(empty,false);buildHands(carry,true);
  const flashlight=new World();buildFlashlight(flashlight);
+ sceneBlocks.add(w.blocks);
  return [w,parcel,empty,carry,flashlight];
 }
 export function newShift(){return {x:1.7,y:0,z:15,yaw:.24,pitch:-.04,vy:0,vx:0,vz:0,flashlight:false,flashAmount:0,grounded:true,states:PARCELS.map(()=> 'AVAILABLE'),carried:-1,elapsed:0,steps:0};}
@@ -45,7 +47,12 @@ export function surface(x,z,y){
  return 0;
 }
 export function step(s,keys,blocks,dt,jump=false){
- return move(s,keys,blocks,dt,jump,surface);
+ const dynamic=sceneBlocks.has(blocks)?parcelPositions(s).flatMap(([x,y,z])=>{
+  if(Math.abs(x-s.x)>3||Math.abs(z-s.z)>3)return [];
+  const [w,h,d]=parcelHalf;
+  return [[x-w,z-d,x+w,z+d,y,y+h,'climb']];
+ }):[];
+ return move(s,keys,blocks,dt,jump,surface,dynamic);
 }
 const parcelPos=(s,i)=>s.parked?.[i]??PARCELS[i].pos;
 const dockTarget=()=>({pos:DOCK,id:'BAY 02',area:'Outbound dispatch',dock:true});

@@ -84,7 +84,7 @@ export class SoftwareRenderer{
   draw(0,[0,0,0],cam,false);for(let off of parcels)draw(1,off,cam,false);
   for(const actor of pose.actors??[])draw(actor.group,[0,0,0],multiply(cam,actor.matrix),false);
   if(pose.flight&&!pose.assembly)draw(1,[0,0,0],multiply(cam,pose.flight),false);
-  this.glow(cam);if(pose.flashlight>0)this.torch(pose.flashlight,pose.torchOffset,pose.torchLocal);this.zbuffer.fill(0);const local=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);for(const layer of pose.hands)draw(layer.group,layer.offset,layer.matrix??local,true,layer.flex);this.ctx.putImageData(this.image,0,0);
+  this.glow(cam);if(pose.flashlight>0)this.torch(pose.flashlight,pose.torchOffset,pose.torchLocal);const local=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);for(const layer of pose.hands)draw(layer.group,layer.offset,layer.matrix??local,true,layer.flex);this.ctx.putImageData(this.image,0,0);
  }
  // Depth-based fallback spotlight: illuminate visible geometry, not a flat HUD overlay.
  torch(power,off=[0,0,0],local={position:[.325,-.283,-.887],direction:[-.045,-.025,-1]}){

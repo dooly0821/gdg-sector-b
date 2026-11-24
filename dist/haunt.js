@@ -36,6 +36,27 @@ function line(blocks,actor,s){
  return [[0,h-.15],[-.18,h*.56],[.18,h*.56]].some(([offset,height])=>
   visible(blocks,eye,[s.x+offset,s.y+height,s.z]));
 }
+const annexCache=new WeakMap();
+const sizes=[.35,.34,.44,.32];
+function detour(actor,target,blocks){
+ const cell=.65,r=sizes[actor.kind],y=cast[actor.kind].float;
+ const gx=Math.round((target[0]-actor.x)/cell),gz=Math.round((target[1]-actor.z)/cell);
+ const queue=[[0,0,null,0]],visited=new Set(['0,0']);
+ for(let n=0;queue.length&&n<340;n++){
+  queue.sort((a,b)=>b[3]-a[3]);
+  const [cx,cz,first]=queue.pop();
+  if(Math.abs(cx-gx)+Math.abs(cz-gz)<=1)return first;
+  for(const [dx,dz] of [[1,0],[0,1],[-1,0],[0,-1]]){
+   const nx=cx+dx,nz=cz+dz,key=nx+','+nz;
+   if(visited.has(key))continue;
+   visited.add(key);
+   const x=actor.x+nx*cell,z=actor.z+nz*cell;
+   if(x>=-17||x<=-42.5||z>20||z<-8||!clear(blocks,x,z,r,y)||!clear(blocks,x-dx*cell/2,z-dz*cell/2,r,y))continue;
+   queue.push([nx,nz,first??[x,z],Math.hypot(nx-gx,nz-gz)+.18*Math.hypot(nx,nz)]);
+  }
+ }
+ return null;
+}
 function updateSpawns(s,blocks,forward,dt,rng){
  const director=s.hauntDirector??={delay:1.8+rng()*2.8,bag:[]};
  if(s.x>=-16)return;
@@ -68,6 +89,8 @@ function updateSpawns(s,blocks,forward,dt,rng){
 }
 export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
  if(s.x>=-16&&!s.haunt)return null;
+ if(!annexCache.has(blocks))annexCache.set(blocks,blocks.filter(b=>b[0]<-15));
+ blocks=annexCache.get(blocks);
  s.haunt??=[];
  updateSpawns(s,blocks,forward,dt,rng);
  s.hauntCooldown=Math.max(0,(s.hauntCooldown??0)-dt);
@@ -103,13 +126,21 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
    actor.pathIndex=(actor.pathIndex+actor.direction+path.length)%path.length;
   const target=actor.state==='charge'?actor.chargeTarget:actor.state==='search'&&actor.lastKnown?actor.lastKnown:chasing?[s.x,s.z]:path[actor.pathIndex];
   const retreat=actor.state==='retreat'&&lit;
-  const desired=retreat?Math.atan2(-delta[0],-delta[1]):Math.atan2(target[0]-actor.x,target[1]-actor.z);
+  actor.routeDelay=(actor.routeDelay??0)-dt;
+  if(actor.routeDelay<=0){
+   actor.routeDelay=.32+i*.046;
+   const h=type.float+.45;
+   const obstruction=blocks.some(b=>traceBox([actor.x,h,actor.z],[target[0],h,target[1]],b,sizes[i])<1);
+   actor.corner=obstruction&&actor.state!=='charge'?detour(actor,target,blocks):null;
+  }
+  const aim=actor.corner??target;
+  const desired=retreat?Math.atan2(-delta[0],-delta[1]):Math.atan2(aim[0]-actor.x,aim[1]-actor.z);
   actor.yaw+=clamp(Math.atan2(Math.sin(desired-actor.yaw),Math.cos(desired-actor.yaw)),-dt*7,dt*7);
   actor.speed=approach(actor.speed,['windup','recovery'].includes(actor.state)?0:actor.state==='charge'?type.speed:chasing?type.speed:1.17,dt*7);
   const stride=actor.speed*dt;
   for(const turn of [0,.68,-.68,1.36,-1.36]){
    const angle=actor.yaw+turn,x=actor.x+Math.sin(angle)*stride,z=actor.z+Math.cos(angle)*stride;
-   if(x<-17.5&&z<20&&z>-8.1&&clear(blocks,x,z,.29,type.float)){actor.x=x;actor.z=z;break;}
+   if(x<-17.5&&z<20&&z>-8.1&&clear(blocks,x,z,sizes[i],type.float)){actor.x=x;actor.z=z;break;}
   }
   const beat=Math.floor(actor.phase/Math.PI);
   actor.phase+=dt*(1+actor.speed*(i===2?5.3:2.4));
@@ -120,7 +151,7 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
   const strikeHeight=eyeHeights[i]-.30;
   const vertical=Math.max(0,s.y-strikeHeight,strikeHeight-s.y-(s.bodyHeight??1.70));
   const aligned=(Math.sin(actor.yaw)*delta[0]+Math.cos(actor.yaw)*delta[1])/Math.max(.001,dist);
-  if(actor.state==='charge'&&actor.timer<.57&&seen&&aligned>.40&&Math.hypot(dist,vertical)<armReach[i]&&s.hauntCooldown===0){
+  if(actor.state==='charge'&&actor.timer<.57&&seen&&aligned>.40&&visible(local,[actor.x,strikeHeight,actor.z],[s.x,clamp(strikeHeight,s.y+.1,s.y+(s.bodyHeight??1.7)-.1),s.z])&&Math.hypot(dist,vertical)<armReach[i]&&s.hauntCooldown===0){
    s.hauntCooldown=4;actor.state='retreat';actor.timer=2;
    s.handAction=null;s.pendingUse=null;s.vault=null;s.jumpBuffer=0;s.vx=s.vz=0;s.vy=0;s.x=-16.1;s.y=0;s.z=14;s.grounded=true;
    encounter=type.name;
@@ -130,6 +161,7 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
 }
 
 export const ACTOR_START=11;
+export const CREATURE_GROUP_COUNT=CREATURE_JOINTS.reduce((sum,joints)=>sum+joints.length,0);
 export const buildHauntRigs=buildCreatureRigs;
 function matrix(position,angles=[0,0,0],scale=1){
  return new Float32Array([...basis(...angles).flatMap(axis=>[...axis.map(v=>v*scale),0]),...position,1]);

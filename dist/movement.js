@@ -1,3 +1,4 @@
+import {nearbyBlocks} from './contact.js';
 // Original, Source-inspired movement controller. All units are metres/seconds.
 export const PHYSICS=Object.freeze({hz:120,walk:4.5,sprint:7,groundAccel:11,friction:7,stopSpeed:1.7,airAccel:12,airWish:1.15,bhopCap:9.8,gravity:14,jump:5.25,radius:.255,height:1.70,stepHeight:.25,groundSnap:.16,jumpBuffer:.10,skin:.001});
 const P=PHYSICS,clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
@@ -89,7 +90,18 @@ function planVault(s,blocks,x,z,surface,wish){
   const maxCrest=s.y+(high?1.84:vaultHeight);
   const onRamp=obstacle[7]&&Math.abs(blockHeight(obstacle,s.z,0)-s.y)<.24;
   if(crest>maxCrest&&!onRamp)return null;
-  const approach=entryDistance*.97;
+  // Lower pallet boards can protrude beyond the upper crate. Begin lifting
+  // before the first lip reached by the capsule, even from a standstill.
+  let approach=entryDistance*.97;
+  if(!rail){
+   for(let d=0;d<=approach;d=Math.min(approach,d+.015)){
+    const [px,pz]=at(d);
+    if(nearby.some(b=>b!==obstacle&&b[5]>s.y+.012&&b[5]<=crest&&overlaps(s.y,b,pz,px,s.bodyHeight)&&hits(b,d))){
+     approach=Math.max(0,d-.015);break;
+    }
+    if(d===approach)break;
+   }
+  }
   for(let distance=entryDistance+.04;distance<=1.95;distance+=.025){
    const [px,pz]=at(distance);
    if(rail){
@@ -118,7 +130,9 @@ function planVault(s,blocks,x,z,surface,wish){
    const entryTangent=Math.min(.75*approach/entry,.75*crossing/(1-entry));
    // Keep the feet above the rail until the capsule clears its far edge.
    const release=rail?.88:.80;
-   const v={x:s.x,y:s.y,z:s.z,dirX:x,dirZ:z,distance,approach,entry,release,crest:top,rail,landing,
+   const [edgeX,edgeZ]=at(entryDistance+P.radius);
+   const grip=[clamp(edgeX,obstacle[0],obstacle[2]),blockHeight(obstacle,edgeZ,1),clamp(edgeZ,obstacle[1],obstacle[3])];
+   const v={grip,x:s.x,y:s.y,z:s.z,dirX:x,dirZ:z,distance,approach,entry,release,crest:top,rail,landing,
     high,startTangent,entryTangent,exitSpeed,time:0,duration};
    // Sample the swept body more finely than a normal collision substep.
    for(let i=1;i<=96;i++){if(blocked(...vaultPoint(v,i/96))){clear=false;break;}}
@@ -161,10 +175,10 @@ function advanceVault(s,dt){
   if(s.grounded)s.y=v.landing;
  }
 }
-export function move(s,keys,staticBlocks,dt,jump,surface){
+export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
  if(dt<=0)return;s.vx??=0;s.vz??=0;s.jumpBuffer??=0;
  if(jump)s.jumpBuffer=P.jumpBuffer;else s.jumpBuffer=Math.max(0,s.jumpBuffer-dt);
- const blocks=[...staticBlocks.filter(b=>s.x>b[0]-3&&s.x<b[2]+3&&s.z>b[1]-3&&s.z<b[3]+3),...bounds];
+ const blocks=[...nearbyBlocks(staticBlocks,s.x,s.z),...dynamic,...bounds];
  const duck=keys.has('ControlLeft')||keys.has('ControlRight');
  const current=s.bodyHeight??P.height,target=duck?1.06:P.height;
  const height=current+clamp(target-current,-dt*4,dt*4);

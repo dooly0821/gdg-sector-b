@@ -1,5 +1,6 @@
+import {buildLegs} from './worker.js';
 import {relaxedFingerAmounts,vaultPose} from './hand-motion.js';
-import {buildHauntRigs} from './haunt.js';
+import {ACTOR_START,CREATURE_GROUP_COUNT,buildHauntRigs} from './haunt.js';
 import {basis,cameraView,multiply,unit,cross,dot} from './world.js';
 import {TORCH_LOCAL,SOCKETS,FINGER_FLEX} from './viewmodel.js';
 import {CONFIG,baySlot,deliveryCount,canUse,interact,forward} from './mission.js';
@@ -13,7 +14,26 @@ export const HAND_TIMING=Object.freeze({pickup:.48,place:.52,equip:.18,stow:.16,
 export function rigs(worlds){
  const [building,parcel,empty,carried,flashlight]=worlds;
  const group=(world,channel)=>({materials:world.materials,parts:world.parts.filter(p=>p.channel===channel)});
- return [building,parcel,group(empty,'left'),group(empty,'right'),group(carried,'left'),group(carried,'right'),group(carried,'parcel'),flashlight,group(carried,'leftSleeve'),group(carried,'rightSleeve'),group(carried,'support'),...buildHauntRigs()];
+ const creatures=buildHauntRigs();
+ const upper=['leftSleeve','rightSleeve'].map(channel=>{
+  const sleeve=group(carried,channel),fabric=sleeve.parts.find(p=>p.m.name==='vm_uniform')?.m;
+  return {...sleeve,parts:sleeve.parts.map(p=>({...p,m:fabric??p.m}))};
+ });
+ return [building,parcel,group(empty,'left'),group(empty,'right'),group(carried,'left'),group(carried,'right'),group(carried,'parcel'),flashlight,group(carried,'leftSleeve'),group(carried,'rightSleeve'),group(carried,'support'),...creatures,...upper,...buildLegs()];
+}
+export function workerLegLayers(s){
+ if(s.pitch>-.68)return [];
+ const root=transform([0,Math.PI+s.yaw,0],[s.x,s.y,s.z],1);
+ const speed=Math.min(1,Math.hypot(s.vx,s.vz)/CONFIG.walk);
+ const stride=Math.sin(s.steps*4.9)*speed*(s.grounded?.42:.12);
+ const crouch=(1.70-(s.bodyHeight??1.70))/.64;
+ return [-1,1].map((side,i)=>{
+  const hip=[side*.115,.63,0],swing=side*stride-.26*crouch;
+  const leg=multiply(translate(hip),multiply(transform([swing,0,0],[0,0,0],1),translate(hip.map(v=>-v))));
+  const lift=.63*(1-Math.cos(swing));
+  leg[13]-=lift;
+  return {group:ACTOR_START+CREATURE_GROUP_COUNT+2+i,matrix:multiply(root,leg)};
+ });
 }
 export function beginHandling(s,target,blocks){
  if(s.handAction||!canUse(s,target,blocks))return false;
@@ -82,23 +102,46 @@ export function updateViewmodel(s,dt){
 const ANCHOR=[0,-.584,-.864], HELD_SIZE=.446;
 const translate=p=>transform([0,0,0],p,1);
 const point=(M,p)=>[0,1,2].map(i=>M[i]*p[0]+M[i+4]*p[1]+M[i+8]*p[2]+M[i+12]);
-// Stretch only the sleeve along its longitudinal axis. The glove stays rigid;
-// its wrist remains welded visually to the sleeve, and the other end stays outside the camera frustum.
-function sleeveLayer(layer,i){
- const {wrist,elbow}=SOCKETS[i?'carryR':'carryL'],M=layer.matrix??translate(layer.offset);
- const targetW=point(M,wrist.map((v,j)=>v+(layer.matrix?layer.offset[j]:0)));
- const from=unit(wrist.map((v,j)=>v-elbow[j]));
- const targetE=[i?.77:-.77,-.72,-.20];
- const toV=targetW.map((v,j)=>v-targetE[j]),to=unit(toV);
- const fRight=unit(cross(from,[0,1,0])),fUp=unit(cross(fRight,from));
- const tRight=unit(cross(to,[0,1,0])),tUp=unit(cross(tRight,to));
- const lengthScale=Math.hypot(...toV)/Math.hypot(...wrist.map((v,j)=>v-elbow[j]));
- const source=[fRight,fUp,from],dest=[tRight,tUp,to.map(v=>v*lengthScale)];
- const axes=[0,1,2].map(j=>[0,1,2].map(k=>source.reduce((sum,a,n)=>sum+a[j]*dest[n][k],0)));
- const tr=targetE.map((v,k)=>v-axes.reduce((sum,axis,j)=>sum+axis[k]*elbow[j],0));
- return {group:8+i,offset:[0,0,0],matrix:new Float32Array([...axes[0],0,...axes[1],0,...axes[2],0,...tr,1])};
+function approachRotation(matrix,t){
+ const scale=Math.hypot(matrix[0],matrix[1],matrix[2]);
+ const r=Array.from(matrix,v=>v/scale);
+ const w=Math.sqrt(Math.max(0,1+r[0]+r[5]+r[10]))/2;
+ // Extract the axis from the largest diagonal near a half turn.
+ let axis;
+ if(w>.001)axis=unit([r[6]-r[9],r[8]-r[2],r[1]-r[4]]);
+ else{
+  const j=[r[0],r[5],r[10]].indexOf(Math.max(r[0],r[5],r[10]));
+  axis=unit([0,1,2].map(k=>r[4*j+k]+(j===k?1:0)));
+ }
+ const [x,y,z]=axis,a=2*Math.acos(Math.min(1,w))*t,c=Math.cos(a),k=1-c,b=Math.sin(a),size=mix(1,scale,t);
+ const axes=[[c+x*x*k,y*x*k+z*b,z*x*k-y*b],[x*y*k-z*b,c+y*y*k,z*y*k+x*b],[x*z*k+y*b,y*z*k-x*b,c+z*z*k]];
+ return new Float32Array([...axes.flatMap(v=>[...v.map(n=>n*size),0]),0,0,0,1]);
 }
-export function choreography(s,eye,near,moving,sprinting,t){
+// Solve shoulder/elbow/wrist in view metres. A forward shoulder reach absorbs
+// the final distance for low shelves without scaling the forearm or glove.
+function sleeveLayers(layer,i){
+ const {wrist,elbow}=SOCKETS[i?'carryR':'carryL'],M=layer.matrix??translate(layer.offset);
+ const hand=point(M,wrist.map((v,j)=>v+(layer.matrix?layer.offset[j]:0)));
+ const side=i?1:-1,shoulder=[side*.29,-.24,.16];
+ const axis=unit(hand.map((v,j)=>v-shoulder[j]));
+ const lower=Math.hypot(...wrist.map((v,j)=>v-elbow[j])),upper=.47;
+ const d=Math.max(.15,Math.min(lower+upper-.004,Math.hypot(...hand.map((v,j)=>v-shoulder[j]))));
+ const root=hand.map((v,j)=>v-d*axis[j]);
+ const pole=[side*.75,-1,.05],along=(upper*upper-lower*lower+d*d)/(2*d);
+ const bend=unit(pole.map((v,j)=>v-dot(pole,axis)*axis[j]));
+ const joint=root.map((v,j)=>v+axis[j]*along+bend[j]*Math.sqrt(Math.max(0,upper*upper-along*along)));
+ const from=unit(wrist.map((v,j)=>v-elbow[j])),right=unit(cross(from,[0,1,0]));
+ const source=[right,cross(right,from),from];
+ function segment(start,end,group,length){
+  const to=unit(end.map((v,j)=>v-start[j])),right=unit(cross(to,Math.abs(to[1])>.98?[0,0,1]:[0,1,0]));
+  const dest=[right,cross(right,to),to.map(v=>v*length/lower)];
+  const axes=[0,1,2].map(j=>[0,1,2].map(k=>source.reduce((sum,a,n)=>sum+a[j]*dest[n][k],0)));
+  const tr=start.map((v,k)=>v-axes.reduce((sum,a,j)=>sum+a[k]*elbow[j],0));
+  return {group,offset:[0,0,0],matrix:new Float32Array([...axes[0],0,...axes[1],0,...axes[2],0,...tr,1])};
+ }
+ return [segment(joint,hand,8+i,lower),segment(root,joint,ACTOR_START+CREATURE_GROUP_COUNT+i,upper)];
+}
+export function choreography(s,eye,near,moving,sprinting,t,view=forward(s)){
  const a=s.handAction,phase=a?Math.min(1,a.time/a.duration):0;
  const holding=s.carried>=0,{reach:plant,brace}=vaultPose(s.vault);
  const stride=Math.min(1.45,(s.motionSpeed??(moving?(sprinting?7:4.5):0))/4.5)*(s.grounded?1:.28);
@@ -117,6 +160,15 @@ export function choreography(s,eye,near,moving,sprinting,t){
   const rotated=point(rotation,wrist);
   // Rotate the entire hand/sleeve assembly around the wrist. The cuff never separates.
   layer.matrix=multiply(translate(wrist.map((v,j)=>v-rotated[j]+layer.offset[j])),rotation);
+  if(s.vault?.grip&&!holding&&(!i||!s.flashlight)){
+   const cam=cameraView(eye,view),target=point(cam,s.vault.grip);
+   // Move the palm pad to the edge during support. Blend out beyond reach.
+   const palm=point(layer.matrix,FINGER_FLEX[name].pivot);
+   const delta=target.map((v,k)=>v-palm[k]+[side*.055,.032,.015][k]);
+   const phase=s.vault.time/s.vault.duration;
+   const contact=smooth(phase/.17)*(1-smooth((phase-.28)/.27))*(1-smooth((Math.hypot(...delta)-.32)/.42));
+   for(let k=0;k<3;k++)layer.matrix[12+k]+=delta[k]*contact;
+  }
   layer.offset=[0,0,0];
   const open=a?Math.sin(Math.PI*phase):reach;
   layer.flex={...FINGER_FLEX[name],fingerAmounts:relaxedFingerAmounts(t,s.steps*3.8,i),
@@ -151,14 +203,18 @@ export function choreography(s,eye,near,moving,sprinting,t){
   else {
    // Open the grip outwards, never through the object. Use a smooth reach path.
    const reach=a.placing?1-smooth((phase-contact)/(1-contact)):smooth(phase/contact);
-   // Early reach/late withdrawal passes below the viewport, hiding the pose swap.
-   const switchAt=.20;
-   if(reach<switchAt){hands=idle.map(layer=>({...layer,offset:[layer.offset[0],layer.offset[1]-.65*smooth(reach/switchAt),layer.offset[2]]}));}
-   else {
-    const close=smooth((reach-switchAt)/(1-switchAt));
-    // Offset in the same local frame as the box; hands remain outside both sides.
-    hands=[4,5].map((group,i)=>({group,matrix:cargoMatrix,offset:[(i?1:-1)*.14*(1-close),-.54*(1-close),.07*(1-close)],flex:{pivot:[(i?1:-1)*.25,-.43,-.69],forward:[0,0,-1],normal:[i?1:-1,0,0],width:[0,1,0],amount:-.23*(1-close)}}));
-   }
+   hands=[4,5].map((group,i)=>{
+    const side=i?1:-1,wrist=SOCKETS[i?'carryR':'carryL'].wrist;
+    const start=point(idle[i].matrix,SOCKETS[i?'emptyR':'emptyL'].wrist);
+    const goal=point(cargoMatrix,wrist);
+    const desired=start.map((v,k)=>mix(v,goal[k],reach));
+    desired[0]+=side*.095*Math.sin(Math.PI*reach);
+    // Rotate from the view axes into the box's local axes along the shortest arc.
+    const M=approachRotation(cargoMatrix,reach);
+    const socket=point(M,wrist);
+    for(let k=0;k<3;k++)M[12+k]=desired[k]-socket[k];
+    return {group,matrix:M,offset:[0,0,0],flex:{pivot:wrist,forward:[0,0,-1],normal:[side,0,0],width:[0,1,0],amount:-.15*(1-reach)}};
+   });
    // A pickup stays in its original world location until contact. A placed parcel
    // stays at the dock while hands withdraw, without a duplicate world draw.
    if(!a.placing||a.result)flight=null;
@@ -168,19 +224,25 @@ export function choreography(s,eye,near,moving,sprinting,t){
  if(holding&&!a&&flash>0){
   // Transfer load while the right hand still supports the carton. Both paths are reversible.
   const transfer=smooth(flash/.52),shift=cargoBob.map((v,i)=>v+[-.23,.100,.035][i]*transfer);
-  const left=flash<.26?{group:4,offset:[shift[0]-.09*smooth(flash/.26),shift[1]-.62*smooth(flash/.26),shift[2]+.04*smooth(flash/.26)]}:{group:10,offset:[shift[0],shift[1]-.62*(1-smooth((flash-.26)/.26)),shift[2]]};
-  let right;
-  if(flash<.76){const pull=smooth((flash-.52)/.24);right={group:5,offset:[shift[0]+.25*pull,shift[1]-.67*pull,shift[2]+.10*pull]};}
-  else{const rise=smooth((flash-.76)/.24);right={group:7,offset:[bob[0]+.035*(1-rise),bob[1]-.69*(1-rise),bob[2]+.045*(1-rise)]};}
+  const under=smooth(flash/.52),arc=Math.sin(Math.PI*under);
+  const base=flash<.26?SOCKETS.carryL:SOCKETS.supportL;
+  const left={group:flash<.26?4:10,offset:under===1?shift:shift.map((v,k)=>v+mix(SOCKETS.carryL.wrist[k],SOCKETS.supportL.wrist[k],under)-base.wrist[k]+[-.10,-.12,.055][k]*arc)};
+  const draw=smooth((flash-.52)/.48),tool=flash>=.76;
+  const start=SOCKETS.carryR.wrist.map((v,k)=>v+shift[k]);
+  const right={group:tool?7:5,offset:draw===0?shift:start.map((v,k)=>mix(v,SOCKETS.torch.wrist[k]+bob[k],draw)
+   -(tool?SOCKETS.torch:SOCKETS.carryR).wrist[k]+[.065,-.08,.11][k]*Math.sin(draw*Math.PI))};
   hands=[left,right,{group:6,offset:shift}];
  }
  if(!holding&&!a&&flash>0){
-  if(flash<.5){hands[1].offset[1]-=.72*smooth(flash*2);}
-  else {const rise=smooth((flash-.5)*2);hands[1]={group:7,offset:[bob[0]+.012*(1-rise),bob[1]-.72*(1-rise),bob[2]+.045*(1-rise)]};}
+  const u=smooth(flash),tool=flash>=.5;
+  const start=point(idle[1].matrix,SOCKETS.emptyR.wrist);
+  const wrist=start.map((v,k)=>mix(v,SOCKETS.torch.wrist[k]+bob[k],u)+[.025,-.085,.09][k]*Math.sin(Math.PI*u));
+  if(tool)hands[1]={group:7,offset:wrist.map((v,k)=>v-SOCKETS.torch.wrist[k])};
+  else for(let k=0;k<3;k++)hands[1].matrix[12+k]+=wrist[k]-start[k];
  }
  // Static carry uses the authored sleeve meshes. During a reach, extend sleeves
  // from the viewport edge to the exact animated wrist; no detached arm ends.
- for(const layer of [...hands])if(layer.group===4||layer.group===5){const i=layer.group-4;hands.push(a||holding&&flash>0?sleeveLayer(layer,i):{group:8+i,offset:layer.offset});}
+ for(const layer of [...hands])if(layer.group===4||layer.group===5){const i=layer.group-4;if(a||holding&&flash>0)hands.push(...sleeveLayers(layer,i));else hands.push({group:8+i,offset:layer.offset});}
  const torchIndex=hands.findIndex(layer=>layer.group===7);
  const torchOffset=torchIndex<0?bob:hands[torchIndex].offset;
  if(torchIndex>=0){

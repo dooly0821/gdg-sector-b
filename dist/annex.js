@@ -49,7 +49,7 @@ export function buildAnnex(w){
    const y=.78+level*1.5;
    w.box(x,y,z,2.86,.15,1.39,rib);
    w.block(x-1.43,z-.695,x+1.43,z+.695,y-.075,y+.075,'shelf');
-   if(level===0&&x===-25)continue;
+   if(x===-25&&(level===0||z===7&&level===1))continue;
    w.block(x-1.32,z-.47,x+1.32,z+.47,y+.08,y+.82,'climb');
    for(let i=0;i<4;i++)w.box(x+(i-1.5)*.68,y+.45,z,.59,.74,.94,parcel,0,.04*(i-1),0);
   }
@@ -62,6 +62,11 @@ export function buildAnnex(w){
    for(const dx of [-.55,.55])w.box(x+dx,.44,z+dz,.12,.56,.06,wood);
    w.beam([x-.55,.25,z+dz],[x+.55,.67,z+dz],.084,.07,wood);
   }
+ }
+ // Staged return crates alongside the open inspection rack form two footholds.
+ for(const [x,h] of [[-22.0,.45],[-23.0,.96]]){
+  solid(x,0,7,.96,h,1.16,wood,'climb');
+  for(const dz of [-.55,.55])w.box(x,h-.08,7+dz,.96,.12,.075,rib);
  }
  // A low inspection deck gives the west hall an alternate path above the floor.
  solid(-34,0,6,8,.86,2.35,steel,'climb');

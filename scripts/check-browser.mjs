@@ -56,7 +56,7 @@ try{
  assert.ok(await page.locator('#world').evaluate(canvas=>!!canvas.getContext('webgl2')));
  await vault('warehouse-catwalk',{x:11.77,y:3.6,z:-18,yaw:Math.PI/2},0,end=>end.x<10.78);
  await vault('warehouse-ramp',{x:12.25,y:1.5975,z:11.45,yaw:Math.PI/2},0,end=>end.x<11.36);
- await vault('warehouse-cargo',{x:1,y:0,z:13.55,yaw:0},.72,end=>end.z<13);
+ await vault('warehouse-cargo',{x:9.19,y:0,z:-14.72,yaw:Math.PI},1.0295,end=>end.z>-14);
  await page.keyboard.press('q');
  await page.waitForFunction(()=>qa.shift.flashAmount===1);
  assert.match(await page.locator('#torch-status').textContent(),/ON/);

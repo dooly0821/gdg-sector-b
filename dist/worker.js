@@ -2,18 +2,41 @@
 import {World} from './world.js';
 import {Sculpt} from './creature-mesh.js';
 import {registerGeometry} from './geometry.js';
+let boots;
+export function buildLegs(){
+ if(boots)return boots;
+ boots=[-1,1].map(side=>{
+  const w=new World(),mesh=new Sculpt(),x=side*.115;
+  const fabric=w.mat('worker-indigo','#393652','cloth'),trim=w.mat('worker-cap binding','#504661','cloth');
+  const rubber=w.mat('worker-tread','#333039','rubber'),leather=w.mat('worker-toecap','#544846','rubber');
+  const bulb=(m,x,y,z,a,b,c)=>mesh.ellipsoid(m,[x,y,z],[a,b,c],.006);
+  const loft=(m,rows,fold)=>mesh.sweep(m,rows,{sides:28,steps:3,fold});
+  const thread=(m,points,r)=>mesh.sweep(m,points.map((p,i)=>[...p,i===0||i===points.length-1?r*.25:r,r*.8]),{sides:9,steps:2,fold:.01});
+  loft(fabric,[[x,.15,0,.086,.085],[x,.194,-.01,.115,.117],[x,.235,.013,.112,.115],[x,.288,-.004,.101,.093],[x,.37,.013,.116,.114],[x,.49,0,.124,.112],[x,.63,0,.126,.126],[x,.68,0,.104,.112]],.055);
+  bulb(rubber,x,.047,.036,.122,.048,.165);bulb(leather,x,.111,.040,.117,.087,.156);
+  for(const y of [.105,.13])thread(trim,[[x-.075,y,.147],[x,y+.023,.152],[x+.074,y,.148]],.009);
+  // Bellows pocket, overlapping flap and stitch line follow each trouser leg.
+  mesh.panel(fabric,[[side*.226,.328,-.052],[side*.247,.334,.088],[side*.257,.475,.096],[side*.242,.484,-.064]],{edge:trim,thickness:.019});
+  mesh.panel(trim,[[side*.25,.446,-.061],[side*.263,.435,.089],[side*.257,.48,.095],[side*.247,.486,-.066]],{thickness:.009});
+  thread(trim,[[side*.21,.32,.063],[side*.25,.36,.077],[side*.25,.451,.075]],.004);
+  for(const dz of [-.07,.01,.09])bulb(rubber,x,.032,dz,.121,.027,.033);
+  w.parts.push(...mesh.layers('worker_leg_'+side,registerGeometry));
+  return w;
+ });
+ return boots;
+}
 export function buildWorker(){
  const w=new World(),mesh=new Sculpt();
  const mat=(name,color,type)=>w.mat('worker-'+name,color,type);
  const fabric=mat('indigo','#393652','cloth'),trim=mat('cap binding','#504661','cloth'),stripe=mat('reflector','#e5a631','paint');
  const hair=mat('chestnut','#583327','plain'),curl=mat('hair highlights','#714133','plain');
- const skin=mat('face','#e8ab80','skin'),lip=mat('smile','#8a4a3c','plain'),iris=mat('iris','#372421','plain'),white=mat('ivory','#fff0d9','plain');
+ const skin=mat('face','#edb487','plain'),lip=mat('smile','#8a4a3c','plain'),iris=mat('iris','#372421','plain'),white=mat('ivory','#fff0d9','plain');
  const rubber=mat('tread','#333039','rubber'),leather=mat('toecap','#544846','rubber'),glove=mat('glove','#bea875','cloth');
  const bulb=(m,x,y,z,a,b,c)=>mesh.ellipsoid(m,[x,y,z],[a,b,c],.006);
  function loft(m,rows,fold=.025){mesh.sweep(m,rows,{sides:28,steps:3,fold});}
  function thread(m,points,r){mesh.sweep(m,points.map((p,i)=>[...p,i===0||i===points.length-1?r*.25:r,r*.8]),{sides:9,steps:2,fold:.01});}
  loft(fabric,[[0,.60,0,.19,.13],[0,.68,0,.235,.163],[0,.78,0,.219,.15],[0,.96,0,.235,.154],[0,1.045,0,.194,.118],[0,1.07,0,.077,.08]]);
- loft(stripe,[[0,.854,0,.232,.154],[0,.88,0,.234,.157],[0,.918,0,.235,.155]],.012);
+ loft(stripe,[[0,.854,0,.244,.165],[0,.88,0,.246,.165],[0,.918,0,.248,.166]],.012);
  loft(leather,[[0,.63,0,.232,.163],[0,.659,0,.233,.163]]);
  bulb(skin,0,1.08,0,.084,.10,.078);
  loft(skin,[[0,1.065,.048,.025,.033],[0,1.092,.041,.15,.115],[0,1.15,.03,.227,.177],[0,1.24,.018,.265,.212],[0,1.37,0,.253,.216],[0,1.48,-.003,.194,.17],[0,1.53,0,.025,.022]],.003);
@@ -21,9 +44,6 @@ export function buildWorker(){
  thread(lip,[[-.060,1.184,.210],[-.028,1.170,.217],[.02,1.168,.218],[.064,1.183,.209]],.005);
  for(const side of [-1,1]){
   const x=side*.115;
-  loft(fabric,[[x,.15,0,.086,.085],[x,.194,-.01,.115,.117],[x,.235,.013,.112,.115],[x,.288,-.004,.101,.093],[x,.37,.013,.116,.114],[x,.49,0,.124,.112],[x,.63,0,.126,.126],[x,.68,0,.104,.112]],.055);
-  bulb(rubber,x,.047,.036,.122,.048,.165);bulb(leather,x,.111,.040,.117,.087,.156);
-  for(const y of [.105,.13])thread(trim,[[x-.075,y,.147],[x,y+.023,.152],[x+.074,y,.148]],.009);
   loft(fabric,[[side*.208,1.01,0,.085,.085],[side*.244,.96,0,.094,.099],[side*.261,.875,.003,.080,.09],[side*.269,.842,.005,.082,.09]]);
   loft(skin,[[side*.263,.853,.004,.063,.066],[side*.274,.795,.012,.061,.061],[side*.282,.721,.029,.046,.052]]);
   bulb(glove,side*.284,.687,.035,.064,.069,.056);
@@ -31,16 +51,19 @@ export function buildWorker(){
   bulb(glove,side*.229,.684,.074,.022,.039,.025);
   bulb(skin,side*.25,1.245,-.004,.049,.059,.034);
   bulb(white,side*.099,1.286,.201,.056,.063,.022);bulb(iris,side*.094,1.287,.219,.035,.052,.013);
+  thread(iris,[[side*.044,1.315,.208],[side*.075,1.341,.209],[side*.120,1.342,.201],[side*.151,1.315,.189],[side*.165,1.324,.181]],.006);
   bulb(white,side*.093-.009,1.306,.231,.010,.012,.005);
   thread(hair,[[side*.048,1.354,.21],[side*.093,1.375,.20],[side*.147,1.357,.175]],.012);
   for(let j=0;j<3;j++)bulb(lip,side*(.143+.014*j),1.222+.006*(j%2),.202-.007*j,.003,.003,.003);
   mesh.panel(trim,[[side*.02,1.04,.103],[side*.15,1.04,.097],[side*.105,.968,.151]],{thickness:.009});
-  // Bellows pocket, overlapping flap and stitch line follow each trouser leg.
-  bulb(fabric,side*.193,.41,.04,.071,.105,.093);
-  bulb(trim,side*.201,.48,.051,.068,.030,.091);
-  thread(trim,[[side*.21,.32,.063],[side*.25,.36,.077],[side*.25,.451,.075]],.004);
-  for(const dz of [-.07,.01,.09])bulb(rubber,x,.032,dz,.121,.027,.033);
   thread(trim,[[side*.18,.941,.1],[side*.167,.83,.137],[side*.157,.745,.137]],.005);
+  for(let row=0;row<4;row++){
+   const z=.13-.065*row;
+   loft(row%2?hair:curl,[[side*(.105+row*.021),1.43,z+.026,.034,.033],
+    [side*(.199+row*.011),1.385,z+.023,.05,.053],
+    [side*.239,1.333,z,.048,.052],[side*.247,1.276,z-.032,.03,.034],
+    [side*.235,1.256,z-.052,.005,.006]],.055);
+  }
   for(let j=0;j<7;j++){
    const a=j*.52,xx=side*(.18+.067*Math.sin(a)),zz=-.21+.042*j;
    const yy=1.18+.046*Math.cos(a);
@@ -69,7 +92,7 @@ export function buildWorker(){
  }
  bulb(trim,0,1.649,-.04,.025,.012,.024);
  bulb(trim,0,1.418,-.23,.085,.023,.013);
- w.sign(0,1.505,.198,.142,.064,'GDG','#ca9b66','#282334');
+ w.sign(0,1.519,.218,.142,.064,'GDG','#ca9b66','#282334');
  w.sign(.111,.901,.151,.070,.10,'ID','#d5c6aa','#503f3a');
  // Enlarge the head assembly about the neck, retaining every facial attachment.
  for(const verts of mesh.batches.values())for(let k=0;k<verts.length;k+=8){
@@ -80,6 +103,6 @@ export function buildWorker(){
  }
  const patch=w.parts.find(p=>p.m.label==='GDG');
  patch.pos[1]=1.075+(patch.pos[1]-1.075)*1.12;patch.pos[2]*=1.1;
- w.parts.push(...mesh.layers('gdg_worker',registerGeometry));
+ w.parts.push(...mesh.layers('gdg_worker',registerGeometry),...buildLegs().flatMap(w=>w.parts));
  return w;
 }
