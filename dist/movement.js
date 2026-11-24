@@ -96,7 +96,7 @@ function planVault(s,blocks,x,z,surface,wish){
   if(crest>maxCrest&&!onRamp)return null;
   // Lower pallet boards can protrude beyond the upper crate. Begin lifting
   // before the first lip reached by the capsule, even from a standstill.
-  let approach=Math.max(0,entryDistance-.025);
+  let approach=rail?entryDistance*.97:Math.max(0,entryDistance-.025);
   if(!rail){
    for(let d=0;d<=approach;d=Math.min(approach,d+.015)){
     const [px,pz]=at(d);
