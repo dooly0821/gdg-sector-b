@@ -25,10 +25,13 @@ export function beginHandling(s,target,blocks){
 }
 export function advanceHandling(s,blocks,dt){
  const a=s.handAction;if(!a)return null;
- if(!canUse(s,a.target,blocks)){s.handAction=null;return 'cancelled';}
- a.time+=dt;if(a.time<a.duration)return null;
+ if(!a.result&&!canUse(s,a.target,blocks)){s.handAction=null;return 'cancelled';}
+ a.time+=dt;
+ const contact=a.duration*(a.placing?.72:.30);
+ if(!a.result&&a.time>=contact)a.result=interact(s,a.target,blocks);
+ if(a.time<a.duration)return null;
  s.handAction=null;
- return interact(s,a.target,blocks);
+ return a.result??'cancelled';
 }
 function transform(angles,position,scale){
  const axes=basis(...angles);
@@ -158,7 +161,7 @@ export function choreography(s,eye,near,moving,sprinting,t){
    }
    // A pickup stays in its original world location until contact. A placed parcel
    // stays at the dock while hands withdraw, without a duplicate world draw.
-   if(!a.placing)flight=null;
+   if(!a.placing||a.result)flight=null;
   }
  }
  const flash=a?0:(s.flashAmount??0);

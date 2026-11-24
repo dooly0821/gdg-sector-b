@@ -17,7 +17,7 @@ function audioOn(){try{if(!sound){sound=new AudioContext();master=sound.createGa
 function beep(hz,time=.12,type='sine',gain=.1){if(!sound||!settings.audio)return;let o=sound.createOscillator(),g=sound.createGain(),now=sound.currentTime;o.type=type;o.frequency.setValueAtTime(hz,now);o.frequency.exponentialRampToValueAtTime(hz*.68,now+time);g.gain.setValueAtTime(gain,now);g.gain.exponentialRampToValueAtTime(.0001,now+time);o.connect(g);g.connect(sound.destination);o.start();o.stop(now+time+.02);}
 function say(line,duration=5){$('#radio').innerHTML='<strong>관제실</strong>'+line;radioUntil=performance.now()+duration*1000;}
 const rows=[['W A S D','이동'],['MOUSE','시점 회전'],['SHIFT','달리기'],['SPACE / WHEEL','점프 · 연속 점프 · 방향 입력 중 장애물 넘기'],['Q','손전등 들기 / 내리기'],['E','상자 들기 · 다시 눌러 내려놓기'],['ESC','일시 정지']];
-const links='<div class="panel-actions"><a class="doc" href="unity-migration.html" target="_blank" rel="noopener">Unity 이식 가이드 ↗</a></div>';
+const links='<a class="doc" href="characters.html" target="_blank" rel="noopener">캐릭터 검수실 ↗</a><div class="panel-actions"><a class="doc" href="unity-migration.html" target="_blank" rel="noopener">Unity 이식 가이드 ↗</a></div>';
 function action(name,label,primary=false){return '<button class="'+(primary?'primary':'secondary')+'" data-action="'+name+'">'+label+'</button>';}
 function plan(){
  const X=x=>105+x*4,Y=z=>100+z*4;
@@ -133,6 +133,20 @@ function frame(now){if(mode!=='game')return;const dt=Math.min(.1,Math.max(0,(now
  const facing=forward(s);
  const threat=updateHaunt(s,worlds[0].blocks,facing,dt);
  if(threat){say(threat+' 출현. 비상 차단으로 서쪽 통로로 복귀했습니다.',3);beep(110,.52,'triangle',.12);}
+ for(const event of s.hauntSounds??[]){
+  if(!settings.audio||!sound)continue;
+  const dx=event.x-s.x,dz=event.z-s.z,d=Math.max(1,Math.hypot(dx,dz));
+  const pan=sound.createStereoPanner(),gain=sound.createGain(),voice=sound.createOscillator();
+  pan.pan.value=Math.max(-1,Math.min(1,(dx*Math.cos(s.yaw)-dz*Math.sin(s.yaw))/d));
+  voice.type=['sine','triangle','sine','sawtooth'][event.kind];
+  const f=[208,86,52,307][event.kind]*(event.accent?1.35:1),now=sound.currentTime;
+  voice.frequency.setValueAtTime(f,now);voice.frequency.exponentialRampToValueAtTime(f*.53,now+.16);
+  gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime(.42/(1+d*.52),now+.018);
+  gain.gain.exponentialRampToValueAtTime(.0001,now+.2);
+  voice.connect(gain).connect(pan).connect(master);voice.start();voice.stop(now+.21);
+  voice.onended=()=>{voice.disconnect();gain.disconnect();pan.disconnect();};
+ }
+ if(s.hauntSounds)s.hauntSounds.length=0;
  const useTarget=handlingTarget(s,worlds[0].blocks),available=canUse(s,useTarget,worlds[0].blocks);
  const target=s.carried<0&&available?useTarget:nextTarget(s);
  const {reach,brace}=vaultPose(s.vault);
@@ -168,7 +182,7 @@ function frame(now){if(mode!=='game')return;const dt=Math.min(.1,Math.max(0,(now
 document.addEventListener('keydown',e=>{
  if(e.code==='Escape'){if(mode==='game'){pauseShift();}else if(!$('#modal').hidden){closePane();}return;}
  if(mode!=='game')return;if(['Space','KeyW','KeyA','KeyS','KeyD','KeyE','KeyQ','ShiftLeft','ShiftRight','ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();
- if(e.code==='KeyQ'&&!e.repeat){if(toggleFlashlight(session)){session.pendingUse=false;session.restoreTorch=false;beep(180,.055,'triangle',.025);}else say('상자를 집거나 내려놓는 동안에는 장비 전환을 할 수 없습니다.',2);return;}if(e.code==='KeyE'&&!e.repeat){use();return;}if(e.code==='Space'&&!e.repeat)jump=true;keys.add(e.code);
+ if(e.code==='KeyQ'&&!e.repeat){if(session.handAction){session.restoreTorch=!session.restoreTorch;return;}if(toggleFlashlight(session)){session.pendingUse=false;session.restoreTorch=false;beep(180,.055,'triangle',.025);}else say('상자를 집거나 내려놓는 동안에는 장비 전환을 할 수 없습니다.',2);return;}if(e.code==='KeyE'&&!e.repeat){use();return;}if(e.code==='Space'&&!e.repeat)jump=true;keys.add(e.code);
 });document.addEventListener('keyup',e=>keys.delete(e.code));
 canvas.addEventListener('wheel',e=>{if(mode==='game'){e.preventDefault();jump=true;}},{passive:false});
 function pointer(e){if(mode!=='game'||(!document.pointerLockElement&&!drag)||performance.now()<lookReady||Math.abs(e.movementX)>220||Math.abs(e.movementY)>220)return;session.yaw-=e.movementX*CONFIG.sensitivity*settings.sensitivity;session.pitch=Math.max(-CONFIG.pitchLimit,Math.min(CONFIG.pitchLimit,session.pitch-e.movementY*CONFIG.sensitivity*settings.sensitivity));}

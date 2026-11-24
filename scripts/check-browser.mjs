@@ -65,7 +65,7 @@ try{
  await page.waitForFunction(()=>qa.shift.flashAmount===0);
  await page.evaluate(()=>Object.assign(qa.shift,{x:1.12,y:0,z:13.72,yaw:.3187,pitch:-.48,vx:0,vz:0}));
  await page.keyboard.press('e');
- await page.waitForFunction(()=>qa.shift.carried===0);
+ await page.waitForFunction(()=>qa.shift.carried===0&&!qa.shift.handAction);
  await page.evaluate(()=>Object.assign(qa.shift,{x:-17,z:14,yaw:Math.PI/2,pitch:-.12}));
  await page.keyboard.press('q');
  await page.waitForFunction(()=>qa.shift.flashAmount===1);

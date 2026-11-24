@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {newShift,createScene,nextTarget,CONFIG,DOCK} from '../dist/mission.js';
 import {HAND_TIMING,beginHandling,advanceHandling,toggleFlashlight,updateViewmodel,choreography} from '../dist/handling.js';
 const [world]=createScene();
-for (const hz of [30,60,120]) {
+for (const hz of [30,60,120,144]) {
  const dt=1/hz,s=newShift();
  for (const [goal,limit] of [[1,HAND_TIMING.equip],[0,HAND_TIMING.stow]]) {
   assert.ok(toggleFlashlight(s));let t=0;while(s.flashAmount!==goal&&t<1){updateViewmodel(s,dt);t+=dt;}

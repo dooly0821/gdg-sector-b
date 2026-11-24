@@ -111,6 +111,15 @@ function flicker(meshes,m,joints){
   }
   body.strip(m.ecto,b,a,{thickness:.012});
  }
+ // Raised filaments wrap around the silhouette and reveal the depth of the mantle.
+ for(let i=0;i<9;i++){
+  const angle=i*Math.PI*2/9,sections=[];
+  for(let k=0;k<6;k++){
+   const t=k/5,a=angle+.28*Math.sin(t*4+i),r=.12+.19*t;
+   sections.push([r*Math.cos(a),.65+.77*t,-.14+.14*t+r*.66*Math.sin(a),.005+.012*Math.sin(t*Math.PI),.009]);
+  }
+  body.sweep(m.ecto,sections,{sides:8,steps:2,fold:.06});
+ }
  for(let i=0;i<8;i++){
   const a=i*2.4,x=Math.cos(a)*.16,z=Math.sin(a)*.12;
   tail.sweep(i%2?m.mint:m.ecto,[[x,.94,z,.065,.043],[x*.92,.73,z-.07,.067,.04],
@@ -156,6 +165,11 @@ function cartonHead(mesh,m,imp){
   hi.push([x,top+.012*Math.sin(i*1.5),z+.004+.012*Math.sin(i*.98)]);
  }
  mesh.strip(m.pulp,lo,hi,options);
+ // Open corrugations follow the torn contour of the head flap.
+ for(let j=0;j<lo.length-1;j++)for(let n=0;n<4;n++){
+  const a=lerp(lo[j],lo[j+1],n/4),b=lerp(lo[j],lo[j+1],(n+1)/4);
+  mesh.tri(m.liner,point(a,0,-.002,.001),point(b,0,-.002,.001),point(lerp(a,b,.5),0,-.009,-.014));
+ }
  if(!imp){
   const crack=[[-.247,top-.04,z+.01],[-.188,top-.115,z+.022],[-.216,top-.17,z+.026],
    [-.119,top-.223,z+.018],[-.142,top-.284,z+.015]];
@@ -181,6 +195,11 @@ function cartonHead(mesh,m,imp){
    mesh.ring(m.roller,[px,y+.08,-.02],.118,.115,.031,{axis});
    mesh.ring(m.rivet,[px+s*.024,y+.08,-.02],.076,.076,.012,{axis});
    mesh.ellipsoid(m.black,[px+s*.030,y+.08,-.02],[.025,.052,.052]);
+  }
+  for(const side of [-1,1]){
+   const x=side*w;
+   mesh.strip(m.tape,[[x*.83,top+.032,-z],[x*1.02,top+.04,-z*.6],[x*1.08,top-.06,-z*.24],[x*1.16,top-.035,z*.1]],
+    [[x*.83,top+.032,-z+.05],[x*1.02,top+.04,-z*.6+.05],[x*1.08,top-.06,-z*.24+.05],[x*1.16,top-.035,z*.1+.04]],{thickness:.005});
   }
   for(let j=0;j<3;j++){
    const y0=top-.13+j*.064,d=.027+j*.009;
@@ -298,6 +317,8 @@ function wraith(meshes,m,joints){
   [[-.238,1.931,-.016],[-.175,2.004,.012],[-.032,2.017,.057],[.110,1.987,.026],[.228,1.931,-.032]],{edge:m.tear,thickness:.010});
  for(const s of [-1,1]){
   eye(head,m,s*.075,1.783,.228,'scan');
+  head.strip(m.receipt,[[s*.15,1.92,.13],[s*.25,1.87,.07],[s*.29,1.80,-.04],[s*.33,1.84,-.08]],
+   [[s*.12,1.95,.11],[s*.22,1.90,.04],[s*.27,1.83,-.07],[s*.30,1.86,-.10]],{edge:m.tear,thickness:.004});
   head.panel(m.paper,[[s*.052,1.534,.24],[s*.172,1.614,.229],[s*.197,1.716,.222],[s*.118,1.626,.240]],{edge:m.tear,thickness:.008});
  }
  for(let i=0;i<6;i++){

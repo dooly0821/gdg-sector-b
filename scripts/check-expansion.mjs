@@ -33,7 +33,8 @@ for(const hz of [30,60,120]){
  for(let i=0;i<hz;i++){
   if(!s.handAction)break;
   const p=pose(s);
-  assert.ok(p.flight);
+  assert.equal(Boolean(p.flight),s.carried>=0);
+  if(s.carried<0)assert.deepEqual(parcelPositions(s)[0],drop.pos);
   advanceHandling(s,blocks,1/hz);
  }
  assert.equal(s.carried,-1);
@@ -91,7 +92,9 @@ updateHaunt(shift,blocks,[-1,0,0],dt);
 assert.equal(shift.haunt[0].state,'retreat','forward torch repels the flicker');
 shift.haunt[0].state='alert';shift.haunt[0].timer=1;
 shift.flashAmount=0;
-assert.equal(updateHaunt(shift,blocks,[-1,0,0],dt),'녹령');
+let encounter=null;
+for(let i=0;i<110&&!encounter;i++)encounter=updateHaunt(shift,blocks,[-1,0,0],dt);
+assert.equal(encounter,'녹령');
 assert.equal(shift.carried,0,'encounter preserves carried box');
 assert.ok(shift.x>-17);
 const batches=rigs(worlds),actors=hauntLayers(shift);

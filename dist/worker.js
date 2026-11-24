@@ -1,0 +1,85 @@
+// Warehouse uniform, facing +Z. Ring profiles are measured in world metres.
+import {World} from './world.js';
+import {Sculpt} from './creature-mesh.js';
+import {registerGeometry} from './geometry.js';
+export function buildWorker(){
+ const w=new World(),mesh=new Sculpt();
+ const mat=(name,color,type)=>w.mat('worker-'+name,color,type);
+ const fabric=mat('indigo','#393652','cloth'),trim=mat('cap binding','#504661','cloth'),stripe=mat('reflector','#e5a631','paint');
+ const hair=mat('chestnut','#583327','plain'),curl=mat('hair highlights','#714133','plain');
+ const skin=mat('face','#e8ab80','skin'),lip=mat('smile','#8a4a3c','plain'),iris=mat('iris','#372421','plain'),white=mat('ivory','#fff0d9','plain');
+ const rubber=mat('tread','#333039','rubber'),leather=mat('toecap','#544846','rubber'),glove=mat('glove','#bea875','cloth');
+ const bulb=(m,x,y,z,a,b,c)=>mesh.ellipsoid(m,[x,y,z],[a,b,c],.006);
+ function loft(m,rows,fold=.025){mesh.sweep(m,rows,{sides:28,steps:3,fold});}
+ function thread(m,points,r){mesh.sweep(m,points.map((p,i)=>[...p,i===0||i===points.length-1?r*.25:r,r*.8]),{sides:9,steps:2,fold:.01});}
+ loft(fabric,[[0,.60,0,.19,.13],[0,.68,0,.235,.163],[0,.78,0,.219,.15],[0,.96,0,.235,.154],[0,1.045,0,.194,.118],[0,1.07,0,.077,.08]]);
+ loft(stripe,[[0,.854,0,.232,.154],[0,.88,0,.234,.157],[0,.918,0,.235,.155]],.012);
+ loft(leather,[[0,.63,0,.232,.163],[0,.659,0,.233,.163]]);
+ bulb(skin,0,1.08,0,.084,.10,.078);
+ loft(skin,[[0,1.065,.048,.025,.033],[0,1.092,.041,.15,.115],[0,1.15,.03,.227,.177],[0,1.24,.018,.265,.212],[0,1.37,0,.253,.216],[0,1.48,-.003,.194,.17],[0,1.53,0,.025,.022]],.003);
+ bulb(skin,0,1.225,.224,.031,.029,.028);
+ thread(lip,[[-.060,1.184,.210],[-.028,1.170,.217],[.02,1.168,.218],[.064,1.183,.209]],.005);
+ for(const side of [-1,1]){
+  const x=side*.115;
+  loft(fabric,[[x,.15,0,.086,.085],[x,.194,-.01,.115,.117],[x,.235,.013,.112,.115],[x,.288,-.004,.101,.093],[x,.37,.013,.116,.114],[x,.49,0,.124,.112],[x,.63,0,.126,.126],[x,.68,0,.104,.112]],.055);
+  bulb(rubber,x,.047,.036,.122,.048,.165);bulb(leather,x,.111,.040,.117,.087,.156);
+  for(const y of [.105,.13])thread(trim,[[x-.075,y,.147],[x,y+.023,.152],[x+.074,y,.148]],.009);
+  loft(fabric,[[side*.208,1.01,0,.085,.085],[side*.244,.96,0,.094,.099],[side*.261,.875,.003,.080,.09],[side*.269,.842,.005,.082,.09]]);
+  loft(skin,[[side*.263,.853,.004,.063,.066],[side*.274,.795,.012,.061,.061],[side*.282,.721,.029,.046,.052]]);
+  bulb(glove,side*.284,.687,.035,.064,.069,.056);
+  for(let j=0;j<4;j++)bulb(glove,side*(.245+j*.025),.645,.048,.016,.042-j*.003,.019);
+  bulb(glove,side*.229,.684,.074,.022,.039,.025);
+  bulb(skin,side*.25,1.245,-.004,.049,.059,.034);
+  bulb(white,side*.099,1.286,.201,.056,.063,.022);bulb(iris,side*.094,1.287,.219,.035,.052,.013);
+  bulb(white,side*.093-.009,1.306,.231,.010,.012,.005);
+  thread(hair,[[side*.048,1.354,.21],[side*.093,1.375,.20],[side*.147,1.357,.175]],.012);
+  for(let j=0;j<3;j++)bulb(lip,side*(.143+.014*j),1.222+.006*(j%2),.202-.007*j,.003,.003,.003);
+  mesh.panel(trim,[[side*.02,1.04,.103],[side*.15,1.04,.097],[side*.105,.968,.151]],{thickness:.009});
+  // Bellows pocket, overlapping flap and stitch line follow each trouser leg.
+  bulb(fabric,side*.193,.41,.04,.071,.105,.093);
+  bulb(trim,side*.201,.48,.051,.068,.030,.091);
+  thread(trim,[[side*.21,.32,.063],[side*.25,.36,.077],[side*.25,.451,.075]],.004);
+  for(const dz of [-.07,.01,.09])bulb(rubber,x,.032,dz,.121,.027,.033);
+  thread(trim,[[side*.18,.941,.1],[side*.167,.83,.137],[side*.157,.745,.137]],.005);
+  for(let j=0;j<7;j++){
+   const a=j*.52,xx=side*(.18+.067*Math.sin(a)),zz=-.21+.042*j;
+   const yy=1.18+.046*Math.cos(a);
+   bulb(hair,xx,yy,zz,.077,.079,.070);
+   const lock=Array.from({length:12},(_,n)=>{
+    const t=n/11*Math.PI*1.8;
+    return [xx+side*.070*Math.sin(t),yy+.067*Math.cos(t),zz+.038*n/11];
+   });
+   thread(curl,lock,.023);
+  }
+  thread(stripe,[[side*.182,1.035,.095],[side*.20,1.01,.111],[side*.208,.975,.117]],.010);
+ }
+ bulb(hair,0,1.329,-.070,.268,.204,.199);
+ for(let j=0;j<7;j++){
+  const x=(j-3)*.067;
+  thread(j%2?hair:curl,[[x+.045,1.477,.115],[x+.017,1.423,.167],[x-.014,1.385,.196-Math.abs(x)*.3],[x-.049,1.355+Math.abs(x)*.20,.20-Math.abs(x)*.37]],.028);
+ }
+ loft(fabric,[[0,1.385,-.025,.27,.211],[0,1.413,-.02,.282,.225],[0,1.52,-.028,.266,.215],[0,1.616,-.042,.18,.15],[0,1.655,-.048,.035,.035]],.023);
+ bulb(fabric,0,1.416,.160,.256,.031,.164);
+ for(let j=0;j<6;j++){
+  const a=j*Math.PI/3;
+  thread(trim,Array.from({length:9},(_,n)=>{
+   const t=n/8*Math.PI*.48;
+   return [.28*Math.cos(a)*Math.cos(t),1.411+.242*Math.sin(t),-.022+.219*Math.sin(a)*Math.cos(t)];
+  }),.004);
+ }
+ bulb(trim,0,1.649,-.04,.025,.012,.024);
+ bulb(trim,0,1.418,-.23,.085,.023,.013);
+ w.sign(0,1.505,.198,.142,.064,'GDG','#ca9b66','#282334');
+ w.sign(.111,.901,.151,.070,.10,'ID','#d5c6aa','#503f3a');
+ // Enlarge the head assembly about the neck, retaining every facial attachment.
+ for(const verts of mesh.batches.values())for(let k=0;k<verts.length;k+=8){
+  if(verts[k+1]<=1.075)continue;
+  const blend=Math.min(1,(verts[k+1]-1.075)/.065);
+  verts[k]*=1+.16*blend;verts[k+2]*=1+.10*blend;
+  verts[k+1]=1.075+(verts[k+1]-1.075)*1.12;
+ }
+ const patch=w.parts.find(p=>p.m.label==='GDG');
+ patch.pos[1]=1.075+(patch.pos[1]-1.075)*1.12;patch.pos[2]*=1.1;
+ w.parts.push(...mesh.layers('gdg_worker',registerGeometry));
+ return w;
+}
