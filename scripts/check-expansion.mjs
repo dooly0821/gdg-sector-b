@@ -93,14 +93,14 @@ assert.equal(shift.haunt[0].state,'retreat','forward torch repels the flicker');
 shift.haunt[0].state='alert';shift.haunt[0].timer=1;
 shift.flashAmount=0;
 let encounter=null;
-for(let i=0;i<110&&!encounter;i++)encounter=updateHaunt(shift,blocks,[-1,0,0],dt);
+for(let i=0;i<360&&!encounter;i++)encounter=updateHaunt(shift,blocks,[-1,0,0],dt);
 assert.equal(encounter,'녹령');
-assert.equal(shift.carried,0,'encounter preserves carried box');
-assert.ok(shift.x>-17);
+assert.equal(shift.failed,true,'capture ends the shift');
+assert.ok(shift.x<-17,'no teleport on capture');
 const batches=rigs(worlds),actors=hauntLayers(shift);
 assert.equal(actors.length,13);
 for(const layer of actors){
  assert.ok(batches[layer.group]);
  assert.ok(layer.matrix.every(Number.isFinite));
 }
-console.log('PASS: forward beam, 3 drop/retrieve/delivery rates, blocked placement, two-way annex, rail/crate vaults, overhead rejection, ghost reaction and encounter recovery');
+console.log('PASS: forward beam, 3 drop/retrieve/delivery rates, blocked placement, two-way annex, rail/crate vaults, overhead rejection, ghost reaction and terminal encounter');
