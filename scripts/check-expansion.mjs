@@ -85,6 +85,8 @@ step(under,w,[...blocks,[-22,9,-20,12,1.92,2.2]],dt,true);
 assert.ok(!under.vault,'overhead collision rejects the vault');
 
 const shift=Object.assign(carried(),{x:-20.5,z:14,flashAmount:1});
+shift.haunt=[{kind:0,x:-21,z:14,path:[[-21,14],[-25,14]],pathIndex:1,direction:1,
+ yaw:0,phase:0,state:'patrol',timer:0,speed:0,age:0,life:30,aggression:0}];
 updateHaunt(shift,blocks,[-1,0,0],dt);
 assert.equal(shift.haunt[0].state,'retreat','forward torch repels the flicker');
 shift.haunt[0].state='alert';shift.haunt[0].timer=1;
@@ -93,7 +95,7 @@ assert.equal(updateHaunt(shift,blocks,[-1,0,0],dt),'녹령');
 assert.equal(shift.carried,0,'encounter preserves carried box');
 assert.ok(shift.x>-17);
 const batches=rigs(worlds),actors=hauntLayers(shift);
-assert.ok(actors.length>=18);
+assert.equal(actors.length,13);
 for(const layer of actors){
  assert.ok(batches[layer.group]);
  assert.ok(layer.matrix.every(Number.isFinite));

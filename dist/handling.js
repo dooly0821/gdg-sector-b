@@ -1,3 +1,4 @@
+import {relaxedFingerAmounts} from './hand-motion.js';
 import {buildHauntRigs} from './haunt.js';
 import {basis,cameraView,multiply,unit,cross,dot} from './world.js';
 import {TORCH_LOCAL,SOCKETS,FINGER_FLEX} from './viewmodel.js';
@@ -101,7 +102,17 @@ export function choreography(s,eye,near,moving,sprinting,t){
  // Carry is a rigid assembly: no independent hand or box sway.
  const cargoBob=bob.map((v,i)=>v*(i===1?.55:.65)+[0,.060,-.085][i]+(s.cargoSpring?.[i]??0));
  const idle=[-1,1].map((side,i)=>({group:2+i,offset:[bob[0]+side*wave*.008*stride,bob[1]+side*wave*.012*stride+(i?0:Math.sin(t*1.1)*.002),bob[2]]}));
- for(let i=0;i<2;i++){const flex=FINGER_FLEX[i?'emptyR':'emptyL'];idle[i].flex={...flex,amount:.07+.045*Math.sin(t*1.7+i*.85)+.024*wave*stride-(a?.15*Math.sin(Math.PI*phase):0)};}
+ for(let i=0;i<2;i++){
+  const name=i?'emptyR':'emptyL',side=i?1:-1,layer=idle[i],wrist=SOCKETS[name].wrist;
+  const rotation=transform([.027*stride*wave*side+(s.handPitchLag??0),s.handYawLag??0,.021*stride*wave], [0,0,0],1);
+  const rotated=point(rotation,wrist);
+  // Rotate the entire hand/sleeve assembly around the wrist. The cuff never separates.
+  layer.matrix=multiply(translate(wrist.map((v,j)=>v-rotated[j]+layer.offset[j])),rotation);
+  layer.offset=[0,0,0];
+  const reach=a?Math.sin(Math.PI*phase):0;
+  layer.flex={...FINGER_FLEX[name],fingerAmounts:relaxedFingerAmounts(t,s.steps*3.8,i),
+   amount:.12+.047*Math.sin(t*1.45+i*.79)+.028*wave*stride-.164*reach};
+ }
  let hands=holding?[4,5,6].map(group=>({group,offset:cargoBob})):idle;
  let flight=null,assembly=false,hidden=-1;
  if(a){

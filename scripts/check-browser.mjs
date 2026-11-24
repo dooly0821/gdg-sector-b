@@ -57,7 +57,7 @@ try{
  await page.keyboard.press('e');
  await page.waitForFunction(()=>qa.shift.states[0]==='DELIVERED');
  await page.evaluate(()=>Object.assign(qa.shift,{x:-32,z:2,yaw:.38,pitch:.03}));
- await page.waitForFunction(()=>qa.shift.haunt?.length===4);
+ await page.waitForFunction(()=>qa.shift.hauntDirector!==undefined);
  await take('containment');
  assert.deepEqual(errors,[]);
  console.log('PASS Chromium WebGL2: actual Q/E input, dual carry, floor drop/retrieve, delivery and C-01');

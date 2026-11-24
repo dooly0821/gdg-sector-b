@@ -1,7 +1,9 @@
 import {MESH_DATA} from "./viewmodel-mesh-data.js";
-export const customShapes=['spectral-drape',...Object.keys(MESH_DATA)];
+export const customShapes=Object.keys(MESH_DATA);
 const cache=new Map();
+export function registerGeometry(shape,vertices){cache.set(shape,vertices);}
 export function geometry(shape){
+ if(cache.has(shape))return cache.get(shape);
  if(MESH_DATA[shape]){if(!cache.has(shape)){const raw=atob(MESH_DATA[shape]),bytes=Uint8Array.from(raw,c=>c.charCodeAt(0));const packed=new Int16Array(bytes.buffer),out=new Float32Array(packed.length);for(let i=0;i<packed.length;i++)out[i]=packed[i]/(i%8<3?20000:i%8<6?32767:1000);cache.set(shape,out);}return cache.get(shape);}
 
  let v=[];const vert=(p,n,u)=>v.push(...p,...n,...u);
@@ -26,25 +28,6 @@ export function geometry(shape){
    const at=(k,r)=>{const a=k/segments*2*Math.PI,[y,rad]=rings[r],prev=rings[Math.max(0,r-1)],next=rings[Math.min(rings.length-1,r+1)],slope=(next[1]-prev[1])/(next[0]-prev[0]);
     const x=Math.cos(a),z=Math.sin(a),n=[x,-slope*.25,z],length=Math.hypot(...n);vert([x*rad,y,z*rad],n.map(v=>v/length),[k/segments,y+.5]);};
    at(i,j);at(i,j+1);at(i+1,j);at(i+1,j);at(i,j+1);at(i+1,j+1);
-  }
- }else if(shape==='spectral-drape'){
-  // A closed, tapered sheet with an uneven hem and vertical cloth folds.
-  const rows=16,cols=28;
-  const sample=(t,a)=>{
-   const r=Math.pow(Math.sin(Math.PI*t),.69)*(0.24+0.91*t);
-   const fold=1+.13*Math.sin(a*6+t*5)+.07*Math.cos(a*9-t*7);
-   const hem=(1-t)**2;
-   return [r*fold*Math.cos(a)+hem*.19*Math.sin(t*7),t-.5-hem*.11*Math.sin(a*4),r*fold*Math.sin(a)-.49*hem];
-  };
-  const at=(j,i)=>{
-   const t=j/rows,a=i/cols*Math.PI*2,p=sample(t,a),m=sample(Math.min(1,t+.001),a),l=sample(Math.max(0,t-.001),a);
-   const d=m.map((v,k)=>v-l[k]),n0=sample(clampRow(t),a-.001),n1=sample(clampRow(t),a+.001);
-   const e=n1.map((v,k)=>v-n0[k]),n=[d[1]*e[2]-d[2]*e[1],d[2]*e[0]-d[0]*e[2],d[0]*e[1]-d[1]*e[0]];
-   vert(p,n.map(v=>v/(Math.hypot(...n)||1)),[i/cols,t]);
-  };
-  const clampRow=t=>Math.min(.999,Math.max(.001,t));
-  for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
-   at(j,i);at(j+1,i);at(j,i+1);at(j,i+1);at(j+1,i);at(j+1,i+1);
   }
  }else if(shape==='sphere'){
   const nx=18,ny=12;

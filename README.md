@@ -20,7 +20,7 @@ WASD 이동 / Shift 달리기 / 마우스 시점 / Space 또는 마우스 휠 �
 - 창고 서쪽 통로의 C-01 표지 아래를 지나면 야간 분류동, 점검 데크, 격리 설비가 나옵니다. 원래 배송 5건의 위치와 출고대는 그대로입니다.
 - 상자를 든 상태에서 E를 누르면, 조준 중인 출고대가 우선입니다. 그 외에는 앞에 공간이 있을 때 상자를 바닥이나 낮은 받침대에 내려놓습니다. 내려놓은 상자는 다시 조준해 E로 집을 수 있습니다.
 - 빈손으로 난간이나 낮은 화물에 다가가 이동 키와 점프를 함께 누르면 넘거나 올라섭니다. 머리 위나 착지 경로가 막혀 있으면 기존 점프가 작동합니다.
-- 분류동에서는 녹령, 함귀, 적재귀, 표찰귀를 만날 수 있습니다. 녹령과 표찰귀를 손전등으로 비추면 물러섭니다. 붙잡히면 분류동 입구로 돌아가며 운반 중인 화물과 출고 기록은 유지됩니다.
+- 분류동에서는 녹령, 함귀, 적재귀, 표찰귀가 서로 다른 시간과 위치에 나타납니다. 한 번에 최대 두 종류가 활동하며, 정면에서 보이는 지점에는 갑자기 생성되지 않습니다. 녹령과 표찰귀를 손전등으로 비추면 물러섭니다. 붙잡히면 분류동 입구로 돌아가며 운반 중인 화물과 출고 기록은 유지됩니다.
 
 ## 프로젝트 구조
 - `dist/` 편집 가능한 전체 웹게임 소스 및 정적 배포 산출물 (npm 의존성 없음)
@@ -30,7 +30,8 @@ WASD 이동 / Shift 달리기 / 마우스 시점 / Space 또는 마우스 휠 �
 - `dist/handling.js`: 손 모션, 달리기/착지/시점 스웨이, 장비 토글, 한 손 운반 전환 및 화물 관성 스프링.
 - `dist/renderer.js`: WebGL 2 표면 조명 (손전등 스포트라이트), `dist/software.js`: CPU 깊이 기반 손전등 fallback.
 - `dist/mission.js`: 기존 5개 화물 미션, 공간 조립, 상호작용과 임시 적치.
-- `dist/annex.js`, `dist/haunt.js`: C-01 구역 지형과 괴물 상태, 관절 계층, 렌더링 배치.
+- `dist/annex.js`, `dist/haunt.js`: C-01 지형, 등장 스케줄, 순찰과 추격.
+- `dist/creature-models.js`, `dist/creature-mesh.js`: 괴물별 3D 메시 원본과 관절 계층. 표찰과 바코드 텍스처는 `python modeling/build_creature_textures.py`로 재생성합니다.
 - `scripts/check-mission.mjs`, `scripts/check-physics.mjs`: Node.js 20+ 자동 검증.
 - `README-V2-ORIGINAL.md`, `EXPORT_MANIFEST-V2-ORIGINAL.json`: 원본 기록. 원본 Unity 이식 ZIP 및 설명은 V2 시점의 자료이며 V3 이식 데이터가 아닙니다.
 - `playtest/`: 원본 V2 캡처 및 V3 오프라인 CPU 렌더 캡처(브라우저 캡처 아님).
@@ -45,6 +46,7 @@ node scripts/check-contact-motion.mjs
 node scripts/check-hand-timing.mjs
 node scripts/check-dual.mjs
 node scripts/check-expansion.mjs
+node scripts/check-creatures.mjs
 python modeling/check_contacts.py # numpy 필요
 node scripts/export-layout.mjs layout.json
 ```

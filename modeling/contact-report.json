@@ -1,11 +1,11 @@
 {
   "vm_carryL_glove": {
-    "sample_count": 241780,
+    "sample_count": 246652,
     "min_clearance_m": 0.003989999999999966,
     "penetrating_samples": 0
   },
   "vm_carryR_glove": {
-    "sample_count": 241780,
+    "sample_count": 246652,
     "min_clearance_m": 0.003989999999999966,
     "penetrating_samples": 0
   },
@@ -20,7 +20,7 @@
     "penetrating_samples": 0
   },
   "vm_supportL_glove": {
-    "sample_count": 156156,
+    "sample_count": 163884,
     "min_clearance_m": 0.0033400000000000374,
     "penetrating_samples": 0
   },
@@ -30,18 +30,18 @@
     "penetrating_samples": 0
   },
   "torch_barrel": {
-    "sample_count": 270817,
-    "min_clearance_m": 0.004963805691822683,
+    "sample_count": 274089,
+    "min_clearance_m": 0.004969868099174933,
     "penetrating_samples": 0
   },
   "guard": {
-    "sample_count": 275268,
-    "min_normalized_radius": 1.0941318896268684,
+    "sample_count": 278180,
+    "min_normalized_radius": 1.0909718234707544,
     "penetrating_samples": 0
   },
   "switch": {
-    "sample_count": 275268,
-    "min_normalized_radius": 1.3188112519107247,
+    "sample_count": 278180,
+    "min_normalized_radius": 1.3254990802091124,
     "penetrating_samples": 0
   }
 }

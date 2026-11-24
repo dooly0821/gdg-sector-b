@@ -1,3 +1,4 @@
+import {prepareFingerBend} from './hand-motion.js';
 // Perspective-correct, depth-buffered CPU rasterizer for systems without WebGL 2.
 // It consumes exactly the same scene instances, carton UVs, camera and mission.
 import {geometry} from './geometry.js';
@@ -57,7 +58,7 @@ function meshPart(o,texs,lights,shadow,hand,idx){
    for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){let a=y*(nx+1)+x;tris.push(grid[a],grid[a+1],grid[a+nx+2],grid[a],grid[a+nx+2],grid[a+nx+1]);tids.push(0,0);}
   }
  }else for(let i=0;i<mesh.length/8;i++){tris.push(vertex(get(i,0),get(i,3),get(i,6)));if(i%3===0)tids.push(cart&&mesh[i*8+4]>.75?1:0);}
- return {p:new Float32Array(vec),tri:new Uint32Array(tris),ti:new Uint8Array(tids),tex:[texture,topMat],c:pos,r:Math.hypot(...sc)*(shape==='box'?.5:1),buf:new Float32Array(vec.length),shape};
+ return {p:new Float32Array(vec),tri:new Uint32Array(tris),ti:new Uint8Array(tids),tex:[texture,topMat],c:o.meshBounds?.center??pos,r:o.meshBounds?.radius??Math.hypot(...sc)*(shape==='box'?.5:1),buf:new Float32Array(vec.length),shape};
 }
 function mixv(a,b,t){return a.map((v,i)=>v+(b[i]-v)*t);}
 export class SoftwareRenderer{
@@ -113,7 +114,8 @@ export class SoftwareRenderer{
   const [a,b,c]=m.c,d=-(V[2]*a+V[6]*b+V[10]*c+oz),xx=V[0]*a+V[4]*b+V[8]*c+ox,yy=V[1]*a+V[5]*b+V[9]*c+oy;
   if(d+m.r<.055||Math.abs(xx)>Math.max(0,d)*this.w/(2*this.f)+m.r*2.3||Math.abs(yy)>Math.max(0,d)*this.h/(2*this.f)+m.r*1.7||m.r*this.f/Math.max(1,d)<.75)return;
   const p=m.p,s=m.buf,F=this.f,W=this.w*.5,H=this.h*.5;
-  for(let i=0;i<p.length;i+=8){let x=p[i],y=p[i+1],z=p[i+2];if(flex){for(const joint of [.006,.046]){const rel=[x-flex.pivot[0]-flex.forward[0]*joint,y-flex.pivot[1]-flex.forward[1]*joint,z-flex.pivot[2]-flex.forward[2]*joint],l=dot(rel,flex.forward),h=dot(rel,flex.normal),w=dot(rel,flex.width),t=clamp(l/.018,0,1),angle=flex.amount*(joint===.006?.55:.45)*t*t*(3-2*t)*(1+.20*clamp(w/.05,-1,1)),c=Math.cos(angle),q=Math.sin(angle),dl=l*c+h*q-l,dh=h*c-l*q-h;x+=flex.forward[0]*dl+flex.normal[0]*dh;y+=flex.forward[1]*dl+flex.normal[1]*dh;z+=flex.forward[2]*dl+flex.normal[2]*dh;}}const Z=-(V[2]*x+V[6]*y+V[10]*z+oz);
+  const bend=prepareFingerBend(flex);
+  for(let i=0;i<p.length;i+=8){let x=p[i],y=p[i+1],z=p[i+2];if(bend)[x,y,z]=bend([x,y,z]);const Z=-(V[2]*x+V[6]*y+V[10]*z+oz);
    s[i]=(V[0]*x+V[4]*y+V[8]*z+ox);s[i+1]=(V[1]*x+V[5]*y+V[9]*z+oy);s[i+2]=Z;
    const iz=1/Math.max(.045,Z);s[i+3]=W+F*s[i]*iz;s[i+4]=H-F*s[i+1]*iz;s[i+5]=iz;
   }
