@@ -129,11 +129,21 @@ export function buildArchitecture(w) {
   }
   for(const z of [-22,22]){
     const s=Math.sign(z);
-    box(0,4.3,z,30,8.6,.27,m.wall);
-    box(0,.43,z-s*.152,29.9,.86,.07,m.wallDark);
+    if(z===22){
+      for(const x of [-9,9]){
+        box(x,4.3,z,12,8.6,.27,m.wall);
+        box(x,.43,z-s*.152,11.9,.86,.07,m.wallDark);
+      }
+      box(0,6.1,z,6,5,.27,m.wall);
+      w.sign(0,3.9,z-.17,3.6,.35,'D-02 / TRANSFER HALL','#402d29','#ecd2a0',pi);
+    }else{
+      box(0,4.3,z,30,8.6,.27,m.wall);
+      box(0,.43,z-s*.152,29.9,.86,.07,m.wallDark);
+    }
     box(0,5.48,z-s*.18,29.8,.08,.085,m.trim);
     for (const x of [-11.25,-3.75,3.75,11.25])endWindow(z-s*.20,x,6.39);
     for (const x of [-14.56,-7.5,0,7.5,14.56]){
+      if(z===22&&x===0)continue;
       box(x,4.22,z-s*.23,.20,8.44,.24,m.steel);
       box(x,4.22,z-s*.39,.31,8.44,.043,m.plate);
     }
@@ -242,7 +252,7 @@ export function buildArchitecture(w) {
     box(x,.25,z-.14,.81,.37,.024,m.steel);
     w.sign(x,2.8,z-.13,1.30,.32,'STAFF ACCESS','#33483f','#d4d8c1',pi);
   }
-  serviceDoor(1.65,21.73);
+  serviceDoor(6.2,21.73);
   for (const x of [-9.8,-9.12,-8.44]) {
     box(x,1.42,21.65,.63,.97,.32,m.plate);
     box(x,1.42,21.46,.55,.89,.07,m.shutter);
