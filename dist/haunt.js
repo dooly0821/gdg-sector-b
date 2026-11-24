@@ -1,4 +1,5 @@
 import {parcelBlocks} from './mission.js';
+import {HIDING_POINTS,REFUGES} from './annex.js';
 import {worldBounds} from './movement.js';
 import {traceBox} from './contact.js';
 import {basis,multiply,dot} from './world.js';
@@ -26,7 +27,12 @@ const routes=[
  [[-11,32],[-9,38],[-6,49],[-12,47]],
  [[-30,24],[-30,33],[-33,39],[-30,49]],
  [[-19,34],[-17,37],[-11,37],[-8,33]],
- [[-40,27],[-39,33],[-40,44],[-38,51]]
+ [[-40,27],[-39,33],[-40,44],[-38,51]],
+ [[-30,56],[-29,62],[-29,71],[-31,76]],
+ [[-41,57],[-41,66],[-41,75],[-35,75]],
+ [[0,56],[1,63],[1,73],[0,76]],
+ [[-12,61],[-12,66],[-5,66],[-5,75]],
+ [[13,56],[13,64],[13,74],[10,76]]
 ];
 const randomOrder=(items,rng)=>{
  const copy=items.slice();
@@ -57,7 +63,7 @@ function line(blocks,actor,s){
 }
 const mapCache=new WeakMap();
 const bodyHeights=[1.85,1.8,.95,1.95];
-const inMap=(x,z)=>x>-42.5&&x<14.35&&z>-21.1&&z<53.5&&(x>=-15||z>-8.65);
+const inMap=(x,z)=>x>-42.5&&x<14.35&&z>-21.1&&z<77.5&&(x>=-15||z>-8.65);
 const sizes=[.35,.34,.44,.32];
 function detour(actor,target,blocks){
  const cell=.65,r=sizes[actor.kind],y=cast[actor.kind].float,h=bodyHeights[actor.kind];
@@ -106,8 +112,10 @@ function updateSpawns(s,blocks,forward,dt,rng){
  const slot=director.bag.findIndex(kind=>!s.haunt.some(actor=>actor.kind===kind));
  if(slot<0)return;
  const kind=director.bag[slot],type=cast[kind];
+ const zone=(x,z)=>z>=54?(x<-15?4:5):z>=22?(x<-15?3:2):x<-15?1:0;
+ const currentZone=zone(s.x,s.z);
  const candidates=routes.flatMap((path,route)=>path.map(([x,z],index)=>({path,route,index,x,z})));
- const spawn=randomOrder(candidates,rng).find(candidate=>{
+ const spawn=randomOrder(candidates,rng).sort((a,b)=>Number(zone(b.x,b.z)===currentZone)-Number(zone(a.x,a.z)===currentZone)).find(candidate=>{
   const {x,z,route}=candidate,dx=x-s.x,dz=z-s.z,dist=Math.hypot(dx,dz);
   if(!inMap(x,z)||dist<6.2||dist>20||!clear(blocks,x,z,.63,type.float,bodyHeights[kind]))return false;
   if(s.haunt.some(a=>a.route===route||Math.hypot(a.x-x,a.z-z)<5))return false;
@@ -151,21 +159,27 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
   const previous=actor.state;
   const i=actor.kind,type=cast[i],delta=[s.x-actor.x,s.z-actor.z],dist=Math.hypot(...delta);
   const local=blocks.filter(b=>b[2]>Math.min(actor.x,s.x)-2&&b[0]<Math.max(actor.x,s.x)+2&&b[3]>Math.min(actor.z,s.z)-2&&b[1]<Math.max(actor.z,s.z)+2);
+  const safe=s.grounded&&REFUGES.some(([x,y,z,r])=>Math.abs(s.y-y)<.09&&Math.hypot(s.x-x,s.z-z)<r);
   const pursuit=actor.pursuit??false,detectRange=type.range*(s.bodyHeight<1.2&&!s.flashlight?.62:1);
-  const seen=dist<(pursuit?24:detectRange)&&line(local,actor,s);
+  const seen=!safe&&dist<(pursuit?24:detectRange)&&line(local,actor,s);
   const noise=s.noise,hearing=[1.12,1.55,.85,.95][i];
   const heard=noise&&s.elapsed-noise.time<.55&&Math.hypot(noise.x-actor.x,noise.z-actor.z,noise.y-eyeHeights[i])<noise.radius*hearing;
-  if(seen){actor.lastKnown=[s.x,s.z];actor.lost=0;actor.pursuit=true;actor.searchPoint=null;}
+  if(seen){actor.lastKnown=[s.x,s.z];actor.lost=0;actor.pursuit=true;actor.searchPoint=null;actor.inspect=null;actor.checked=[];actor.fakeDone=false;if(['fakeLeave','ambush','inspect','guard'].includes(actor.state)){actor.state='alert';actor.timer=0;}}
   else {actor.lost=(actor.lost??0)+dt;if(heard){actor.lastKnown=[noise.x,noise.z];actor.searchPoint=null;}}
   // Do not give up just because one frame of sight was blocked.
   // Once acquired, continue to the last seen position and sweep the area.
   if(actor.pursuit&&dist>23&&(actor.lost??0)>3.2){
-   actor.pursuit=false;actor.state='patrol';actor.lastKnown=null;actor.corner=null;
+   actor.pursuit=false;actor.state='patrol';actor.lastKnown=null;actor.corner=null;actor.inspect=null;actor.fakeDone=false;
   }
   if(i===3&&s.horrorEvent?.type==='drop'&&s.elapsed-s.horrorEvent.time<.55&&dist<4){actor.state='disappear';return;}
   const lit=seen&&s.flashAmount>.8&&dist>0&&dot(forward,[-delta[0]/dist,0,-delta[1]/dist])>.9;
   actor.timer=Math.max(0,actor.timer-dt);
-  if(lit&&(i===0||i===3)){
+  if(safe&&(actor.pursuit||actor.state==='guard')){
+   if(actor.state!=='guard'){actor.state='guard';actor.timer=2.6;actor.guardPoint=actor.lastKnown??[actor.x,actor.z];actor.pursuit=false;actor.corner=null;}
+   if(!actor.timer){actor.state='patrol';actor.lastKnown=null;}
+  }else if(actor.state==='guard'){
+   actor.state='search';actor.pursuit=true;actor.lastKnown=actor.guardPoint;actor.timer=4;
+  }else if(lit&&(i===0||i===3)){
    actor.state='retreat';actor.timer=.9;
   }else if(actor.state==='retreat'){
    if(!actor.timer)actor.state=actor.pursuit?'alert':'patrol';
@@ -177,6 +191,13 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
    if(!actor.timer){actor.state='recovery';actor.timer=[.12,.16,.23,.11][i];}
   }else if(actor.state==='recovery'){
    if(!actor.timer)actor.state=actor.pursuit?'alert':heard?'search':'patrol';
+   }else if(actor.state==='fakeLeave'||actor.state==='ambush'||actor.state==='inspect'){
+   if(heard){actor.state='search';actor.pursuit=true;actor.inspect=null;}
+   else if(!actor.timer){
+    if(actor.state==='fakeLeave'){actor.state='ambush';actor.timer=1.0+i*.18;actor.corner=null;}
+    else if(actor.state==='ambush'){actor.state='search';actor.pursuit=true;actor.searchPoint=null;actor.inspect=null;actor.corner=null;}
+    else {actor.state='search';actor.inspect=null;actor.searchPoint=null;}
+   }
   }else if(actor.pursuit){
    actor.state=seen?'alert':'search';
    if(actor.age>.65&&seen&&dist<(i===2?2.75:1.80)&&s.y<eyeHeights[i]+.24){
@@ -184,8 +205,24 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
    }
   }else if(heard){actor.state='search';actor.timer=5;}
   else if(actor.state==='search'&&!actor.timer){actor.state='patrol';actor.lastKnown=null;}
+  // Inspect likely hiding entrances using only the last known position.
+  if(actor.state==='search'&&actor.lastKnown&&!seen&&!safe){
+   const nearLast=Math.hypot(actor.x-actor.lastKnown[0],actor.z-actor.lastKnown[1])<2.5;
+   if(nearLast||actor.inspect){
+    actor.checked??=[];
+    if(!actor.inspect){
+     actor.inspect=HIDING_POINTS.filter(p=>!actor.checked.includes(p)&&Math.hypot(p[0]-actor.lastKnown[0],p[1]-actor.lastKnown[1])<7&&clear(blocks,p[0],p[1],sizes[i],type.float,bodyHeights[i])).sort((a,b)=>Math.hypot(a[0]-actor.x,a[1]-actor.z)-Math.hypot(b[0]-actor.x,b[1]-actor.z))[0]??null;
+    }
+    if(actor.inspect&&Math.hypot(actor.x-actor.inspect[0],actor.z-actor.inspect[1])<.85){actor.checked.push(actor.inspect);actor.state='inspect';actor.timer=.65+i*.13;}
+    else if(!actor.inspect&&!actor.fakeDone&&(actor.lost??0)>2.1){
+     const center=actor.lastKnown;
+     const away=routes.flat().filter(p=>Math.hypot(p[0]-center[0],p[1]-center[1])>4&&Math.hypot(p[0]-center[0],p[1]-center[1])<10&&clear(blocks,p[0],p[1],sizes[i],type.float,bodyHeights[i])).sort((a,b)=>Math.hypot(a[0]-actor.x,a[1]-actor.z)-Math.hypot(b[0]-actor.x,b[1]-actor.z))[0];
+     if(away){actor.fakeDone=true;actor.fakeTarget=away;actor.state='fakeLeave';actor.timer=2.4+i*.25;actor.corner=null;actor.routeDelay=0;}
+    }
+   }
+  }
   const chasing=actor.pursuit&&['alert','search','charge','recovery','windup'].includes(actor.state);
-  if(actor.state==='search'&&actor.lastKnown&&(actor.searchPoint||Math.hypot(actor.x-actor.lastKnown[0],actor.z-actor.lastKnown[1])<.75)){
+  if(actor.state==='search'&&!actor.inspect&&actor.lastKnown&&(actor.searchPoint||Math.hypot(actor.x-actor.lastKnown[0],actor.z-actor.lastKnown[1])<.75)){
    actor.searchDelay=(actor.searchDelay??0)-dt;
    if(!actor.searchPoint||actor.searchDelay<=0||Math.hypot(actor.x-actor.searchPoint[0],actor.z-actor.searchPoint[1])<.65){
     actor.searchDelay=1.4;
@@ -199,7 +236,7 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
   actor.aggression=approach(actor.aggression,chasing?1:actor.state==='windup'?.75:0,dt*5.5);
   if(actor.state==='patrol'&&Math.hypot(path[actor.pathIndex][0]-actor.x,path[actor.pathIndex][1]-actor.z)<.5)
    actor.pathIndex=(actor.pathIndex+actor.direction+path.length)%path.length;
-  const target=(actor.state==='charge'||actor.state==='windup')?(actor.chargeTarget??actor.lastKnown??[s.x,s.z]):actor.state==='search'&&actor.lastKnown?(actor.searchPoint??actor.lastKnown):chasing?(seen?[s.x,s.z]:(actor.lastKnown??[s.x,s.z])):path[actor.pathIndex];
+  const target=actor.state==='guard'?(actor.guardPoint??[actor.x,actor.z]):actor.state==='fakeLeave'?(actor.fakeTarget??[actor.x,actor.z]):actor.state==='ambush'?[actor.x,actor.z]:actor.inspect&&(actor.state==='search'||actor.state==='inspect')?actor.inspect:(actor.state==='charge'||actor.state==='windup')?(actor.chargeTarget??actor.lastKnown??[s.x,s.z]):actor.state==='search'&&actor.lastKnown?(actor.searchPoint??actor.lastKnown):chasing?(seen?[s.x,s.z]:(actor.lastKnown??[s.x,s.z])):path[actor.pathIndex];
   const retreat=actor.state==='retreat';
   actor.routeDelay=(actor.routeDelay??0)-dt;
   if(actor.routeDelay<=0){
@@ -210,12 +247,12 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
   }
   if(actor.corner&&Math.hypot(actor.corner[0]-actor.x,actor.corner[1]-actor.z)<.38){actor.corner=null;actor.routeDelay=0;}
   const aim=actor.corner??target;
-  const desired=retreat?Math.atan2(-delta[0],-delta[1]):Math.atan2(aim[0]-actor.x,aim[1]-actor.z);
+  const desired=actor.state==='inspect'||actor.state==='ambush'?actor.yaw+Math.sin(actor.age*2.4)*.09:retreat?Math.atan2(-delta[0],-delta[1]):Math.atan2(aim[0]-actor.x,aim[1]-actor.z);
   actor.yaw+=clamp(Math.atan2(Math.sin(desired-actor.yaw),Math.cos(desired-actor.yaw)),-dt*(chasing?12:7),dt*(chasing?12:7));
   const pressure=1+Math.min(1,(s.states?.filter(k=>k==='DELIVERED').length??0)/30)*.19;
   // Different chase rhythms; the telegraphed charge is faster than sprinting.
   const pulse=i===0?.88+.22*Math.sin(actor.phase*.73):i===1?.91+.18*Math.sin(actor.phase*.46):i===2?.94+.10*Math.sin(actor.phase*.31):.87+.26*Math.pow(.5+.5*Math.sin(actor.phase*.69),3);
-  const goalSpeed=retreat?3.3:actor.state==='windup'?type.speed*.38:actor.state==='charge'?type.speed*1.32*pressure:actor.state==='recovery'?type.speed*.72:chasing?type.speed*pressure*pulse*(actor.state==='search'?.88:1):actor.state==='search'?2.8:1.35;
+  const goalSpeed=actor.state==='ambush'||actor.state==='inspect'?0:actor.state==='fakeLeave'?2.3:actor.state==='guard'?Math.hypot(actor.x-target[0],actor.z-target[1])>1.3?2.5:0:retreat?3.3:actor.state==='windup'?type.speed*.38:actor.state==='charge'?type.speed*1.32*pressure:actor.state==='recovery'?type.speed*.72:chasing?type.speed*pressure*pulse*(actor.state==='search'?.88:1):actor.state==='search'?2.8:1.35;
   actor.speed=approach(actor.speed,goalSpeed,dt*(actor.state==='charge'?18:chasing?[15,11,9,17][i]:7));
   const stride=actor.speed*dt;
   let moved=false;
@@ -236,7 +273,7 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
   const vertical=Math.max(0,s.y-strikeHeight,strikeHeight-s.y-(s.bodyHeight??1.70));
   const hitDx=s.x-actor.x,hitDz=s.z-actor.z,hitDist=Math.hypot(hitDx,hitDz);
   const aligned=(Math.sin(actor.yaw)*hitDx+Math.cos(actor.yaw)*hitDz)/Math.max(.001,hitDist);
-  if(striking&&!captured&&actor.age>.65&&actor.timer<.56&&line(local,actor,s)&&aligned>.40&&visible(local,[actor.x,strikeHeight,actor.z],[s.x,clamp(strikeHeight,s.y+.1,s.y+(s.bodyHeight??1.7)-.1),s.z])&&Math.hypot(hitDist,vertical)<armReach[i]&&s.hauntCooldown===0){
+  if(!safe&&striking&&!captured&&actor.age>.65&&actor.timer<.56&&line(local,actor,s)&&aligned>.40&&visible(local,[actor.x,strikeHeight,actor.z],[s.x,clamp(strikeHeight,s.y+.1,s.y+(s.bodyHeight??1.7)-.1),s.z])&&Math.hypot(hitDist,vertical)<armReach[i]&&s.hauntCooldown===0){
    actor.speed=0;captured=type.name;
    s.handAction=null;s.pendingUse=null;s.vault=null;s.jumpBuffer=0;s.vx=s.vz=s.vy=0;s.failed=true;s.capturedBy=i;
   }
@@ -269,6 +306,7 @@ export function hauntLayers(s){
    [.15*Math.cos(a.phase*.74)-reach*.16,0,-.07],[.15*Math.sin(a.phase*.74)-reach*.16,0,.07],
    [.23*Math.sin(a.phase*.97)+reach*.12,.16*Math.cos(a.phase*.67),.22*Math.sin(a.phase*.78)]
   ];
+  if(['inspect','ambush','guard'].includes(a.state)){angles[1][1]+=.75*Math.sin(a.age*2.7);angles[1][2]+=.29*Math.cos(a.age*2.1);angles[0][0]+=.13;}
   const coil=a.state==='windup'?clamp(1-a.timer/[.18,.22,.28,.17][i],0,1):0;
   const strike=a.state==='charge'?Math.sin(Math.PI*clamp((.62-a.timer)/.57,0,1)):0;
   if(a.pursuit||a.state==='charge'||a.state==='alert'){
