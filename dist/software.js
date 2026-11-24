@@ -30,10 +30,10 @@ function shadowField(parts){
 function vertexLight(P,n,m,lights,shadow,hand){
  const [x,y,z]=P,v=shadow(x,y,z),k=(n[1]+1)*.5;
  if(hand){let d=Math.max(0,dot(n,[-.53,.75,.39])),r=Math.max(0,dot(n,[.8,.25,-.4]));const h=unit(unit(P.map(v=>-v)).map((v,i)=>v+[-.53,.75,.39][i])),spec=/vm_(metal|rim)/.test(m.name)?Math.pow(Math.max(0,dot(n,h)),18)*2:0;return [.48+.74*d+.15*r+m.emission+spec,.49+.65*d+.17*r+m.emission+spec,.55+.51*d+.24*r+m.emission+spec];}
- let L=[.14+.22*k,.15+.25*k,.19+.30*k],di=Math.max(0,dot(n,[.37,.87,-.30]))*(.24+.76*v);
- L[0]+=.14*di;L[1]+=.17*di;L[2]+=.22*di;
+ let L=[.065+.135*k,.075+.155*k,.10+.19*k],di=Math.max(0,dot(n,[.37,.87,-.30]))*(.24+.76*v);
+ L[0]+=.085*di;L[1]+=.105*di;L[2]+=.145*di;
  for(const [lx,ly,lz,red=0] of lights){let dx=lx-x,dy=ly-y,dz=lz-z,ds=dx*dx+dy*dy+dz*dz,inv=1/Math.sqrt(ds+.01),cone=clamp((dy*inv+.04)/.85,0,1);
-  let f=31/(ds+7)*cone*cone*(3-2*cone)*(.13+.87*Math.max(0,(dx*n[0]+dy*n[1]+dz*n[2])*inv))*(.29+.71*v);
+  let f=(red?32:14)/(ds+7)*cone*cone*(3-2*cone)*(.13+.87*Math.max(0,(dx*n[0]+dy*n[1]+dz*n[2])*inv))*(.29+.71*v);
   L[0]+=f;L[1]+=(red?.075:.72)*f;L[2]+=(red?.035:.44)*f;
  }return L.map(a=>a+m.emission);
 }
@@ -78,7 +78,7 @@ export class SoftwareRenderer{
  render(eye,forward,parcels,pose,scale){
   const c=this.canvas,base={HIGH:1100,BALANCED:760,PERFORMANCE:520}[this.quality],w=Math.max(80,Math.floor(Math.min(base,c.clientWidth)*scale)),h=Math.max(60,Math.round(w*c.clientHeight/c.clientWidth));
   if(c.width!==w||c.height!==h||!this.image){c.width=w;c.height=h;this.image=this.ctx.createImageData(w,h);this.pixels=new Uint32Array(this.image.data.buffer);this.zbuffer=new Float32Array(w*h);}
-  this.f=h/(2*Math.tan(78*Math.PI/360));this.w=w;this.h=h;this.pixels.fill(0xff493b30);this.zbuffer.fill(0);
+  this.f=h/(2*Math.tan(78*Math.PI/360));this.w=w;this.h=h;this.pixels.fill(0xff100b09);this.zbuffer.fill(0);
   const cam=cameraView(eye,forward);this.vp=multiply(perspective(78*Math.PI/180,w/h,.045,95),cam);
   const draw=(group,offset,view,arms,flex)=>{for(let mesh of this.groups[group])this.drawMesh(mesh,offset,view,arms,mesh.shape.includes("_glove_")?flex:null);};
   draw(0,[0,0,0],cam,false);for(let off of parcels)draw(1,off,cam,false);
@@ -143,7 +143,7 @@ export class SoftwareRenderer{
   for(let y=y0;y<=y1;y++){let wb=(x0+.5-ax)*ibx+(y+.5-ay)*iby,wc=(x0+.5-ax)*icx+(y+.5-ay)*icy;
    for(let x=x0,idx=y*W+x0;x<=x1;x++,idx++,wb+=ibx,wc+=icx){if(wb<-.00004||wc<-.00004||wb+wc>1.00004)continue;let iz=iz0+wb*(iz1-iz0)+wc*(iz2-iz0);if(iz<=zbuf[idx])continue;
     let z=1/iz,uvx=Math.floor((ur+ub*wb+uc*wc)*z)&mask,uvy=Math.floor((vr+vb*wb+vc*wc)*z)&mask,px=im[uvy*n+uvx];if((px>>>24)<100)continue;
-    let r=Math.min(255,(px&255)*(r0+rb*wb+rc*wc)*clear+26*fog),g=Math.min(255,((px>>>8)&255)*(g0+gb*wb+gc*wc)*clear+30*fog),bl=Math.min(255,((px>>>16)&255)*(b0+bb*wb+bc*wc)*clear+39*fog);
+    let r=Math.min(255,(px&255)*(r0+rb*wb+rc*wc)*clear+9*fog),g=Math.min(255,((px>>>8)&255)*(g0+gb*wb+gc*wc)*clear+11*fog),bl=Math.min(255,((px>>>16)&255)*(b0+bb*wb+bc*wc)*clear+15*fog);
     img[idx]=0xff000000|((bl|0)<<16)|((g|0)<<8)|(r|0);zbuf[idx]=iz;
    }
   }
