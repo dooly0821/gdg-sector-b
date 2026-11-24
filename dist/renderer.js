@@ -272,13 +272,14 @@ export class Renderer{
   gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D_ARRAY,this.atlas);gl.uniform1i(u.atlas,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,this.depth);gl.uniform1i(u.shadowMap,1);gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,this.floorTex);gl.uniform1i(u.floorTex,2);
   const planes=[];for(let i=0;i<3;i++)for(let s of [-1,1]){let pl=[0,1,2,3].map(j=>vp[4*j+3]+s*vp[4*j+i]);planes.push(pl.map(v=>v/Math.hypot(...pl.slice(0,3))));}
   for(const b of this.groups[0])if(planes.every(p=>dot(p.slice(0,3),b.center)+p[3]>-b.radius))this.draw(b);
-  for(const xyz of items){gl.uniform3fv(u.offset,xyz);for(const b of this.groups[1])this.draw(b);}
+  for(const xyz of items){if(!planes.every(p=>p[0]*xyz[0]+p[1]*(xyz[1]+.24)+p[2]*xyz[2]+p[3]>-.65))continue;gl.uniform3fv(u.offset,xyz);for(const b of this.groups[1])this.draw(b);}
   if(pose.actors?.length){
    gl.uniform3f(u.offset,0,0,0);
    gl.uniform1i(u.worldObject,1);
    gl.uniform1f(u.character,1);gl.uniform1f(u.clay,pose.clay?1:0);
    const transparent=[];
    for(const actor of pose.actors){
+    if(actor.root&&!planes.every(p=>p[0]*actor.root[0]+p[1]*actor.root[1]+p[2]*actor.root[2]+p[3]>-3.1))continue;
     gl.uniform1f(u.actorOpacity,actor.opacity??1);
     gl.uniformMatrix4fv(u.objectMatrix,false,actor.matrix);
     for(const b of this.groups[actor.group]){
