@@ -1,0 +1,47 @@
+{
+  "vm_carryL_glove": {
+    "sample_count": 241528,
+    "min_clearance_m": 0.003989999999999966,
+    "penetrating_samples": 0
+  },
+  "vm_carryR_glove": {
+    "sample_count": 241528,
+    "min_clearance_m": 0.003989999999999966,
+    "penetrating_samples": 0
+  },
+  "vm_carryL_sleeve": {
+    "sample_count": 25200,
+    "min_clearance_m": 0.12195128422858037,
+    "penetrating_samples": 0
+  },
+  "vm_carryR_sleeve": {
+    "sample_count": 25200,
+    "min_clearance_m": 0.12195128422858037,
+    "penetrating_samples": 0
+  },
+  "vm_supportL_glove": {
+    "sample_count": 155764,
+    "min_clearance_m": 0.0033400000000000374,
+    "penetrating_samples": 0
+  },
+  "vm_supportL_sleeve": {
+    "sample_count": 25200,
+    "min_clearance_m": 0.08503286188292147,
+    "penetrating_samples": 0
+  },
+  "torch_barrel": {
+    "sample_count": 267429,
+    "min_clearance_m": 0.004963805691822683,
+    "penetrating_samples": 0
+  },
+  "guard": {
+    "sample_count": 271880,
+    "min_normalized_radius": 1.0941318896268684,
+    "penetrating_samples": 0
+  },
+  "switch": {
+    "sample_count": 271880,
+    "min_normalized_radius": 1.3188112519107247,
+    "penetrating_samples": 0
+  }
+}

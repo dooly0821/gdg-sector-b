@@ -1,0 +1,104 @@
+{
+  "emptyL": [
+    {
+      "component": "glove",
+      "triangles": 16768,
+      "watertight": true,
+      "components": 1
+    },
+    {
+      "component": "sleeve",
+      "triangles": 3600,
+      "watertight": true,
+      "components": 1
+    }
+  ],
+  "emptyR": [
+    {
+      "component": "glove",
+      "triangles": 16768,
+      "watertight": true,
+      "components": 1
+    },
+    {
+      "component": "sleeve",
+      "triangles": 3600,
+      "watertight": true,
+      "components": 1
+    }
+  ],
+  "carryL": [
+    {
+      "component": "glove",
+      "triangles": 34504,
+      "watertight": true,
+      "components": 1
+    },
+    {
+      "component": "sleeve",
+      "triangles": 3600,
+      "watertight": true,
+      "components": 1
+    }
+  ],
+  "carryR": [
+    {
+      "component": "glove",
+      "triangles": 34504,
+      "watertight": true,
+      "components": 1
+    },
+    {
+      "component": "sleeve",
+      "triangles": 3600,
+      "watertight": true,
+      "components": 1
+    }
+  ],
+  "supportL": [
+    {
+      "component": "glove",
+      "triangles": 22252,
+      "watertight": true,
+      "components": 1
+    },
+    {
+      "component": "sleeve",
+      "triangles": 3600,
+      "watertight": true,
+      "components": 1
+    }
+  ],
+  "torch": [
+    {
+      "component": "glove",
+      "triangles": 38840,
+      "watertight": true,
+      "components": 1
+    },
+    {
+      "component": "sleeve",
+      "triangles": 3600,
+      "watertight": true,
+      "components": 1
+    },
+    {
+      "component": "flashlight",
+      "triangles": 3744,
+      "watertight": true,
+      "components": 1
+    },
+    {
+      "component": "switch_guard",
+      "triangles": 320,
+      "watertight": true,
+      "components": 1
+    },
+    {
+      "component": "switch",
+      "triangles": 320,
+      "watertight": true,
+      "components": 1
+    }
+  ]
+}
