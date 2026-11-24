@@ -22,7 +22,9 @@ for name,center,radii in [('guard',[.318,-.230,-.773],[.013,.008,.016]),('switch
 # Contact with the switch housing is valid for the thumb; the four fingers
 # contact the carton or the handle. Distances are in the game's metre units.
 anchors=json.loads((root/'modeling/grip-anchors.json').read_text())
+contacts={}
 for pose,tips in anchors.items():
+ contacts[pose]={}
  points=samples('vm_'+pose+'_glove')
  for digit,anchor in tips.items():
   local=points[np.linalg.norm(points-anchor,axis=1)<.019]
@@ -33,6 +35,8 @@ for pose,tips in anchors.items():
   else:
    q=np.abs(local-[0,-.584+.446*.88/2,-.864])-[.446/2,.446*.88/2,.446*.82/2]
    d=np.linalg.norm(np.maximum(q,0),axis=1)+np.minimum(np.max(q,axis=1),0)
+  contacts[pose][digit]=local[d.argmin()].round(6).tolist()
   check(pose+'_'+digit,d)
   assert d.min()<=.005, (pose,digit,'gap',d.min())
+(root/'dist/grip-contacts.js').write_text('// Points on the packed glove at the nearest measured prop surface.\nexport const gripContacts='+json.dumps(contacts,indent=1)+';\n')
 (root/'modeling/contact-report.json').write_text(json.dumps(report,indent=2));print(json.dumps(report,indent=2))

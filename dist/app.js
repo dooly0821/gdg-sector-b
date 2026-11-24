@@ -2,7 +2,7 @@ import {drawTraversalDebug} from './traversal-debug.js';
 import {equipmentClearance} from './contact.js';
 import {vaultPose} from './hand-motion.js';
 import {updateHaunt,hauntLayers} from './haunt.js';
-import {createScene,CONFIG,PARCELS,DOCK,newShift,step,forward,nextTarget,handlingTarget,canUse,parcelPositions,deliveryCount} from './mission.js';
+import {createScene,CONFIG,PARCELS,DOCK,newShift,step,forward,nextTarget,handlingTarget,canUse,parcelPositions,parcelBlocks,deliveryCount} from './mission.js';
 import {PHYSICS} from "./movement.js";
 import {workerLegLayers,rigs,beginHandling,advanceHandling,choreography,toggleFlashlight,updateViewmodel} from './handling.js';
 import {Renderer} from './renderer.js';
@@ -125,7 +125,7 @@ function targetCorners(pos,dock){
 }
 function frame(now){if(mode!=='game')return;const dt=Math.min(.1,Math.max(0,(now-last)/1000));last=now;const s=session;
  if(keys.has('ArrowLeft'))s.yaw+=dt*1.65;if(keys.has('ArrowRight'))s.yaw-=dt*1.65;if(keys.has('ArrowUp'))s.pitch=Math.min(CONFIG.pitchLimit,s.pitch+dt);if(keys.has('ArrowDown'))s.pitch=Math.max(-CONFIG.pitchLimit,s.pitch-dt);
- const was=s.steps;const tick=1/PHYSICS.hz;accumulator+=dt;while(accumulator>=tick){step(s,keys,worlds[0].blocks,tick,jump);jump=false;accumulator-=tick;}equipmentClearance(s,worlds[0].blocks,dt);updateViewmodel(s,dt);
+ const was=s.steps;const tick=1/PHYSICS.hz;accumulator+=dt;while(accumulator>=tick){step(s,keys,worlds[0].blocks,tick,jump);jump=false;accumulator-=tick;}equipmentClearance(s,worlds[0].blocks,dt,parcelBlocks(s));updateViewmodel(s,dt);
  if(s.pendingUse&&s.flashAmount===0){const target=s.pendingUse;s.pendingUse=null;use(target);if(!s.handAction&&s.restoreTorch){s.flashlight=true;s.restoreTorch=false;}}
  if(s.grounded&&Math.floor(s.steps/1.12)>Math.floor(was/1.12))beep(95,.08,'sine',.04);
  const moving=s.steps>was+.002;const bob=settings.motion&&moving&&s.grounded?Math.sin(s.steps*5.5)*.014:0;
@@ -156,7 +156,7 @@ function frame(now){if(mode!=='game')return;const dt=Math.min(.1,Math.max(0,(now
  const pose=choreography(s,eye,available,moving,keys.has('ShiftLeft')||keys.has('ShiftRight'),s.elapsed,view);
  pose.actors=[...hauntLayers(s),...workerLegLayers(s)];pose.clock=s.elapsed;
  renderer.render(eye,view,parcelPositions(s,pose.hidden),pose,settings.scale);
- if(s.showTraversal||document.querySelector('#traversal-debug'))drawTraversalDebug(s,worlds[0].blocks,renderer);
+ if(s.showTraversal||document.querySelector('#traversal-debug'))drawTraversalDebug(s,worlds[0].blocks,renderer,pose,eye,view);
  const mark=$('#waypoint'),p=$('#prompt'),brackets=$('#target-brackets');
  let msg=s.climbHint>s.elapsed?'높은 선반에 오르려면 E로 상자를 내려놓으세요.':'';brackets.hidden=true;mark.hidden=true;
  if(target&&!s.handAction){

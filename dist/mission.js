@@ -46,12 +46,12 @@ export function surface(x,z,y){
  if(x>=11&&x<=14.9&&z>=-20&&z<=7.08&&y>=3.25)return 3.6;
  return 0;
 }
+export function parcelBlocks(s){
+ const [w,h,d]=parcelHalf;
+ return parcelPositions(s).map(([x,y,z])=>[x-w,z-d,x+w,z+d,y,y+h,'climb']);
+}
 export function step(s,keys,blocks,dt,jump=false){
- const dynamic=sceneBlocks.has(blocks)?parcelPositions(s).flatMap(([x,y,z])=>{
-  if(Math.abs(x-s.x)>3||Math.abs(z-s.z)>3)return [];
-  const [w,h,d]=parcelHalf;
-  return [[x-w,z-d,x+w,z+d,y,y+h,'climb']];
- }):[];
+ const dynamic=sceneBlocks.has(blocks)?parcelBlocks(s).filter(b=>b[0]<s.x+3&&b[2]>s.x-3&&b[1]<s.z+3&&b[3]>s.z-3):[];
  const grounded=s.grounded,vy=s.vy,previousStep=Math.floor(s.steps/.90),vault=s.vault;
  move(s,keys,blocks,dt,jump,surface,dynamic);
  const speed=Math.hypot(s.vx,s.vz);

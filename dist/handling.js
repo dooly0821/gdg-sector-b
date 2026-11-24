@@ -74,6 +74,15 @@ export function toggleFlashlight(s){
  if(s.handAction)return false;
  s.flashlight=!s.flashlight;return true;
 }
+// Exact critically damped step for offsets measured in view metres or radians.
+function settle(position,velocity,goals,omega,dt){
+ const decay=Math.exp(-omega*dt);
+ for(let i=0;i<goals.length;i++){
+  const error=position[i]-goals[i],v=velocity[i],j=v+omega*error;
+  position[i]=goals[i]+(error+j*dt)*decay;
+  velocity[i]=(v-omega*j*dt)*decay;
+ }
+}
 export function updateViewmodel(s,dt){
  const target=s.flashlight&&!s.handAction&&!s.vault?.high?1:0;
  const flashA=s.flashAmount??0;
@@ -83,11 +92,13 @@ export function updateViewmodel(s,dt){
  s.motionSpeed=mix(s.motionSpeed??0,speed,a);
  const dyaw=Math.atan2(Math.sin(s.yaw-(s.lastViewYaw??s.yaw)),Math.cos(s.yaw-(s.lastViewYaw??s.yaw)));
  const dpitch=s.pitch-(s.lastViewPitch??s.pitch);
- const rateScale=1/Math.max(1,dt*60);
- s.swayX=mix(s.swayX??0,Math.max(-.050,Math.min(.050,-dyaw*2.9*rateScale)),a);
- s.swayY=mix(s.swayY??0,Math.max(-.042,Math.min(.042,-dpitch*2.7*rateScale)),a);
- s.handYawLag=mix(s.handYawLag??0,Math.max(-.028,Math.min(.028,-dyaw*1.8)),1-Math.exp(-dt*10));
- s.handPitchLag=mix(s.handPitchLag??0,Math.max(-.022,Math.min(.022,-dpitch*1.6)),1-Math.exp(-dt*10));
+ const rateScale=dt>0?1/(dt*60):0;
+ const yawRate=dyaw*rateScale,pitchRate=dpitch*rateScale;
+ const targets=[[-yawRate*2.9,.050],[-pitchRate*2.7,.042],[-yawRate*1.8,.028],[-pitchRate*1.6,.022]]
+  .map(([value,limit])=>Math.max(-limit,Math.min(limit,value)));
+ s.viewLag??=[0,0,0,0];s.viewLagVelocity??=[0,0,0,0];
+ settle(s.viewLag,s.viewLagVelocity,targets,21,dt);
+ [s.swayX,s.swayY,s.handYawLag,s.handPitchLag]=s.viewLag;
  s.lastViewYaw=s.yaw;s.lastViewPitch=s.pitch;
  if(s.grounded&&s.wasAirborne)s.landKick=Math.min(.055,.012+(s.fallSpeed??0)*.004);
  s.fallSpeed=Math.max(0,-s.vy);
@@ -96,8 +107,8 @@ export function updateViewmodel(s,dt){
  // Critically damped spring: inertia driven by actual player velocity, shared by hands and parcel.
  const side=(s.vx||0)*Math.cos(s.yaw)-(s.vz||0)*Math.sin(s.yaw),front=-(s.vx||0)*Math.sin(s.yaw)-(s.vz||0)*Math.cos(s.yaw);
  const goals=[Math.max(-.023,Math.min(.023,-side*.003)),s.grounded?0:Math.max(-.035,Math.min(.035,-(s.vy||0)*.006)),Math.max(-.026,Math.min(.026,(front-(s.prevFront??front))*.018))];s.prevFront=front;
- s.cargoSpring??=[0,0,0];s.cargoSpringV??=[0,0,0];const omega=17,decay=Math.exp(-omega*dt);
- for(let i=0;i<3;i++){const x=s.cargoSpring[i]-goals[i],v=s.cargoSpringV[i],j=v+omega*x;s.cargoSpring[i]=goals[i]+(x+j*dt)*decay;s.cargoSpringV[i]=(v-omega*j*dt)*decay;}
+ s.cargoSpring??=[0,0,0];s.cargoSpringV??=[0,0,0];
+ settle(s.cargoSpring,s.cargoSpringV,goals,17,dt);
 }
 const ANCHOR=[0,-.584,-.864], HELD_SIZE=.446;
 const translate=p=>transform([0,0,0],p,1);

@@ -57,7 +57,7 @@ function draw(ms){
  const glove=i===4;
  document.querySelector('#bend-control').hidden=!glove;
  const actors=glove?[{group:ACTOR_START+rigs.length+1,matrix:gloveMatrix('emptyR',[.12,.30,0],[-.25,.95,-.18],[-.97,-.25,0],5.1),
-  flex:{...FINGER_FLEX.emptyR,amount:Number(bend.value)*.013,fingerAmounts:[.74,.92,1.01,1.12]}}]:i<0?[{group:ACTOR_START+rigs.length,matrix:identity,footprint:[0,0,.31,.48]}]:hauntLayers({x:0,z:1,haunt:[actor]});
+  flex:{...FINGER_FLEX.emptyR,amount:Number(bend.value)*.021,fingerAmounts:[.74,.92,1.01,1.12]}}]:i<0?[{group:ACTOR_START+rigs.length,matrix:identity,footprint:[0,0,.31,.48]}]:hauntLayers({x:0,z:1,haunt:[actor]});
  const shadow=[i,bend.value,phase].join('/');
  if(lastShadow!==shadow){renderer.studioShadow(actors);lastShadow=shadow;}
  const framingKey=[i,a,innerWidth,innerHeight].join('/');
@@ -65,7 +65,8 @@ function draw(ms){
   const neutral=moving?hauntLayers({x:0,z:1,haunt:[{...actor,phase:0}]}):actors;
   camera=frameSubject(neutral,a);framing=framingKey;
  }
- const [eye,dir]=camera;
+ const [framed,dir]=camera;
+ const eye=glove?framed.map((v,k)=>v+dir[k]*.29):framed;
  renderer.render(eye,dir,[],{hands:[],actors,clay:clay.checked,clock:phase,flashlight:lamp.checked?.045:0},1);
  document.body.dataset.ready='true';
  requestAnimationFrame(draw);

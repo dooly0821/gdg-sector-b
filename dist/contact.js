@@ -21,10 +21,10 @@ export function traceBox(a,b,box,pad=0){
  }
  return enter;
 }
-export function equipmentClearance(s,blocks,dt){
+export function equipmentClearance(s,blocks,dt,dynamic=[]){
  const eye=[s.x,s.y+(s.bodyHeight??1.70)-.12,s.z],cp=Math.cos(s.pitch);
  const f=[-Math.sin(s.yaw)*cp,Math.sin(s.pitch),-Math.cos(s.yaw)*cp];
- const local=nearbyBlocks(blocks,s.x,s.z);
+ const local=nearbyBlocks(blocks,s.x,s.z).concat(dynamic);
  let nearest=1;
  for(const side of [-.22,0,.22]){
   const end=eye.map((v,i)=>v+f[i]*1.12+[side*Math.cos(s.yaw),-.32,-side*Math.sin(s.yaw)][i]);

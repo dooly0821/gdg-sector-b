@@ -1,0 +1,53 @@
+PASS: 242 sampled pickup/placement phases, shared cargo transform, wrist-sleeve attachment, reach constraint, exact Q endpoints.
+Creature 1: 21416 triangles, 13 joint transforms
+Creature 2: 23407 triangles, 13 joint transforms
+Creature 3: 38276 triangles, 13 joint transforms
+Creature 4: 17514 triangles, 13 joint transforms
+PASS: 100613 triangles, varied types/routes/times, deterministic seeded replay, encounter cap
+PASS: 3377447 sampled glove vertices during 121 transfer phases; dual grip, light, 30/60/120 Hz reverse transitions and delivery.
+PASS: forward beam, 3 drop/retrieve/delivery rates, blocked placement, two-way annex, rail/crate vaults, overhead rejection, ghost reaction and encounter recovery
+PASS: 267778 continuous three-joint samples, independent finger timing and fixed palm
+emptyL 0.33 100.42% of rest volume
+emptyL 0.65 100.80% of rest volume
+emptyL 0.98 101.16% of rest volume
+emptyL 1.3 101.49% of rest volume
+emptyL 1.7 101.78% of rest volume
+emptyL 2.1 101.91% of rest volume
+emptyR 0.33 100.42% of rest volume
+emptyR 0.65 100.80% of rest volume
+emptyR 0.98 101.16% of rest volume
+emptyR 1.3 101.49% of rest volume
+emptyR 1.7 101.78% of rest volume
+emptyR 2.1 101.91% of rest volume
+PASS: 30 Hz equip/stow/pickup/place timing
+PASS: 60 Hz equip/stow/pickup/place timing
+PASS: 120 Hz equip/stow/pickup/place timing
+PASS: 144 Hz equip/stow/pickup/place timing
+PASS 30 Hz: all five pickup/delivery missions, collision-free approach, simultaneous light, slots, duplicate and cancellation guards
+PASS 60 Hz: all five pickup/delivery missions, collision-free approach, simultaneous light, slots, duplicate and cancellation guards
+PASS 120 Hz: all five pickup/delivery missions, collision-free approach, simultaneous light, slots, duplicate and cancellation guards
+PASS: walk speed, airborne momentum, jump apex, buffered bunny hop, upper ramp round trip, air strafe and collision sliding
+PASS vault: C-01 rail head-on
+PASS vault: rail at contact
+PASS vault: diagonal sprint
+PASS vault: warehouse upper rail
+PASS vault: warehouse ramp rail
+PASS vault: ascending diagonal on ramp
+PASS vault: low cargo
+PASS vault: warehouse pallet top
+PASS vault: flashlight
+PASS vault: one-hand box and flashlight
+PASS vault rejection: solid wall
+PASS vault rejection: high marked obstacle
+PASS vault rejection: blocked landing
+PASS vault rejection: blocked headroom
+PASS vault rejection: outside idle reach
+PASS vault: extended reach at sprint speed
+PASS 30 Hz: all five pickup/delivery missions, collision-free approach, simultaneous light, slots, duplicate and cancellation guards
+PASS 60 Hz: all five pickup/delivery missions, collision-free approach, simultaneous light, slots, duplicate and cancellation guards
+PASS 120 Hz: all five pickup/delivery missions, collision-free approach, simultaneous light, slots, duplicate and cancellation guards
+PASS 30 Hz, 20 Q reversals and 20 E actions with one ownership event each
+PASS 60 Hz, 20 Q reversals and 20 E actions with one ownership event each
+PASS 120 Hz, 20 Q reversals and 20 E actions with one ownership event each
+PASS 144 Hz, 20 Q reversals and 20 E actions with one ownership event each
+PASS actual C-01 crates, upper tier climb, blocked stand, descent, occluded attack

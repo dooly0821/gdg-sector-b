@@ -48,7 +48,7 @@ for(const pose of ['emptyL','emptyR']){
   return Math.abs(sum)/6;
  };
  const open=volume(0);
- for(const amount of [.33,.65,.98,1.3]){
+ for(const amount of [.33,.65,.98,1.3,1.7,2.1]){
   const ratio=volume(amount)/open;
   assert.ok(Math.abs(1-ratio)<.05,'glove volume lost during flexion '+ratio);
   console.log(pose,amount,(100*ratio).toFixed(2)+'% of rest volume');

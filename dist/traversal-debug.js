@@ -1,6 +1,8 @@
+import {gripContacts} from './grip-contacts.js';
+import {unit,cross} from './world.js';
 import {nearbyBlocks} from './contact.js';
 // Developer overlay uses the same camera projection and solids as gameplay.
-export function drawTraversalDebug(s,blocks,renderer){
+export function drawTraversalDebug(s,blocks,renderer,pose,eye,view){
  let canvas=document.querySelector('#traversal-debug');
  if(!s.showTraversal){if(canvas)canvas.remove();return;}
  if(!canvas){
@@ -25,6 +27,20 @@ export function drawTraversalDebug(s,blocks,renderer){
  }
  if(s.vault)line([s.x,s.y+.8,s.z],s.vault.grip,'#fff22a');
  for(const a of s.haunt??[])for(const ray of a.rays??[])line(ray.from,ray.to,ray.open?'#ff5468':'#888');
+ // Convert the same final viewmodel transform used by WebGL back to world
+ // space, including the flashlight aim correction and the held carton offset.
+ const right=unit(cross(view,[0,1,0])),up=cross(right,view);
+ const names={4:'carryL',5:'carryR',7:'torch',10:'supportL'};
+ for(const layer of pose.hands){
+  const contacts=gripContacts[names[layer.group]];
+  if(!contacts)continue;
+  for(const pos of Object.values(contacts)){
+   const p=pos.map((v,k)=>v+layer.offset[k]),m=layer.matrix;
+   const q=m?[0,1,2].map(k=>m[k]*p[0]+m[k+4]*p[1]+m[k+8]*p[2]+m[12+k]):p;
+   const uv=project(eye.map((v,k)=>v+q[0]*right[k]+q[1]*up[k]-q[2]*view[k]));
+   if(uv){ctx.beginPath();ctx.arc(...uv,3,0,2*Math.PI);ctx.fillStyle='#53ddff';ctx.fill();}
+  }
+ }
  ctx.fillStyle='white';ctx.font='15px monospace';
  ctx.fillText((s.vault?(s.vault.high?'climb':'vault'):s.grounded?'ground':'air')+'   '+s.bodyHeight.toFixed(2)+' m',16,canvas.height-64);
 }

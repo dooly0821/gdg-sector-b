@@ -1,3 +1,4 @@
+import {parcelBlocks} from './mission.js';
 import {traceBox} from './contact.js';
 import {basis,multiply,dot} from './world.js';
 import {buildCreatureRigs,CREATURE_JOINTS} from './creature-models.js';
@@ -66,13 +67,13 @@ function detour(actor,target,blocks){
 }
 function updateSpawns(s,blocks,forward,dt,rng){
  const director=s.hauntDirector??={delay:1.8+rng()*2.8,bag:[]};
- if(s.x>=-16)return;
  for(const actor of s.haunt)actor.age+=dt;
  for(const actor of s.haunt){
   if(actor.age>actor.life&&Math.hypot(s.x-actor.x,s.z-actor.z)>7&&actor.state==='patrol')actor.state='disappear';
   if(actor.state==='disappear')actor.fade=(actor.fade??1)-dt/.65;
  }
  s.haunt=s.haunt.filter(actor=>(actor.fade??1)>0);
+ if(s.x>=-16)return;
  director.delay-=dt;
  if(director.delay>0||s.haunt.length>=2)return;
  if(!director.bag.length)director.bag=randomOrder([0,1,2,3],rng);
@@ -114,7 +115,7 @@ function attackContact(actor,s,blocks){
 export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
  if(s.x>=-16&&!s.haunt)return null;
  if(!annexCache.has(blocks))annexCache.set(blocks,blocks.filter(b=>b[0]<-15));
- blocks=annexCache.get(blocks);
+ blocks=annexCache.get(blocks).concat(s.states?parcelBlocks(s).filter(b=>b[0]<-15):[]);
  s.haunt??=[];
  if(s.encounterHit){
   s.encounterHit.time-=dt;
@@ -233,13 +234,17 @@ export function hauntLayers(s){
    angles[11][0]-=.65*strike;angles[12][2]+=.30*Math.sin(a.phase*1.24-.7);
   }
   const emergence=clamp((a.age??1)/.42,.02,1);
-  const root=matrix([a.x,rise-.09*coil,a.z],[0,a.yaw,0],emergence*(a.fade??1));
+  const leaving=1-(a.fade??1);
+  const flicker=i===0&&!['charge','windup','retreat'].includes(a.state)?
+   clamp((Math.sin(a.phase*.64)+.35*Math.sin(a.phase*3.3)+1.13)/.25,.08,1):1;
+  const opacity=emergence*(1-leaving)*flicker;
+  const root=matrix([a.x,rise-.09*coil-(1-emergence)*.14+leaving*(float?.24:-.09),a.z],[0,a.yaw,0]);
   const boneMatrices=[];
   return joints.map(({pivot,parent},j)=>{
    const joint=multiply(matrix(pivot,angles[j]),matrix(pivot.map(v=>-v)));
    const bone=multiply(parent===undefined?root:boneMatrices[parent],joint);
    boneMatrices.push(bone);
-   return {group:ACTOR_START+i*joints.length+j,matrix:bone,
+   return {group:ACTOR_START+i*joints.length+j,matrix:bone,opacity,
     footprint:j===0?[a.x,a.z,i===2?.37:i===1?.45:.62,float?.16:.49]:null};
   });
  });

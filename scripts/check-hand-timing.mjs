@@ -17,3 +17,15 @@ for (const hz of [30,60,120,144]) {
  }
  console.log(`PASS: ${hz} Hz equip/stow/pickup/place timing`);
 }
+
+// The same camera input curve must produce the same lag at all refresh rates.
+const stops=[];
+for(const hz of [30,60,120,144]){
+ const s=newShift();updateViewmodel(s,0);
+ for(let n=0;n<hz;n++){s.yaw+=Math.PI/hz;updateViewmodel(s,1/hz);}
+ stops.push(s.handYawLag);
+ assert.ok(s.handYawLag<-.02&&s.handYawLag>=-.028);
+ for(let n=0;n<hz;n++)updateViewmodel(s,1/hz);
+ assert.ok(Math.abs(s.handYawLag)<1e-7);
+}
+assert.ok(Math.max(...stops)-Math.min(...stops)<1e-6);

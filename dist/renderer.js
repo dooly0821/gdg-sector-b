@@ -57,7 +57,7 @@ void main(){
 const fs=`#version 300 es
 precision highp float;precision highp sampler2DArray;
 in vec3 P,N;in vec2 UV,tile;in vec4 C,Q,shadowPos;
-uniform sampler2DArray atlas;uniform sampler2D shadowMap,floorTex;uniform vec3 eye,lamps[8];uniform float shadowStep,hand,clock,torchPower,clay,character;uniform vec3 torchPos,torchDir,core;uniform vec4 footprints[2];
+uniform sampler2DArray atlas;uniform sampler2D shadowMap,floorTex;uniform vec3 eye,lamps[8];uniform float shadowStep,hand,clock,torchPower,clay,character,actorOpacity;uniform vec3 torchPos,torchDir,core;uniform vec4 footprints[2];
 out vec4 outColor;
 float visibility(vec3 n){
  if(hand>.5||shadowStep==0.)return 1.;vec3 s=shadowPos.xyz/shadowPos.w*.5+.5;
@@ -67,6 +67,12 @@ float visibility(vec3 n){
  return v/9.;
 }
 void main(){
+ if(character>.5&&actorOpacity<1.){
+  // Screen-door coverage keeps opaque joints depth-tested as a ghost fades.
+  ivec2 px=ivec2(gl_FragCoord.xy)&3;
+  const float threshold[16]=float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
+  if(actorOpacity<=(threshold[px.x+px.y*4]+.5)/16.)discard;
+ }
  vec3 n=normalize(N);float e=Q.x;vec2 st=Q.w>0.?UV:tile;
  vec4 sampleC=Q.w==3.?texture(floorTex,UV):texture(atlas,vec3(st,C.w));if(sampleC.a<.4)discard;
  if(Q.w==5.||(character>.5&&Q.w!=2.))sampleC.rgb=mix(vec3(.90),sampleC.rgb,.21);
@@ -151,7 +157,7 @@ export class Renderer{
  constructor(canvas){
   this.canvas=canvas;this.gl=canvas.getContext('webgl2',{alpha:false,antialias:true,powerPreference:'high-performance'});if(!this.gl)throw Error('WebGL 2 is unavailable. Enable graphics acceleration in desktop Chrome, then reload.');
   const gl=this.gl;this.program=compile(gl,vs,fs);this.depthProgram=compile(gl,vs,depthFS);
-  this.loc={};for(let p of [this.program,this.depthProgram]){let u={};for(let k of ['VP','offset','lightVP','worldObject','objectMatrix','clock','core','clay','character','atlas','shadowMap','floorTex','eye','lamps','shadowStep','hand','torchPower','torchPos','torchDir','flexPivot','flexForward','flexNormal','flexWidth','flexAmount','digitWidths','knuckles','digitLengths','fingerAmounts','footprints[0]'])u[k]=gl.getUniformLocation(p,k);this.loc[p===this.program?'main':'depth']=u;}
+  this.loc={};for(let p of [this.program,this.depthProgram]){let u={};for(let k of ['VP','offset','lightVP','worldObject','objectMatrix','clock','core','clay','character','actorOpacity','atlas','shadowMap','floorTex','eye','lamps','shadowStep','hand','torchPower','torchPos','torchDir','flexPivot','flexForward','flexNormal','flexWidth','flexAmount','digitWidths','knuckles','digitLengths','fingerAmounts','footprints[0]'])u[k]=gl.getUniformLocation(p,k);this.loc[p===this.program?'main':'depth']=u;}
   this.buffers={};
   const lv=cameraView([0,39,-9],[-14,-39,9]);const ortho=new Float32Array([1/37,0,0,0,0,1/32,0,0,0,0,-2/95,0,0,0,-1,1]);this.lightVP=multiply(ortho,lv);
  }
@@ -273,13 +279,14 @@ export class Renderer{
    gl.uniform1f(u.character,1);gl.uniform1f(u.clay,pose.clay?1:0);
    const transparent=[];
    for(const actor of pose.actors){
+    gl.uniform1f(u.actorOpacity,actor.opacity??1);
     gl.uniformMatrix4fv(u.objectMatrix,false,actor.matrix);
     for(const b of this.groups[actor.group]){
      if(actor.flex)this.setFlex(u,actor.flex,b);
      if(b.translucent&&!pose.clay){
       const m=actor.matrix,c=b.center;
       const depth=forward.reduce((d,f,i)=>d+f*(m[i]*c[0]+m[4+i]*c[1]+m[8+i]*c[2]+m[12+i]-eye[i]),0);
-      transparent.push({b,m,depth});
+      transparent.push({b,m,depth,opacity:actor.opacity??1});
      }else this.draw(b);
     }
    }
@@ -287,7 +294,7 @@ export class Renderer{
    if(transparent.length){
     transparent.sort((a,b)=>b.depth-a.depth);gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
-    for(const {b,m} of transparent){gl.uniformMatrix4fv(u.objectMatrix,false,m);this.draw(b);}
+    for(const {b,m,opacity} of transparent){gl.uniform1f(u.actorOpacity,opacity);gl.uniformMatrix4fv(u.objectMatrix,false,m);this.draw(b);}
     gl.depthMask(true);gl.disable(gl.BLEND);
    }
    gl.uniform1i(u.worldObject,0);gl.uniform1f(u.character,0);gl.uniform1f(u.clay,0);
