@@ -178,6 +178,9 @@ export function buildStorage(w) {
             const prominent = j === bayCount - 1 && slot === 1;
             if (!prominent && rand() < (k === 3 ? 0.26 : 0.11)) continue;
             const variant = prominent && (k + lane) % 4 === 1 ? 0.03 : rand();
+            // Reserve the middle B-12 bay as a clear traversal / hiding route.
+            // Keep all decks and uprights collidable; only omit cargo in this bay.
+            if (id === 'B-12' && j === 1) continue;
             stack(x, base, loadZ, halfWidth - 0.19, bayLen * 0.465 - 0.05, k === 3 ? 1.35 : 1.49, variant);
           }
         }
