@@ -68,7 +68,7 @@ function jumpOver(start,isRail,realBlocks){
  let prev=s.y;
  for(let i=0;i<120&&s.vault;i++){
   step(s,w,realBlocks,dt);
-  assert.ok(s.y>=prev&&s.y-prev<.08,'continuous elevation');
+  assert.ok(Math.abs(s.y-prev)<.08,'continuous elevation through the crest and descent');
   prev=s.y;
  }
  assert.equal(s.vault,null);

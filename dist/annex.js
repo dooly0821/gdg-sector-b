@@ -68,7 +68,8 @@ export function buildAnnex(w){
  for(const z of [4.84,7.16]){
   for(let x=-37.94;x<-30;x+=1.3)w.cyl(x,1.35,z,.04,.98,.04,amber);
   for(const y of [1.31,1.85])w.box(-34,y,z,8,.055,.055,amber);
-  w.block(-38,z-.045,-30,z+.045,.86,1.88,'rail');
+  const postsTop=1.35+.98/2,railTop=1.85+.055/2;
+  w.block(-38,z-.045,-30,z+.045,.86,Math.max(postsTop,railTop),'rail');
  }
  for(let i=0;i<14;i++)w.box(-37.7+i*.55,.867,6,.032,.014,2.12,dark);
  const [cx,,cz]=CORE;

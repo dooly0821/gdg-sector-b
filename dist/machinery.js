@@ -220,7 +220,7 @@ function freight(w,m){
     w.cyl(x+.148,.916,z-.105,.032,.024,.032,m.zinc);
     w.cyl(x-.118,.916,z+.077,.016,.015,.016,m.dark);
     w.shadow(x,z,.81,.81);
-    w.block(x-r,z-r,x+r,z+r,0,.93,"climb");
+    w.block(x-.303,z-.303,x+.303,z+.303,0,.916+.024/2,"climb");
   }
   drum(8.92,-11.18,m.red);
   drum(9.63,-11.33,m.blue);
@@ -238,7 +238,9 @@ function freight(w,m){
       w.box(x+t,.862,z-.176,.467,.335,.56,m.pack);
     }
     w.shadow(x,z,1.56,1.44);
-    w.block(x-.61,z-.54,x+.61,z+.54,0,1.04,"climb");
+    w.block(x-.605,z-.54,x+.605,z+.54,0,.20);
+    w.block(x-.4845,z-.46,x+.4845,z+.46,.20,.447+.493/2,"climb");
+    w.block(x-.4835,z-.456,x+.4835,z+.104,.447+.493/2,.862+.335/2,"climb");
   }
   pallet(9.19,-13.7);
   pallet(-7.44,-17.73);

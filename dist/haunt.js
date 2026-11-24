@@ -97,7 +97,7 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
   actor.phase+=dt*(1+actor.speed*(i===2?5.3:2.4));
   if(chasing&&dist<.68&&s.hauntCooldown===0&&!s.handAction&&!s.vault){
    s.hauntCooldown=4;actor.state='retreat';actor.timer=2;
-   s.vx=s.vz=0;s.vy=0;s.x=-16.1;s.y=0;s.z=14;s.grounded=true;
+   s.vault=null;s.jumpBuffer=0;s.vx=s.vz=0;s.vy=0;s.x=-16.1;s.y=0;s.z=14;s.grounded=true;
    encounter=type.name;
   }
  });

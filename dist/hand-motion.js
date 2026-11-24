@@ -43,3 +43,12 @@ export function relaxedFingerAmounts(time,step,side){
  const pulse=Math.sin(time*1.31+side*.76);
  return [0,1,2,3].map(i=>.80+i*.115+.13*Math.sin(step-i*.36)+.08*pulse);
 }
+
+// Shared timing for the reach, weight transfer and recovery of a vault.
+export function vaultPose(v){
+ if(!v)return {reach:0,brace:0};
+ const t=v.time/v.duration;
+ const reach=smooth(t/v.entry)* (1-smooth((t-v.entry)/(1-v.entry)));
+ const brace=smooth(t/.18)*(1-smooth((t-.68)/.32));
+ return {reach,brace};
+}

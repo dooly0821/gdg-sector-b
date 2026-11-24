@@ -1,4 +1,4 @@
-import {relaxedFingerAmounts} from './hand-motion.js';
+import {relaxedFingerAmounts,vaultPose} from './hand-motion.js';
 import {buildHauntRigs} from './haunt.js';
 import {basis,cameraView,multiply,unit,cross,dot} from './world.js';
 import {TORCH_LOCAL,SOCKETS,FINGER_FLEX} from './viewmodel.js';
@@ -95,23 +95,26 @@ function sleeveLayer(layer,i){
 }
 export function choreography(s,eye,near,moving,sprinting,t){
  const a=s.handAction,phase=a?Math.min(1,a.time/a.duration):0;
- const holding=s.carried>=0;
+ const holding=s.carried>=0,{reach:plant,brace}=vaultPose(s.vault);
  const stride=Math.min(1.45,(s.motionSpeed??(moving?(sprinting?7:4.5):0))/4.5)*(s.grounded?1:.28);
  const wave=Math.sin(s.steps*4.9),breath=Math.sin(t*1.45)*.003;
  const bob=[wave*.006*stride+(s.swayX??0)*.65,breath+Math.sin(s.steps*9.8+.6)*.0048*stride+(s.swayY??0)*.6+(s.airOffset??0)-(s.landKick??0),Math.cos(s.steps*4.9+.4)*.005*stride];
  // Carry is a rigid assembly: no independent hand or box sway.
- const cargoBob=bob.map((v,i)=>v*(i===1?.55:.65)+[0,.060,-.085][i]+(s.cargoSpring?.[i]??0));
+ const cargoBob=bob.map((v,i)=>v*(i===1?.55:.65)+[0,.060+.075*brace,-.085+.105*brace][i]+(s.cargoSpring?.[i]??0));
  const idle=[-1,1].map((side,i)=>({group:2+i,offset:[bob[0]+side*wave*.008*stride,bob[1]+side*wave*.012*stride+(i?0:Math.sin(t*1.1)*.002),bob[2]]}));
  for(let i=0;i<2;i++){
   const name=i?'emptyR':'emptyL',side=i?1:-1,layer=idle[i],wrist=SOCKETS[name].wrist;
-  const rotation=transform([.027*stride*wave*side+(s.handPitchLag??0),s.handYawLag??0,.021*stride*wave], [0,0,0],1);
+  const reach=plant*(i?.78:1);
+  const rotation=transform([.027*stride*wave*side+(s.handPitchLag??0)-.34*reach,
+   (s.handYawLag??0)+side*.11*reach,.021*stride*wave-side*.13*reach], [0,0,0],1);
+  layer.offset[0]+=side*.06*reach;layer.offset[1]+=.20*reach;layer.offset[2]-=.24*reach;
   const rotated=point(rotation,wrist);
   // Rotate the entire hand/sleeve assembly around the wrist. The cuff never separates.
   layer.matrix=multiply(translate(wrist.map((v,j)=>v-rotated[j]+layer.offset[j])),rotation);
   layer.offset=[0,0,0];
-  const reach=a?Math.sin(Math.PI*phase):0;
+  const open=a?Math.sin(Math.PI*phase):reach;
   layer.flex={...FINGER_FLEX[name],fingerAmounts:relaxedFingerAmounts(t,s.steps*3.8,i),
-   amount:.12+.047*Math.sin(t*1.45+i*.79)+.028*wave*stride-.164*reach};
+   amount:.12+.047*Math.sin(t*1.45+i*.79)+.028*wave*stride-.164*open};
  }
  let hands=holding?[4,5,6].map(group=>({group,offset:cargoBob})):idle;
  let flight=null,assembly=false,hidden=-1;
@@ -174,20 +177,10 @@ export function choreography(s,eye,near,moving,sprinting,t){
  for(const layer of [...hands])if(layer.group===4||layer.group===5){const i=layer.group-4;hands.push(a||holding&&flash>0?sleeveLayer(layer,i):{group:8+i,offset:layer.offset});}
  const torchIndex=hands.findIndex(layer=>layer.group===7);
  const torchOffset=torchIndex<0?bob:hands[torchIndex].offset;
- if(torchIndex>=0)hands[torchIndex]=torchLayer(hands[torchIndex]);
- if(s.vault&&!a){
-  const phase=s.vault.time/s.vault.duration;
-  const reach=Math.sin(Math.PI*phase)**2;
-  for(const hand of hands){
-   if(hand.group===7){
-    hand.matrix[13]-=.115*reach;
-    torchOffset[1]-=.115*reach;
-   }else if(hand.group===2||hand.group===3){
-    const side=hand.group===2?-1:1;
-    hand.offset=hand.offset.map((v,i)=>v+[-side*.048,.12,-.16][i]*reach);
-    hand.flex.amount-=.16*reach;
-   }
-  }
+ if(torchIndex>=0){
+  torchOffset[1]-=.115*brace;
+  torchOffset[2]+=.06*brace;
+  hands[torchIndex]=torchLayer(hands[torchIndex]);
  }
  return {hands,flight,assembly,flashlight:flash>(holding?.82:.65)?smooth((flash-(holding?.82:.65))/(holding?.18:.35)):0,torchOffset,torchLocal:torchAim,hidden};
 }

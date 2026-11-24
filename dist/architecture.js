@@ -200,8 +200,9 @@ export function buildArchitecture(w) {
       post(x,3.60,z,.99,.037,m.yellow);
       box(x,3.63,z,.12,.06,.12,m.plate);
     }
-    for (const height of [4.07,4.60])rail([x1,height,z1],[x2,height,z2],.058,m.yellow);
-    block(Math.min(x1,x2)-.045,Math.min(z1,z2)-.045,Math.max(x1,x2)+.045,Math.max(z1,z2)+.045,3.60,4.63,"rail");
+    const railWidth=.058,railTop=4.60;
+    for (const height of [4.07,railTop])rail([x1,height,z1],[x2,height,z2],railWidth,m.yellow);
+    block(Math.min(x1,x2)-.045,Math.min(z1,z2)-.045,Math.max(x1,x2)+.045,Math.max(z1,z2)+.045,3.60,railTop+railWidth/2,"rail");
   }
   deckRail(11.075,-19.94,11.075,6.96);
   deckRail(11.075,-19.94,14.74,-19.94);
@@ -215,7 +216,6 @@ export function buildArchitecture(w) {
     box(12.5,top-.017,z+run*.46,1.69,.061,.055,i===0||i===steps-1?m.line:m.edge);
     for(const x of [11.71,13.29]){
       box(x,top-.090,z,.055,.14,.198,m.plate);
-      block(x-.050,z-run*.5,x+.050,z+run*.5,top-.02,top+.97,"rail");
     }
   }
   for(const x of [11.66,13.34]){
@@ -225,7 +225,11 @@ export function buildArchitecture(w) {
       const t=i/6, z=14.95-7.92*t,y=.09+3.50*t;
       post(x,y,z,.97,.037,m.yellow);
     }
-    for(const ht of [.57,1.04])rail([x,.08+ht,15.05],[x,3.59+ht,6.98],.061,m.yellow);
+    const nearZ=6.98,farZ=15.05,nearY=3.59,farY=.08,width=.061;
+    for(const ht of [.57,1.04])rail([x,farY+ht,farZ],[x,nearY+ht,nearZ],width,m.yellow);
+    const topOffset=1.04+width/2*(farZ-nearZ)/Math.hypot(farZ-nearZ,nearY-farY);
+    block(x-.05,nearZ,x+.05,farZ,farY-.02,nearY+topOffset,"rail",
+     [nearY-.02,nearY+topOffset,farY-.02,farY+topOffset]);
   }
   w.sign(11.60,3.36,7.115,1.02,.26,'CATWALK','#3e4447','#e3d9bd');
   // Employee access and utility cabinets on the south wall.

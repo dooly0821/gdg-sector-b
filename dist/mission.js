@@ -22,7 +22,7 @@ export function createScene(){
   const [x,y,z]=p.pos,base=y-.72;
   for(let side of [-1,1])for(let end of [-1,1])w.box(x+side*.43,base+.33,z+end*.31,.055,.66,.055,steel);
   w.box(x,y-.048,z,1.03,.096,.79,plank);w.box(x,y-.13,z+.33,1.0,.12,.045,edge);
-  w.block(x-.51,z-.4,x+.51,z+.4,base,y,"climb");
+  w.block(x-1.03/2,z-.79/2,x+1.03/2,z+.79/2,base,y,"climb");
  }
  const [x,y,z]=DOCK;
  for(let dx of [-1,0,1])w.box(x+dx,.092,z,.13,.184,1.6,plank);

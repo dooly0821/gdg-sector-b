@@ -6,10 +6,12 @@ export function stageFreight(w){
   const wide=nx*.57+.06,deep=nz*.49+.08;
   for(let t of [-.4,0,.4])w.box(x+t*wide,.068,z,.11,.136,deep,boards[0]);
   for(let i=0;i<6;i++)w.box(x+wide*((i+.5)/6-.5),.155,z,wide*.15,.038,deep,boards[i%3]);
+  let top=.174;
   for(let i=0;i<nx;i++)for(let j=0;j<nz;j++){const h=.37+.09*((i*7+j*3)%3);const count=layers-((i+j)%3===2?1:0);
+   top=Math.max(top,.174+count*h);
    for(let k=0;k<count;k++)w.box(x+(i-(nx-1)/2)*.57,.174+(k+.5)*h,z+(j-(nz-1)/2)*.49,.55,h,.47,kraft,0,((i+j+k)%3-1)*.021);
   }
-  w.block(x-wide*.5,z-deep*.5,x+wide*.5,z+deep*.5,0,.174+layers*.46,"climb");
+  w.block(x-wide*.5,z-deep*.5,x+wide*.5,z+deep*.5,0,top,"climb");
   w.shadow(x,z,wide+.28,deep+.32);
  }
  skid(-3.45,5.35,3,3,3);skid(-11.3,10.5,3,2,2);skid(8.90,3.11,3,3,3);skid(8.96,-.16,2,3,2);

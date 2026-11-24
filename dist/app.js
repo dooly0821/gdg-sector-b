@@ -1,3 +1,4 @@
+import {vaultPose} from './hand-motion.js';
 import {updateHaunt,hauntLayers} from './haunt.js';
 import {createScene,CONFIG,PARCELS,DOCK,newShift,step,forward,nextTarget,handlingTarget,canUse,parcelPositions,deliveryCount} from './mission.js';
 import {PHYSICS} from "./movement.js";
@@ -133,10 +134,12 @@ function frame(now){if(mode!=='game')return;const dt=Math.min(.1,Math.max(0,(now
  if(threat){say(threat+' 출현. 비상 차단으로 서쪽 통로로 복귀했습니다.',3);beep(110,.52,'triangle',.12);}
  const useTarget=handlingTarget(s,worlds[0].blocks),available=canUse(s,useTarget,worlds[0].blocks);
  const target=s.carried<0&&available?useTarget:nextTarget(s);
- const eye=[s.x,s.y+CONFIG.eye+bob,s.z];
+ const {reach,brace}=vaultPose(s.vault);
+ const eye=[s.x,s.y+CONFIG.eye+bob-.065*brace-(s.landKick??0)*.8,s.z];
+ const view=brace?forward({...s,pitch:s.pitch-.125*reach}):facing;
  const pose=choreography(s,eye,available,moving,keys.has('ShiftLeft')||keys.has('ShiftRight'),s.elapsed);
  pose.actors=hauntLayers(s);pose.clock=s.elapsed;
- renderer.render(eye,facing,parcelPositions(s,pose.hidden),pose,settings.scale);
+ renderer.render(eye,view,parcelPositions(s,pose.hidden),pose,settings.scale);
  const mark=$('#waypoint'),p=$('#prompt'),brackets=$('#target-brackets');
  let msg='';brackets.hidden=true;mark.hidden=true;
  if(target&&!s.handAction){
