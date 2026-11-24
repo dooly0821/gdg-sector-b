@@ -1,4 +1,5 @@
 import {traceBox} from './contact.js';
+import {buildLockers,lockerDoorBlocks,advanceLockers,closedLocker} from './lockers.js';
 import {PHYSICS,move,worldBounds} from './movement.js';
 import {World,unit,dot,vsub} from './world.js';
 import {buildStorage} from './storage.js';
@@ -40,7 +41,7 @@ export function randomCargo(rng=Math.random){
 export const shiftParcel=(s,i)=>s?.cargo?.[i]??PARCELS[i];
 const sceneBlocks=new WeakSet();
 export function createScene(){
- const w=new World();buildArchitecture(w);buildStorage(w);buildMachinery(w);stageFreight(w);buildAnnex(w);
+ const w=new World();buildArchitecture(w);buildStorage(w);buildMachinery(w);stageFreight(w);buildAnnex(w);buildLockers(w);
  const emergency=w.mat('emergency-red-lens','#e52c29','plain',1.65),housing=w.mat('emergency-housing','#33363a','metal');
  for(const [x,z] of [[-7,1],[3,-11],[-20,13],[-32,4],[0,23],[-10,38],[8,47],[-30,23],[-38,40],[-19,37]]){
   w.box(x,4.1,z,.36,.18,.32,housing);w.cyl(x,3.91,z,.14,.22,.14,emergency);w.lights.push([x,3.8,z,1]);
@@ -80,6 +81,9 @@ export function parcelBlocks(s){
 }
 export function step(s,keys,blocks,dt,jump=false){
  const dynamic=sceneBlocks.has(blocks)?parcelBlocks(s).filter(b=>b[0]<s.x+3&&b[2]>s.x-3&&b[1]<s.z+3&&b[3]>s.z-3):[];
+ advanceLockers(s,dt);
+ if(sceneBlocks.has(blocks))dynamic.push(...lockerDoorBlocks(s).filter(b=>b[0]<s.x+3&&b[2]>s.x-3&&b[1]<s.z+3&&b[3]>s.z-3));
+ if(closedLocker(s)){s.vx=s.vz=s.vy=0;s.jumpBuffer=0;s.elapsed+=dt;return;}
  const grounded=s.grounded,vy=s.vy,previousStep=Math.floor(s.steps/.90),vault=s.vault;
  move(s,keys,blocks,dt,jump,surface,dynamic);
  const speed=Math.hypot(s.vx,s.vz);

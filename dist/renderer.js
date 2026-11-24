@@ -280,6 +280,7 @@ export class Renderer{
    const transparent=[];
    for(const actor of pose.actors){
     if(actor.root&&!planes.every(p=>p[0]*actor.root[0]+p[1]*actor.root[1]+p[2]*actor.root[2]+p[3]>-3.1))continue;
+    gl.uniform1f(u.character,actor.prop?0:1);
     gl.uniform1f(u.actorOpacity,actor.opacity??1);
     gl.uniformMatrix4fv(u.objectMatrix,false,actor.matrix);
     for(const b of this.groups[actor.group]){

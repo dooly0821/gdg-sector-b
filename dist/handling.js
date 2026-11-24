@@ -1,4 +1,5 @@
 import {dropTarget} from './mission.js';
+import {buildLockerDoor} from './lockers.js';
 import {buildLegs} from './worker.js';
 import {relaxedFingerAmounts,vaultPose} from './hand-motion.js';
 import {ACTOR_START,CREATURE_GROUP_COUNT,buildHauntRigs} from './haunt.js';
@@ -20,8 +21,9 @@ export function rigs(worlds){
   const sleeve=group(carried,channel),fabric=sleeve.parts.find(p=>p.m.name==='vm_uniform')?.m;
   return {...sleeve,parts:sleeve.parts.map(p=>({...p,m:fabric??p.m}))};
  });
- return [building,parcel,group(empty,'left'),group(empty,'right'),group(carried,'left'),group(carried,'right'),group(carried,'parcel'),flashlight,group(carried,'leftSleeve'),group(carried,'rightSleeve'),group(carried,'support'),...creatures,...upper,...buildLegs()];
+ return [building,parcel,group(empty,'left'),group(empty,'right'),group(carried,'left'),group(carried,'right'),group(carried,'parcel'),flashlight,group(carried,'leftSleeve'),group(carried,'rightSleeve'),group(carried,'support'),...creatures,...upper,...buildLegs(),buildLockerDoor()];
 }
+export const LOCKER_DOOR_GROUP=ACTOR_START+CREATURE_GROUP_COUNT+4;
 export function workerLegLayers(s){
  if(s.pitch>-.68)return [];
  const root=transform([0,Math.PI+s.yaw,0],[s.x,s.y,s.z],1);

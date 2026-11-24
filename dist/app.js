@@ -3,9 +3,10 @@ import {equipmentClearance} from './contact.js';
 import {vaultPose} from './hand-motion.js';
 import {updateHaunt,hauntLayers,SPAWN_BALANCE} from './haunt.js';
 import {HIDING_POINTS,REFUGES} from './annex.js';
+import {LOCKERS,lockerDoorBlocks,lockerLayers,lockerTarget,useLocker,closedLocker,lockerPrompt} from './lockers.js';
 import {createScene,CONFIG,PARCELS,DOCK,newShift,step,forward,nextTarget,handlingTarget,dropTarget,canUse,parcelPositions,parcelBlocks,deliveryCount,shiftParcel,MISSION_TOTAL} from './mission.js';
 import {PHYSICS} from "./movement.js";
-import {workerLegLayers,rigs,beginHandling,advanceHandling,choreography,toggleFlashlight,updateViewmodel} from './handling.js';
+import {LOCKER_DOOR_GROUP,workerLegLayers,rigs,beginHandling,advanceHandling,choreography,toggleFlashlight,updateViewmodel} from './handling.js';
 import {Renderer} from './renderer.js';
 const $=s=>document.querySelector(s),canvas=$('#world'),keys=new Set(),icon=i=>'<svg aria-hidden="true"><use href="#i-'+i+'"/></svg>';
 let mode='menu',pane='',session=null,renderer,worlds,setupPromise,raf,last=0,drag=false,grabbing=false,lookReady=0,radioUntil=0,jump=false,accumulator=0;
@@ -31,10 +32,11 @@ function plan(){
  for(const [x,z] of [[-37,65],[-22,74],[-7,65],[8,74]])shapes+=rect(x-1.35,z-1,2.7,2,'#55594f');
  for(const [x,z] of [[-32,68],[-2,68]])shapes+=rect(x-1.5,z-1.5,3,3,'#71988b');
  shapes+=label(-40,-5,'C-01 분류동')+label(-13,-18,'B 메인 창고')+label(-40,24,'D-03 반품동')+label(-13,24,'D-02 이송동')+label(-40,56,'C-02 폐기물 처리동')+label(-13,56,'D-04 격리실험동');
+ for(const {x,z} of LOCKERS)shapes+='<rect x="'+(X(x)-2.8)+'" y="'+(Y(z)-2.8)+'" width="5.6" height="5.6" fill="#d6b77d" stroke="#fff1cf" stroke-width=".6"/>';
  for(const [x,z] of HIDING_POINTS)shapes+='<rect x="'+(X(x)-2.3)+'" y="'+(Y(z)-2.3)+'" width="4.6" height="4.6" fill="#a9c6e0"/>';
  for(const [x,y,z] of REFUGES)shapes+='<circle cx="'+X(x)+'" cy="'+Y(z)+'" r="3.1" fill="#79cda6" stroke="#c5ebd8" stroke-width=".6"/>';
  const lines=(session?.cargo??PARCELS).map((p,i)=>{if(session&&session.states[i]!=='AVAILABLE')return '';const pos=session?.parked?.[i]??p.pos;return '<circle cx="'+X(pos[0])+'" cy="'+Y(pos[2])+'" r="2" fill="#f3bd51"/>';}).join('');
- return '<svg class="map-drawing" viewBox="0 0 306 516" aria-label="GDG 시설 평면도">'+shapes+lines+'<rect x="'+(X(DOCK[0])-4)+'" y="'+(Y(DOCK[2])-2)+'" width="8" height="4" fill="#9bc8cf"/><circle cx="'+X(session?.x??1.7)+'" cy="'+Y(session?.z??15)+'" r="3" fill="#f1f1e2"/></svg><div class="map-key"><span>● 화물</span><span style="color:#9bc8cf">■ 출고대</span><span>● 작업자</span><span style="color:#a9c6e0">■ 은신처 입구</span><span style="color:#79cda6">● 높은 피신 지점</span></div>';
+ return '<svg class="map-drawing" viewBox="0 0 306 516" aria-label="GDG 시설 평면도">'+shapes+lines+'<rect x="'+(X(DOCK[0])-4)+'" y="'+(Y(DOCK[2])-2)+'" width="8" height="4" fill="#9bc8cf"/><circle cx="'+X(session?.x??1.7)+'" cy="'+Y(session?.z??15)+'" r="3" fill="#f1f1e2"/></svg><div class="map-key"><span>● 화물</span><span style="color:#9bc8cf">■ 출고대</span><span>● 작업자</span><span style="color:#a9c6e0">■ 은신처 입구</span><span style="color:#d6b77d">■ 철제 사물함</span><span style="color:#79cda6">● 높은 피신 지점</span></div>';
 }
 function panel(name,body,title,eyebrow='GDG / 근무 안내'){
  pane=name;$('#eyebrow').textContent=eyebrow;$('#paneTitle').textContent=title;$('#paneBody').innerHTML=body;$('#modal').hidden=false;$('#close').focus();
@@ -45,7 +47,7 @@ function openPane(name){
  if(name==='manual')panel(name,
  '<div class="survival-manual"><p>GDG 상자 30개를 한 개씩 02번 출고대로 운반하세요. 가까이 다가가 노란 조준 표시가 생기면 E로 집고, 출고대에서 E로 배송합니다.</p>'+
  '<h3>01 / 기본 조작</h3>'+rows.map(([k,l])=>'<div class="row"><span>'+l+'</span><kbd>'+k+'</kbd></div>').join('')+
- '<h3>02 / 은신 방법</h3><p><b>C를 누른 채 W A S D로 이동</b>하여 빈 선반 아래, 상자 뒤 또는 SERVICE / LOW CLEARANCE 표시가 붙은 낮은 은신처 안으로 들어가세요. C를 놓으면 머리 위 공간이 충분할 때 일어납니다. 별도의 은신 상호작용 키는 없습니다.</p>'+
+ '<h3>02 / 은신 방법</h3><article class="creature-guide"><h4>철제 사물함 <small>LOCKER / 6곳</small></h4><p>상자를 내려놓고 사물함 정면에서 E를 눌러 문을 엽니다. 너무 가까우면 뒤로 물러나 다시 E를 누르세요. 문이 완전히 열리면 W로 내부 중앙까지 들어간 뒤 E로 문을 닫습니다.</p><p>문이 닫히면 자동으로 문 쪽을 바라봅니다. 실제 가로 통풍구 사이로 귀신을 관찰할 수 있으며 마우스로 시점을 움직일 수 있습니다. Q로 손전등을 끄고 기다리세요. 귀신은 문 앞을 약 4.5~6.5초 조사하고 다른 통로로 떠납니다. 소등하지 않으면 더 오래 머물 수 있습니다. 충분히 멀어진 것을 확인하고 E로 문을 열어 W로 나가세요. 너무 빨리 열면 다시 추격당할 수 있습니다.</p></article><p><b>C를 누른 채 W A S D로 이동</b>하여 빈 선반 아래, 상자 뒤 또는 SERVICE / LOW CLEARANCE 표시가 붙은 낮은 은신처 안으로 들어가세요. C를 놓으면 머리 위 공간이 충분할 때 일어납니다. 낮은 은신처는 별도의 상호작용 키 없이 들어갑니다.</p>'+
  '<p>구조물이 귀신과 나 사이의 시야를 가리게 하고, Q로 손전등을 끄세요. 움직임을 멈추면 발소리를 줄일 수 있습니다. 달리기, 점프 착지, 상자 집기·내려놓기는 소음을 발생시킵니다. 앉아 있다고 무적이 되는 것은 아닙니다.</p>'+
  '<h3>03 / 추격 및 피신</h3><p>귀신은 마지막으로 본 위치와 소리를 기억합니다. 은신처 입구를 확인하고 떠나는 척 다시 돌아올 수도 있습니다. 발소리가 멀어졌다고 바로 뛰어나오지 마세요. 추격을 끊으려면 시야를 차단한 채 거리를 충분히 벌리거나 지정된 높은 피신 지점으로 이동하세요.</p>'+
  '<p>상자를 내려놓고 발판을 향해 W + SPACE로 연속 등반하세요. B-12 상층 선반과 C-02 폐기물 처리동, D-04 격리실험동의 ESCAPE DECK은 지정 피신 지점입니다. 해당 발판 중앙에 착지하면 일반 지상 추격을 끊을 수 있습니다. 모든 높은 물체가 안전한 것은 아닙니다.</p>'+
@@ -55,7 +57,7 @@ function openPane(name){
  '<article class="creature-guide"><h4>함귀 <small>소음 추적형</small></h4><p>네 개체 중 소음 감도가 가장 높습니다. 가까이 있을 때 달리기와 상자 조작을 피하고 C로 천천히 이동하세요. 직접 비춘 빛에 더 빨라지므로 손전등을 끄고 구조물 뒤로 시야를 끊으세요. 한 번 숨었다고 안심하지 마세요.</p></article>'+
  '<article class="creature-guide"><h4>적재귀 <small>고속 돌진형</small></h4><p>기본 추격 속도가 가장 빠르고 공격 준비 거리도 깁니다. 정면에서 맞서거나 직선으로만 도망치지 말고 선반과 기둥을 돌아 거리를 벌리세요. 손전등은 오히려 자극합니다. 상자를 내려놓고 파쿠르를 통해 지정 피신 지점으로 이동하세요.</p></article>'+
  '<article class="creature-guide"><h4>표찰귀 <small>화물 반응형</small></h4><p>직접 비춘 손전등 빛으로 일시적으로 물러나게 할 수 있습니다. 표찰귀가 약 4m 이내에 있을 때 운반 중인 상자를 E로 정상적으로 내려놓으면 사라집니다. 배송 완료가 아닌 임시 적치이며, 내려놓을 공간이 필요합니다. 너무 가까워지기 전에 행동하세요. 격리동에서는 천장 이동 및 하강도 주의하세요.</p></article>'+
- '<h3>05 / 지도 및 이동 팁</h3><p>구역 지도의 파란 사각형은 은신처 입구, 초록 원은 지정 피신 지점입니다. ESC → 구역 지도로 확인할 수 있습니다. 마우스가 고정되지 않으면 왼쪽 버튼을 누른 채 드래그하거나 방향키로 시점을 돌리세요.</p></div>'+
+ '<h3>05 / 지도 및 이동 팁</h3><p>구역 지도의 파란 사각형은 낮은 은신처 입구, 금색 사각형은 철제 사물함, 초록 원은 지정 피신 지점입니다. ESC → 구역 지도로 확인할 수 있습니다. 마우스가 고정되지 않으면 왼쪽 버튼을 누른 채 드래그하거나 방향키로 시점을 돌리세요.</p></div>'+
  '<div class="panel-actions">'+action('map','구역 지도')+'</div>'+links,'조작 방법 및 공략','WORK 모드 / 근무자 생존 매뉴얼');
  if(name==='map')panel(name,plan()+'<p>직원 입고대에서 중앙 통로를 따라 북쪽으로 가면 출고대가 나옵니다. 동쪽 계단은 상층 화물로 연결됩니다.</p>','구역 지도','SECTOR B / 시설 평면도');
  if(name==='settings')panel(name,'<small>그래픽 품질</small><div class="presets">'+['HIGH','BALANCED','PERFORMANCE'].map(q=>'<button class="preset '+(q===settings.quality?'active':'')+'" data-quality="'+q+'">'+q+'</button>').join('')+'</div><label class="row">렌더 해상도 <output id="scaleVal">'+Math.round(settings.scale*100)+'%</output><input id="scale" type="range" min=".55" max="1" step=".05" value="'+settings.scale+'"></label><label class="row">마우스 감도 <output id="sensVal">'+settings.sensitivity.toFixed(1)+'×</output><input id="sens" type="range" min=".4" max="1.8" step=".1" value="'+settings.sensitivity+'"></label><div class="row">걸을 때 시점 흔들림<button class="toggle '+(settings.motion?'on':'')+'" data-toggle="motion">'+(settings.motion?'ON':'OFF')+'</button></div><div class="row">창고 소리<button class="toggle '+(settings.audio?'on':'')+'" data-toggle="audio">'+(settings.audio?'ON':'OFF')+'</button></div>','설정','SECTOR B / 환경 설정');
@@ -117,6 +119,7 @@ $('#start').onclick=async()=>{
    }
    renderer.gl.finish();renderer.hauntPrimed=true;pose.actors=[];
   }
+  pose.actors=[...hauntLayers(session),...lockerLayers(session,LOCKER_DOOR_GROUP)];
   renderer.render(eye,facing,parcelPositions(session,pose.hidden),pose,settings.scale);
   reportProgress(1,'출근 준비 완료');await painted();
   $('#loading').hidden=true;resume();say('GDG 표식이 있는 상자를 02번 출고대로 운반하세요.',4);
@@ -136,10 +139,13 @@ function failShift(name){
 }
 function complete(){pauseShift(false);beep(630,.3);panel('complete','<div class="row"><span>출고 내역</span><b>30 / 30건 배송 완료</b></div><div class="row"><span>근무 시간</span><b>'+Math.floor(session.elapsed/60)+'분 '+Math.floor(session.elapsed%60)+'초</b></div><p>화물 30개의 배송을 마쳤습니다. 야간 근무에서 살아남았습니다.</p><div class="panel-actions">'+action('brief','근무 마치기',true)+action('resume','창고 둘러보기')+'</div>','전체 배송 완료','출고 02 / 근무 확인서');}
 let receiptUntil=0;
-function use(target=handlingTarget(session,worlds[0].blocks),locked=false){
- if(session.handAction||session.pendingUse||!canUse(session,target,worlds[0].blocks,locked))return;
+function use(target=null,locked=false){
+ const staticBlocks=worlds[0].blocks,blocks=staticBlocks.concat(lockerDoorBlocks(session));
+ if(!locked&&!session.handAction&&!session.pendingUse){const l=lockerTarget(session,staticBlocks);if(l&&session.carried<0){const result=useLocker(session,l);if(result==='opening'||result==='closing'){beep(112,.19,'triangle',.08);if(result==='closing')session.lockerLook={yaw:session.yaw,pitch:session.pitch,t:0};}else if(result==='step-back')say('문이 열릴 공간이 필요합니다. 한 걸음 물러서서 E를 누르세요.',2.5);else if(result==='enter-first')say('문이 열린 상태입니다. 내부 중앙으로 들어가 E를 누르세요.',2.5);return;}}
+ target??=handlingTarget(session,blocks);
+ if(session.handAction||session.pendingUse||!canUse(session,target,blocks,locked))return;
  if(session.flashlight||session.flashAmount>0){session.restoreTorch=session.flashlight||session.restoreTorch;session.flashlight=false;if(session.flashAmount>0){session.pendingUse=target;return;}}
- if(beginHandling(session,target,worlds[0].blocks,locked))beep(235,.07,'sine',.035);
+ if(beginHandling(session,target,blocks,locked))beep(235,.07,'sine',.035);
 }
 function onHandling(result,now,id){
  if(session.restoreTorch){session.flashlight=true;session.restoreTorch=false;}
@@ -165,13 +171,14 @@ function targetCorners(pos,dock){
 }
 function frame(now){if(mode!=='game')return;const dt=Math.min(.067,Math.max(0,(now-last)/1000));last=now;const s=session;
  if(keys.has('ArrowLeft'))s.yaw+=dt*1.65;if(keys.has('ArrowRight'))s.yaw-=dt*1.65;if(keys.has('ArrowUp'))s.pitch=Math.min(CONFIG.pitchLimit,s.pitch+dt);if(keys.has('ArrowDown'))s.pitch=Math.max(-CONFIG.pitchLimit,s.pitch-dt);
- const was=s.steps;const tick=1/PHYSICS.hz;if(s.encounterHit){keys.clear();jump=false;s.vx=s.vz=s.vy=0;accumulator=0;}else accumulator+=dt;while(accumulator>=tick){step(s,keys,worlds[0].blocks,tick,jump);jump=false;accumulator-=tick;}equipmentClearance(s,worlds[0].blocks,dt,parcelBlocks(s));updateViewmodel(s,dt);
- if(s.pendingUse&&s.flashAmount===0){const target=s.pendingUse;s.pendingUse=null;use(target.drop?dropTarget(s,worlds[0].blocks):target,true);if(!s.handAction&&s.restoreTorch){s.flashlight=true;s.restoreTorch=false;}}
+ const was=s.steps;const tick=1/PHYSICS.hz;if(s.encounterHit){keys.clear();jump=false;s.vx=s.vz=s.vy=0;accumulator=0;}else accumulator+=dt;while(accumulator>=tick){step(s,keys,worlds[0].blocks,tick,jump);jump=false;accumulator-=tick;}const interactionBlocks=worlds[0].blocks.concat(lockerDoorBlocks(s));equipmentClearance(s,worlds[0].blocks,dt,parcelBlocks(s).concat(lockerDoorBlocks(s)));
+ if(s.lockerLook){const a=s.lockerLook;a.t=Math.min(1,a.t+dt/.44);const t=a.t*a.t*(3-2*a.t);s.yaw=a.yaw+Math.atan2(Math.sin(-a.yaw),Math.cos(-a.yaw))*t;s.pitch=a.pitch*(1-t);if(a.t>=1)s.lockerLook=null;}updateViewmodel(s,dt);
+ if(s.pendingUse&&s.flashAmount===0){const target=s.pendingUse;s.pendingUse=null;use(target.drop?dropTarget(s,interactionBlocks):target,true);if(!s.handAction&&s.restoreTorch){s.flashlight=true;s.restoreTorch=false;}}
  if(s.grounded&&Math.floor(s.steps/1.12)>Math.floor(was/1.12))beep(95,.08,'sine',.04);
  if(s.zoneScare){const zone=s.zoneScare;s.zoneScare=null;if(zone==='lab'||zone==='waste'){beep(zone==='lab'?64:43,.42,'triangle',.095);if(zone==='lab')say('경고: 격리 설비의 접근 제한이 해제되었습니다.',2.6);}}
  const moving=s.steps>was+.002;const bob=settings.motion&&moving&&s.grounded?Math.sin(s.steps*5.5)*.014:0;
  const active=s.handAction;
- if(active){const result=advanceHandling(s,worlds[0].blocks,dt);if(result)onHandling(result,now,active.target.id);}
+ if(active){const result=advanceHandling(s,interactionBlocks,dt);if(result)onHandling(result,now,active.target.id);}
  const facing=forward(s);
  let threat=null;const hauntSteps=Math.max(1,Math.ceil(dt*60));for(let k=0;k<hauntSteps&&!threat;k++)threat=updateHaunt(s,worlds[0].blocks,facing,dt/hauntSteps);
  if(threat){canvas.classList.remove('captured');failShift(threat);return;}
@@ -191,7 +198,8 @@ function frame(now){if(mode!=='game')return;const dt=Math.min(.067,Math.max(0,(n
   voice.onended=()=>{voice.disconnect();gain.disconnect();pan.disconnect();};
  }
  if(s.hauntSounds)s.hauntSounds.length=0;
- const useTarget=handlingTarget(s,worlds[0].blocks),available=canUse(s,useTarget,worlds[0].blocks);
+ const l=lockerTarget(s,worlds[0].blocks),hiddenLocker=closedLocker(s);
+ const useTarget=handlingTarget(s,interactionBlocks),available=!hiddenLocker&&canUse(s,useTarget,interactionBlocks);
  const target=s.carried<0&&available?useTarget:nextTarget(s);
  const {reach,brace}=vaultPose(s.vault);
  const eyeHeight=(s.bodyHeight??1.70)-.12;
@@ -199,7 +207,8 @@ function frame(now){if(mode!=='game')return;const dt=Math.min(.067,Math.max(0,(n
  const eye=[s.x,s.y+s.viewHeight+bob-.040*brace-(s.landKick??0)*.8,s.z];
  const view=brace?forward({...s,pitch:s.pitch-.070*reach}):facing;
  const pose=choreography(s,eye,available,moving,keys.has('ShiftLeft')||keys.has('ShiftRight'),s.elapsed,view);
- pose.actors=[...hauntLayers(s),...workerLegLayers(s)];pose.clock=s.elapsed;
+ pose.actors=[...hauntLayers(s),...lockerLayers(s,LOCKER_DOOR_GROUP),...(hiddenLocker?[]:workerLegLayers(s))];pose.clock=s.elapsed;
+ if(hiddenLocker){pose.hands=[];if(Math.floor(s.elapsed*1.6)>Math.floor((s.elapsed-dt)*1.6)&&s.haunt.some(a=>Math.hypot(a.x-s.x,a.z-s.z)<8))beep(43,.15,'sine',.055);}
  // Hysteresis: lower render resolution only after sustained slow frames.
  if(dt>.025){s.slowFrames=(s.slowFrames??0)+1;s.fastFrames=0;}else if(dt<.018){s.fastFrames=(s.fastFrames??0)+1;s.slowFrames=0;}else{s.slowFrames=0;s.fastFrames=0;}
  if((s.slowFrames??0)>=10){s.adaptiveScale=Math.max(.65,(s.adaptiveScale??1)-.10);s.slowFrames=0;}
@@ -220,6 +229,7 @@ function frame(now){if(mode!=='game')return;const dt=Math.min(.067,Math.max(0,(n
   }
  }
  if(s.handAction)msg=s.handAction.placing?'상자 내려놓는 중':'상자 드는 중';
+ if(l&&!s.handAction&&s.carried<0){msg=lockerPrompt(s,l);brackets.hidden=true;if(hiddenLocker){msg='은신 중 · 문틈 관찰 / Q 소등 / E 열기';mark.hidden=true;}}
  if(!msg&&!document.pointerLockElement&&!drag)msg='드래그로 시점 회전 · WASD 이동';
  $('#torch-status').textContent='Q · 손전등 '+(s.flashlight?'ON':'OFF');p.innerHTML=msg;$('#delivered').textContent=deliveryCount(s)+' / '+MISSION_TOTAL;
  $('#carry-status span').textContent=s.handAction?(s.handAction.placing?'내려놓는 중':'드는 중'):s.carried>=0?(s.flashlight?'한 손 운반 중':'운반 중'):'빈손';
