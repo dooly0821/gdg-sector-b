@@ -21,7 +21,12 @@ const routes=[
  [[-8,5],[-8,-5],[-8,-11],[-8,-18]],
  [[2,12],[2,6],[2,-3],[2,-10]],
  [[9,-17],[10,-10],[10,-3],[9,6]],
- [[-13,13],[-17,13],[-20,14],[-16,15]]
+ [[-13,13],[-17,13],[-20,14],[-16,15]],
+ [[0,25],[0,34],[2,43],[0,50]],
+ [[-11,32],[-9,38],[-6,49],[-12,47]],
+ [[-30,24],[-30,33],[-33,39],[-30,49]],
+ [[-19,34],[-17,37],[-11,37],[-8,33]],
+ [[-40,27],[-39,33],[-40,44],[-38,51]]
 ];
 const randomOrder=(items,rng)=>{
  const copy=items.slice();
@@ -52,7 +57,7 @@ function line(blocks,actor,s){
 }
 const mapCache=new WeakMap();
 const bodyHeights=[1.85,1.8,.95,1.95];
-const inMap=(x,z)=>x>-42.5&&x<14.35&&z>-21.1&&z<21&&(x>=-15||z>-8.65);
+const inMap=(x,z)=>x>-42.5&&x<14.35&&z>-21.1&&z<53.5&&(x>=-15||z>-8.65);
 const sizes=[.35,.34,.44,.32];
 function detour(actor,target,blocks){
  const cell=.65,r=sizes[actor.kind],y=cast[actor.kind].float,h=bodyHeights[actor.kind];
@@ -103,7 +108,7 @@ function updateSpawns(s,blocks,forward,dt,rng){
  const yaw=Math.atan2(path[pathIndex][0]-x,path[pathIndex][1]-z);
  s.haunt.push({kind,route,path,direction,pathIndex,x,z,yaw,phase:rng()*Math.PI*2,
   state:'patrol',timer:0,speed:0,age:0,life:25+rng()*18,aggression:0});
- director.delay=Math.max(3.5,6+rng()*7-(s.states?.filter(k=>k==='DELIVERED').length??0)*.65);
+ director.delay=Math.max(4,8+rng()*6-Math.min(6,(s.states?.filter(k=>k==='DELIVERED').length??0)*.2));
 }
 // Sample the rendered wrist joints and torso through the active window.
 function attackContact(actor,s,blocks){
@@ -180,9 +185,11 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
   const aim=actor.corner??target;
   const desired=retreat?Math.atan2(-delta[0],-delta[1]):Math.atan2(aim[0]-actor.x,aim[1]-actor.z);
   actor.yaw+=clamp(Math.atan2(Math.sin(desired-actor.yaw),Math.cos(desired-actor.yaw)),-dt*7,dt*7);
-  const pressure=1+(s.states?.filter(k=>k==='DELIVERED').length??0)*.045;
-  const goalSpeed=['windup','recovery'].includes(actor.state)?0:actor.state==='charge'?type.speed*1.23*pressure:chasing?type.speed*pressure:actor.state==='search'?2.65:retreat?3.2:1.35;
-  actor.speed=approach(actor.speed,goalSpeed,dt*(chasing||actor.state==='charge'?12:7));
+  const pressure=1+Math.min(1,(s.states?.filter(k=>k==='DELIVERED').length??0)/30)*.19;
+  // Different chase rhythms; the telegraphed charge is faster than sprinting.
+  const pulse=i===0?.88+.22*Math.sin(actor.phase*.73):i===1?.91+.18*Math.sin(actor.phase*.46):i===2?.94+.10*Math.sin(actor.phase*.31):.87+.26*Math.pow(.5+.5*Math.sin(actor.phase*.69),3);
+  const goalSpeed=['windup','recovery'].includes(actor.state)?0:actor.state==='charge'?type.speed*1.23*pressure:chasing?type.speed*pressure*pulse:actor.state==='search'?2.65:retreat?3.2:1.35;
+  actor.speed=approach(actor.speed,goalSpeed,dt*(actor.state==='charge'?18:chasing?[15,11,9,17][i]:7));
   const stride=actor.speed*dt;
   for(const turn of [0,.68,-.68,1.36,-1.36]){
    const angle=actor.yaw+turn,x=actor.x+Math.sin(angle)*stride,z=actor.z+Math.cos(angle)*stride;
@@ -236,8 +243,9 @@ export function hauntLayers(s){
   const coil=a.state==='windup'?1-a.timer/[.32,.39,.48,.37][i]:0;
   const strike=a.state==='charge'?Math.sin(Math.PI*Math.min(1,(.7-a.timer)/.53)):0;
   if(a.state==='alert'||a.state==='charge'){
-   angles[0][0]+=.18*reach;angles[1][2]+=.16*Math.sin(a.phase*1.71)*reach;
-   angles[2][0]-=.22*reach;angles[3][0]-=.22*reach;
+   angles[0][0]+=[.13,.48,.54,.20][i]*reach;angles[1][2]+=[.26,.10,.06,.38][i]*Math.sin(a.phase*1.71)*reach;
+   angles[2][0]-=[.31,.48,.24,.67][i]*reach;angles[3][0]-=[.36,.31,.24,.44][i]*reach;
+   angles[1][1]+=[.28,.12,.04,.35][i]*Math.sin(a.phase*.83)*reach;
   }
   if(i===0){
    angles[0][1]+=.22*Math.sin(a.phase*.41);angles[12][0]+=.32*Math.sin(a.phase*.41-.9);
