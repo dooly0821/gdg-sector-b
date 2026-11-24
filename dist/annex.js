@@ -19,7 +19,10 @@ export function buildAnnex(w){
   const segments=x===-43?[[-9,21]]:[[-9,12],[16,21]];
   for(const [a,b] of segments)solid(x,0,(a+b)/2,.32,8.2,b-a,wall);
  }
- for(const z of [-9,21])solid(-29,0,z,28,8.2,.32,wall);
+ solid(-29,0,-9,28,8.2,.32,wall);
+ for(const [a,b] of [[-43,-33],[-27,-15]])solid((a+b)/2,0,21,b-a,8.2,.32,wall);
+ solid(-30,3.6,21,6,4.6,.32,wall);
+ w.sign(-30,3.82,20.8,3.4,.34,'D-03 / RETURNS','#452c2d','#f4c1a7',Math.PI);
  for(let z=-8;z<21;z+=4){
   w.box(-29,.004,z,27.8,.008,.018,dark);
   for(const x of [-42.5,-15.5])solid(x,0,z,.32,8.1,.37,steel);
@@ -115,4 +118,43 @@ export function buildAnnex(w){
   w.box(x+1.32,2.86,-8.46,.10,.055,.025,filament);
  }
  for(let z=-7.5;z<4;z+=.6)w.box(-31.15,.018,z,.48,.022,.10,amber,0,-.65);
+ buildSouthExtension(w);
+}
+
+function buildSouthExtension(w){
+ const steel=w.mat('extension-steel','#46505a','metal'),floor=w.mat('extension-floor','#68645f','concrete',0,1.4),
+ wall=w.mat('extension-wall','#3f4850','concrete'),trim=w.mat('extension-trim','#a16c3a','paint'),
+ wood=w.mat('extension-crate','#987653','wood'),dark=w.mat('extension-roof','#303942','metal'),
+ amber=w.mat('extension-lamp','#edc190','plain',.65);
+ const solid=(x,y,z,a,b,c,m,kind)=>{w.box(x,y+b/2,z,a,b,c,m);w.block(x-a/2,z-c/2,x+a/2,z+c/2,y,y+b,kind);};
+ // Two connected halls: D-02 transfer and D-03 returns, both linked to the old map.
+ w.box(-14,-.16,37.5,58,.32,33,floor);
+ for(const x of [-43,15])solid(x,0,37.5,.34,8,33,wall);
+ solid(-14,0,54,58,8,.34,wall);
+ // Close the offset between the existing north walls without obstructing the gateways.
+ solid(-14.9,0,21.5,.34,8,1,wall);
+ for(const [a,b] of [[22,34],[40,54]])solid(-15,0,(a+b)/2,.30,8,b-a,wall);
+ solid(-15,3.7,37, .30,4.3,6,wall);
+ for(const z of [24,30,36,42,48,53]){
+  w.box(-14,8.15,z,58,.18,5.95,dark);
+  w.beam([-43,7.75,z],[15,7.75,z],.22,.25,steel);
+  for(const x of [-40,-25,-11,11]){solid(x,0,z,.22,7.7,.22,steel);}
+  for(const x of [-34,-4,8]){w.box(x,5.9,z,.8,.10,.22,steel);w.box(x,5.82,z,.70,.045,.14,amber);w.lamp(x,5.8,z);}
+ }
+ for(const [x,z] of [[-35,28],[-35,44],[-23,29],[-23,47],[-9,28],[-9,44],[5,29],[5,46]]){
+  for(const dx of [-2.2,2.2])for(const dz of [-.72,.72])solid(x+dx,0,z+dz,.12,4.65,.12,steel);
+  for(const y of [.16,1.72,3.27,4.82]){
+   solid(x,y-.16,z,4.55,.16,1.55,steel,'shelf');
+   w.box(x,y-.08,z+.79,4.55,.16,.045,trim);
+  }
+  for(const dx of [-1.4,1.4])for(const y of [.16,1.72,3.27])solid(x+dx,y,z,.82,.86,.98,wood,'climb');
+ }
+ for(const [x,z] of [[-39,35],[-28,38],[-20,41],[-5,36],[2,40],[10,35]]){
+  solid(x,0,z,1.4,.62,1.3,wood,'climb');
+  solid(x-.25,.62,z, .80,.54,.92,wood,'climb');
+ }
+ for(const z of [25,31,37,43,49])for(const x of [-31,-1])w.box(x,.012,z, .10,.02,3.4,trim);
+ w.sign(-15.17,3.15,37,2.8,.35,'D-02 / D-03','#392f28','#e5c39b',Math.PI/2);
+ w.sign(-30,3.8,22.2,3.4,.35,'RETURNS / D-03','#392f28','#e5c39b');
+ w.sign(0,3.8,22.2,3.4,.35,'TRANSFER / D-02','#392f28','#e5c39b');
 }
