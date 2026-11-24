@@ -9,7 +9,7 @@ import {CONFIG,baySlot,deliveryCount,canUse,interact,forward} from './mission.js
 const smooth=x=>{x=Math.max(0,Math.min(1,x));return x*x*(3-2*x);};
 const mix=(a,b,t)=>a+(b-a)*t;
 // Seconds. Keep all contact phases and shared transforms intact.
-export const HAND_TIMING=Object.freeze({pickup:.48,place:.52,equip:.18,stow:.16,cargoEquip:.34,cargoStow:.28});
+export const HAND_TIMING=Object.freeze({pickup:.34,place:.40,equip:.16,stow:.10,cargoEquip:.24,cargoStow:.15});
 
 // Keep the exported scene intact. Split only the viewmodel's draw batches.
 export function rigs(worlds){
@@ -36,8 +36,8 @@ export function workerLegLayers(s){
   return {group:ACTOR_START+CREATURE_GROUP_COUNT+2+i,matrix:multiply(root,leg)};
  });
 }
-export function beginHandling(s,target,blocks){
- if(s.handAction||!canUse(s,target,blocks))return false;
+export function beginHandling(s,target,blocks,locked=false){
+ if(s.handAction||!canUse(s,target,blocks,locked))return false;
  if((target.dock||target.drop)?s.carried<0:s.states[target.index]!=='AVAILABLE'||s.carried>=0)return false;
  s.flashlight=false;s.flashAmount=0;
  s.handAction={placing:!!(target.dock||target.drop),target,index:target.dock?s.carried:target.index,
@@ -51,10 +51,10 @@ export function advanceHandling(s,blocks,dt){
   if(!target){s.handAction=null;return 'cancelled';}
   a.target=target;a.worldPos=target.pos.slice();
  }
- if(!a.result&&!canUse(s,a.target,blocks)){s.handAction=null;return 'cancelled';}
+ if(!a.result&&!canUse(s,a.target,blocks,true)){s.handAction=null;return 'cancelled';}
  a.time+=dt;
  const contact=a.duration*(a.placing?.72:.30);
- if(!a.result&&a.time>=contact)a.result=interact(s,a.target,blocks);
+ if(!a.result&&a.time>=contact)a.result=interact(s,a.target,blocks,true);
  if(a.time<a.duration)return null;
  s.handAction=null;
  return a.result??'cancelled';
@@ -183,13 +183,13 @@ export function choreography(s,eye,near,moving,sprinting,t,view=forward(s)){
    const palm=point(layer.matrix,FINGER_FLEX[name].pivot);
    const delta=target.map((v,k)=>v-palm[k]+[side*.055,.032,.015][k]);
    const phase=s.vault.time/s.vault.duration;
-   const contact=smooth(phase/.17)*(1-smooth((phase-.28)/.27))*(1-smooth((Math.hypot(...delta)-.32)/.42));
+   const contact=smooth(phase/.12)*(1-smooth((phase-.48)/.26))*(1-smooth((Math.hypot(...delta)-.38)/.60));
    for(let k=0;k<3;k++)layer.matrix[12+k]+=delta[k]*contact;
   }
   layer.offset=[0,0,0];
   const open=a?Math.sin(Math.PI*phase):reach;
   layer.flex={...FINGER_FLEX[name],fingerAmounts:relaxedFingerAmounts(t,s.steps*3.8,i),
-   amount:.12+.047*Math.sin(t*1.45+i*.79)+.028*wave*stride-.164*open};
+   amount:.12+.047*Math.sin(t*1.45+i*.79)+.028*wave*stride-.164*open+.50*plant};
  }
  let hands=holding?[4,5,6].map(group=>({group,offset:cargoBob})):idle;
  let flight=null,assembly=false,hidden=-1;
