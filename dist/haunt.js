@@ -127,6 +127,13 @@ function updateSpawns(s,blocks,forward,dt,rng){
  const yaw=Math.atan2(path[pathIndex][0]-x,path[pathIndex][1]-z);
  s.haunt.push({kind,route,path,direction,pathIndex,x,z,yaw,phase:rng()*Math.PI*2,
   state:'patrol',timer:0,speed:0,age:0,life:25+rng()*18,aggression:0});
+ // A confined ceiling route in the deep lab. No arbitrary wall penetration.
+ if(kind===3&&x>=13&&z>=56&&z<=75&&rng()<.72){
+  const a=s.haunt.at(-1);
+  if(clear(blocks,13.85,z,.75,0,7.7)){
+   a.x=13.85;a.state='ceilingStalk';a.surfaceY=7.55;a.surfaceRoll=Math.PI;a.surfaceDir=direction;a.timer=6.5;
+  }
+ }
  director.delay=Math.max(4,8+rng()*6-Math.min(6,(s.states?.filter(k=>k==='DELIVERED').length??0)*.2));
 }
 // Sample the rendered wrist joints and torso through the active window.
@@ -159,6 +166,21 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
   const previous=actor.state;
   const i=actor.kind,type=cast[i],delta=[s.x-actor.x,s.z-actor.z],dist=Math.hypot(...delta);
   const local=blocks.filter(b=>b[2]>Math.min(actor.x,s.x)-2&&b[0]<Math.max(actor.x,s.x)+2&&b[3]>Math.min(actor.z,s.z)-2&&b[1]<Math.max(actor.z,s.z)+2);
+  if(actor.state==='ceilingStalk'||actor.state==='wallDescent'){
+   actor.phase+=dt*8;actor.timer=Math.max(0,actor.timer-dt);
+   const canSee=dist<10&&visible(local,[actor.x,5.6,actor.z],[s.x,s.y+1,s.z]);
+   if(actor.state==='ceilingStalk'){
+    const next=actor.z+(canSee?Math.sign(s.z-actor.z):actor.surfaceDir)*dt*2.8;
+    if(next>56&&next<76&&clear(blocks,actor.x,next,.75,0,7.7))actor.z=next;else actor.surfaceDir*=-1;
+    actor.yaw=actor.surfaceDir>0?0:Math.PI;actor.speed=2.8;
+    if(canSee||!actor.timer){actor.state='wallDescent';actor.timer=1.4;(s.hauntSounds??=[]).push({x:actor.x,z:actor.z,kind:i,accent:true});}
+   }else{
+    const t=1-actor.timer/1.4;
+    actor.surfaceY=7.55*(1-t);actor.surfaceRoll=Math.PI*(1-clamp((t-.08)/.70,0,1));actor.speed=1.8;
+    if(!actor.timer){actor.surfaceY=0;actor.surfaceRoll=0;actor.state='patrol';actor.pursuit=false;actor.speed=0;actor.age=Math.max(actor.age,.65);}
+   }
+   return;
+  }
   const safe=s.grounded&&REFUGES.some(([x,y,z,r])=>Math.abs(s.y-y)<.09&&Math.hypot(s.x-x,s.z-z)<r);
   const pursuit=actor.pursuit??false,detectRange=type.range*(s.bodyHeight<1.2&&!s.flashlight?.62:1);
   const seen=!safe&&dist<(pursuit?24:detectRange)&&line(local,actor,s);
@@ -341,14 +363,15 @@ export function hauntLayers(s){
   const flicker=i===0&&!['charge','windup','retreat'].includes(a.state)?
    clamp((Math.sin(a.phase*.64)+.35*Math.sin(a.phase*3.3)+1.13)/.25,.08,1):1;
   const opacity=emergence*(1-leaving)*flicker;
-  const root=matrix([a.x,rise-.09*coil-(1-emergence)*.14+leaving*(float?.24:-.09),a.z],[0,a.yaw,0]);
+  const surface=a.surfaceY??0,roll=a.surfaceRoll??0;
+  const root=matrix([a.x,surface+rise*(1-Math.min(1,surface))-.09*coil-(1-emergence)*.14+leaving*(float?.24:-.09),a.z],[0,a.yaw,roll]);
   const boneMatrices=[];
   return joints.map(({pivot,parent},j)=>{
    const joint=multiply(matrix(pivot,angles[j]),matrix(pivot.map(v=>-v)));
    const bone=multiply(parent===undefined?root:boneMatrices[parent],joint);
    boneMatrices.push(bone);
    return {group:ACTOR_START+i*joints.length+j,matrix:bone,opacity,
-    footprint:j===0?[a.x,a.z,i===2?.37:i===1?.45:.62,float?.16:.49]:null};
+    footprint:j===0&&surface<.5?[a.x,a.z,i===2?.37:i===1?.45:.62,float?.16:.49]:null};
   });
  });
 }
