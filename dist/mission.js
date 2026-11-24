@@ -70,11 +70,14 @@ function placementClear(s,pos,blocks){
    x+w>x1&&x-w<x2&&z+d>z1&&z-d<z2&&y+h>y1+.001&&y<y2-.001)&&
   !parcelPositions(s).some(([px,py,pz])=>Math.abs(px-x)<2*w+.03&&Math.abs(py-y)<h+.01&&Math.abs(pz-z)<2*d+.03);
 }
-function dropTarget(s,blocks){
+export function dropTarget(s,blocks){
  if(!s.grounded||s.vault)return null;
  const [w,,d]=parcelHalf, clear=.012;
- for(const distance of [1.04,.93,1.18]){
-  const x=s.x-Math.sin(s.yaw)*distance,z=s.z-Math.cos(s.yaw)*distance;
+ const running=Math.hypot(s.vx||0,s.vz||0)>PHYSICS.walk;
+ const offsets=running?[[.86,.66],[.86,-.66],[1.04,0]]:[[1.04,0],[.93,0],[1.18,0]];
+ for(const [distance,side] of offsets){
+  const x=s.x-Math.sin(s.yaw)*distance+Math.cos(s.yaw)*side;
+  const z=s.z-Math.cos(s.yaw)*distance-Math.sin(s.yaw)*side;
   let y=surface(x,z,s.y);
   for(const [dx,dz] of [[-w,-d],[-w,d],[w,-d],[w,d]]){
    if(Math.abs(surface(x+dx,z+dz,s.y)-y)>.025){y=null;break;}

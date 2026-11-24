@@ -1,3 +1,4 @@
+import {dropTarget} from './mission.js';
 import {buildLegs} from './worker.js';
 import {relaxedFingerAmounts,vaultPose} from './hand-motion.js';
 import {ACTOR_START,CREATURE_GROUP_COUNT,buildHauntRigs} from './haunt.js';
@@ -45,6 +46,11 @@ export function beginHandling(s,target,blocks){
 }
 export function advanceHandling(s,blocks,dt){
  const a=s.handAction;if(!a)return null;
+ if(!a.result&&a.target.drop){
+  const target=dropTarget(s,blocks);
+  if(!target){s.handAction=null;return 'cancelled';}
+  a.target=target;a.worldPos=target.pos.slice();
+ }
  if(!a.result&&!canUse(s,a.target,blocks)){s.handAction=null;return 'cancelled';}
  a.time+=dt;
  const contact=a.duration*(a.placing?.72:.30);

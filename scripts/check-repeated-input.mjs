@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {newShift,createScene,handlingTarget} from '../dist/mission.js';
+import {newShift,createScene,step,handlingTarget} from '../dist/mission.js';
 import {choreography,advanceHandling,beginHandling,toggleFlashlight,updateViewmodel} from '../dist/handling.js';
 const [{blocks}]=createScene();
 for(const hz of [30,60,120,144]){
@@ -26,3 +26,16 @@ for(const hz of [30,60,120,144]){
  }
  console.log('PASS',hz,'Hz, 20 Q reversals and 20 E actions with one ownership event each');
 }
+
+const runner=Object.assign(newShift(),{x:-18,z:14,yaw:Math.PI/2,vx:-7,carried:0});
+runner.states[0]='CARRIED';
+const keys=new Set(['KeyW','ShiftLeft']);
+assert.ok(beginHandling(runner,handlingTarget(runner,blocks),blocks));
+for(let i=0;i<78;i++){
+ step(runner,keys,blocks,1/120);
+ advanceHandling(runner,blocks,1/120);
+}
+assert.equal(runner.carried,-1);
+assert.equal(runner.parked[0][1],0);
+assert.ok(runner.x<-22&&runner.vx< -6.9);
+console.log('PASS sustained sprint through floor placement on C-01 aisle');
