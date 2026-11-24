@@ -14,6 +14,22 @@ export const PARCELS=[
  {id:'B-04',area:'Upper catwalk',pos:[13.90,4.32,-4.45]},
  {id:'B-05',area:'Loading aisle',pos:[-7.75,.72,-13.4]}];
 export const DOCK=[4.6,.24,-19.6];
+// Each shift selects one supported position in each risk zone. All five
+// objectives remain unique; elevated cargo is reachable by physical routes.
+const spot=(area,pos)=>({area,pos});
+const cargoPools=[
+ [PARCELS[0],PARCELS[2],spot('Storage cross aisle',[-9,0,5])],
+ [PARCELS[1],PARCELS[4],spot('Loading aisle',[-7,0,-8])],
+ [spot('Annex freight',[-21,.72,10]),spot('Annex freight',[-30,.72,17.8]),spot('Annex freight',[-37,.72,11]),spot('Annex freight',[-29,.72,-3])],
+ [spot('Annex rack',[-25,.855,7.35]),spot('Annex rack',[-24.5,2.355,7])],
+ [PARCELS[3],spot('High storage',[-1.6,3.58,.25]),spot('High storage',[-1.6,5.27,2.35])]
+];
+export function randomCargo(rng=Math.random){
+ const selected=cargoPools.map(pool=>pool[Math.min(pool.length-1,Math.floor(rng()*pool.length))]);
+ for(let i=selected.length-1;i>0;i--){const j=Math.min(i,Math.floor(rng()*(i+1)));[selected[i],selected[j]]=[selected[j],selected[i]];}
+ return selected.map((p,i)=>({id:PARCELS[i].id,area:p.area,pos:p.pos.slice()}));
+}
+export const shiftParcel=(s,i)=>s?.cargo?.[i]??PARCELS[i];
 const sceneBlocks=new WeakSet();
 export function createScene(){
  const w=new World();buildArchitecture(w);buildStorage(w);buildMachinery(w);stageFreight(w);buildAnnex(w);
@@ -38,7 +54,7 @@ export function createScene(){
  sceneBlocks.add(w.blocks);
  return [w,parcel,empty,carry,flashlight];
 }
-export function newShift(){return {x:1.7,y:0,z:15,yaw:.24,pitch:-.04,vy:0,vx:0,vz:0,flashlight:false,flashAmount:0,grounded:true,states:PARCELS.map(()=> 'AVAILABLE'),carried:-1,elapsed:0,steps:0};}
+export function newShift(rng){return {cargo:typeof rng==='function'?randomCargo(rng):null,x:1.7,y:0,z:15,yaw:.24,pitch:-.04,vy:0,vx:0,vz:0,flashlight:false,flashAmount:0,grounded:true,states:PARCELS.map(()=> 'AVAILABLE'),carried:-1,elapsed:0,steps:0};}
 export const deliveryCount=s=>s.states.filter(k=>k==='DELIVERED').length;
 export const forward=s=>[-Math.sin(s.yaw)*Math.cos(s.pitch),Math.sin(s.pitch),-Math.cos(s.yaw)*Math.cos(s.pitch)];
 export function surface(x,z,y){
@@ -61,7 +77,7 @@ export function step(s,keys,blocks,dt,jump=false){
  else if(s.grounded&&Math.floor(s.steps/.90)>previousStep)radius=s.bodyHeight<1.3?1.4:speed*1.1;
  if(radius)s.noise={x:s.x,y:s.y+.2,z:s.z,radius,time:s.elapsed};
 }
-const parcelPos=(s,i)=>s.parked?.[i]??PARCELS[i].pos;
+const parcelPos=(s,i)=>s.parked?.[i]??shiftParcel(s,i).pos;
 const dockTarget=()=>({pos:DOCK,id:'BAY 02',area:'Outbound dispatch',dock:true});
 const parcelHalf=[CONFIG.parcelWidth/2,CONFIG.parcelWidth*.88,CONFIG.parcelWidth*.41];
 function placementClear(s,pos,blocks){
@@ -98,7 +114,7 @@ export function handlingTarget(s,blocks){
   if(canUse(s,target,blocks))return target;
   for(let i=0;i<PARCELS.length;i++){
    if(s.states[i]!=='AVAILABLE'||i===target?.index)continue;
-   const alternative={...PARCELS[i],index:i,pos:parcelPos(s,i)};
+   const alternative={...shiftParcel(s,i),index:i,pos:parcelPos(s,i)};
    if(canUse(s,alternative,blocks))return alternative;
   }
   return target;
@@ -108,7 +124,7 @@ export function handlingTarget(s,blocks){
 }
 export function nextTarget(s){
  if(s.carried>=0)return dockTarget();
- let best=null,d=Infinity;for(let i=0;i<PARCELS.length;i++){if(s.states[i]!=='AVAILABLE')continue;const p={...PARCELS[i],pos:parcelPos(s,i)};let dist=Math.hypot(s.x-p.pos[0],s.z-p.pos[2],(s.y-p.pos[1])*1.8);if(dist<d){best={...p,index:i};d=dist;}}
+ let best=null,d=Infinity;for(let i=0;i<PARCELS.length;i++){if(s.states[i]!=='AVAILABLE')continue;const p={...shiftParcel(s,i),pos:parcelPos(s,i)};let dist=Math.hypot(s.x-p.pos[0],s.z-p.pos[2],(s.y-p.pos[1])*1.8);if(dist<d){best={...p,index:i};d=dist;}}
  return best;
 }
 export function canUse(s,target,blocks=[]){
@@ -121,7 +137,7 @@ export function canUse(s,target,blocks=[]){
  }else if(d>(s.parked?.[target.index]?1.91:CONFIG.reach)||dot(unit(v),forward(s))<.63)return false;
  // Ray segment intersects solid props. Skip the target's own support.
  for(const [x1,z1,x2,z2,y1,y2] of blocks){
-  if(!target.drop&&!s.parked?.[target.index]&&target.id==='B-03' && x1<pos[0]&&x2>pos[0]&&z1<pos[2]&&z2>pos[2])continue;
+  if(!target.drop&&!s.parked?.[target.index]&&target.area==='Conveyor sorting' && x1<pos[0]&&x2>pos[0]&&z1<pos[2]&&z2>pos[2])continue;
   let lo=0,hi=.97;
   for(const [j,a,b] of [[0,x1,x2],[1,y1,y2],[2,z1,z2]]){if(Math.abs(v[j])<.00001){if(eye[j]<a||eye[j]>b){hi=-1;break;}continue;}const t1=(a-eye[j])/v[j],t2=(b-eye[j])/v[j];lo=Math.max(lo,Math.min(t1,t2));hi=Math.min(hi,Math.max(t1,t2));}
   if(lo<hi)return false;
@@ -133,10 +149,10 @@ export function interact(s,target,blocks){
  if(target.drop){
   (s.parked??={})[target.index]=target.pos.slice();
   s.states[target.index]='AVAILABLE';s.carried=-1;
-  s.noise={x:target.pos[0],y:target.pos[1],z:target.pos[2],radius:4.5,time:s.elapsed};return 'dropped';
+  s.noise={x:target.pos[0],y:target.pos[1],z:target.pos[2],radius:4.5,time:s.elapsed};s.horrorEvent={type:'drop',time:s.elapsed};return 'dropped';
  }
- if(target.dock&&s.carried>=0&&s.states[s.carried]==='CARRIED'){s.deliveryOrder??=s.states.flatMap((v,i)=>v==='DELIVERED'?[i]:[]);s.deliveryOrder.push(s.carried);s.states[s.carried]='DELIVERED';s.carried=-1;return 'delivered';}
- if(!target.dock&&s.carried===-1&&s.states[target.index]==='AVAILABLE'){s.carried=target.index;s.states[target.index]='CARRIED';return 'picked';}
+ if(target.dock&&s.carried>=0&&s.states[s.carried]==='CARRIED'){s.deliveryOrder??=s.states.flatMap((v,i)=>v==='DELIVERED'?[i]:[]);s.deliveryOrder.push(s.carried);s.states[s.carried]='DELIVERED';s.carried=-1;s.horrorEvent={type:'delivery',time:s.elapsed};s.noise={x:s.x,y:s.y+.5,z:s.z,radius:7,time:s.elapsed};return 'delivered';}
+ if(!target.dock&&s.carried===-1&&s.states[target.index]==='AVAILABLE'){s.carried=target.index;s.states[target.index]='CARRIED';s.horrorEvent={type:'pickup',time:s.elapsed};s.noise={x:s.x,y:s.y+.5,z:s.z,radius:5,time:s.elapsed};return 'picked';}
  return null;
 }
 export function baySlot(n){return [DOCK[0]+((n%3)-1)*.65,DOCK[1],DOCK[2]+(Math.floor(n/3)-.5)*.60];}
