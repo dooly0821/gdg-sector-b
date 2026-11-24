@@ -15,7 +15,7 @@ export const PARCELS=[
  {id:'B-04',area:'Upper catwalk',pos:[13.90,4.32,-4.45]},
  {id:'B-05',area:'Loading aisle',pos:[-7.75,.72,-13.4]}];
 export const DOCK=[4.6,.24,-19.6];
-// Six risk zones, five unique cargo assignments per zone. Keep the original
+// Eight risk pools with thirty unique cargo assignments per shift. Keep the original
 // five-position fixture for automated legacy tests (newShift without RNG).
 export const MISSION_TOTAL=30;
 const spots=(area,positions)=>positions.map(pos=>({area,pos}));
@@ -88,6 +88,9 @@ export function step(s,keys,blocks,dt,jump=false){
  else if(!vault&&s.vault)radius=s.vault.rail||s.vault.high?6:4;
  else if(s.grounded&&Math.floor(s.steps/.90)>previousStep)radius=s.bodyHeight<1.3?1.4:speed*1.1;
  if(radius)s.noise={x:s.x,y:s.y+.2,z:s.z,radius,time:s.elapsed};
+ const zone=s.z>=54?(s.x<-15?'waste':'lab'):s.z>=22?(s.x<-15?'returns':'transfer'):s.x<-15?'annex':'warehouse';
+ if(s.zone&&s.zone!==zone&&s.elapsed>(s.lastZoneEvent??-10)+5){s.horrorEvent={type:'zone',time:s.elapsed};s.lastZoneEvent=s.elapsed;s.zoneScare=zone;}
+ s.zone=zone;
 }
 const parcelPos=(s,i)=>s.parked?.[i]??shiftParcel(s,i).pos;
 const dockTarget=()=>({pos:DOCK,id:'BAY 02',area:'Outbound dispatch',dock:true});
