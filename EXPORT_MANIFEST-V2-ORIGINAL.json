@@ -1,0 +1,363 @@
+{
+  "project": "GDG — SECTOR B",
+  "export_date": "2026-11-24",
+  "site_id": "appgprj_6afcf2800b8481918f57ee52d5aadce6",
+  "published_version_number": 2,
+  "source_commit": "b4d4f926700bee72bf24cc819907c1ffa075d5ea",
+  "deployment_status": "succeeded",
+  "live_url": "https://gdg-sector-b-night-shift.rich-flame-3289.chatgpt.site/",
+  "tracked_file_count": 66,
+  "original_files": [
+    {
+      "path": ".openai/hosting.json",
+      "size_bytes": 106,
+      "sha256": "7b7ed8949bbfde952013d775b8b616657d0c03e5528165f6abc1dc26b1974d56"
+    },
+    {
+      "path": "dist/app.js",
+      "size_bytes": 19233,
+      "sha256": "028f7e8ac7efb1880d0289117f499c2240f72a6da66ed0454147a1f0a3132cbe"
+    },
+    {
+      "path": "dist/architecture.js",
+      "size_bytes": 11189,
+      "sha256": "6f785b299fce87e8ded22a0bc4631c33e2fef4293f9c11a5c4f2ae4d5f59d96a"
+    },
+    {
+      "path": "dist/assets/brand.webp",
+      "size_bytes": 213408,
+      "sha256": "848cfce30f18e236f71f05163b2980357dc3450efdd64a7d68decba0fc273164"
+    },
+    {
+      "path": "dist/assets/cover.webp",
+      "size_bytes": 326060,
+      "sha256": "e90b7a6878c7bbb17fb8b961303300cdaf139e3e923a6105c569383fb3f92a0a"
+    },
+    {
+      "path": "dist/assets/display.otf",
+      "size_bytes": 81340,
+      "sha256": "6d7cec07f5a9035e208532dab35a51312aef4a7f26eb524dd614c9fcd97c3264"
+    },
+    {
+      "path": "dist/assets/floor-deck.webp",
+      "size_bytes": 175610,
+      "sha256": "14c5d83b22598a23ffa53b05e4aacb950f898b28aa974bfe8d77f31058e61740"
+    },
+    {
+      "path": "dist/assets/font-license.txt",
+      "size_bytes": 52517,
+      "sha256": "1315a62758a603a3e6e87a79b8389563789c59c1740b9db8bc2b20e2e2145458"
+    },
+    {
+      "path": "dist/assets/interface/loading-label.webp",
+      "size_bytes": 56658,
+      "sha256": "20b17140cf09e997a904ef0a380088f4987e49b4de5962fcbe6aab8f3a4de0ec"
+    },
+    {
+      "path": "dist/assets/interface/loading-plate.webp",
+      "size_bytes": 63388,
+      "sha256": "520bad1b5828822a2534ed3f2e66f05a8ede41cde29b5359721742ce32f07c8b"
+    },
+    {
+      "path": "dist/assets/interface/manual.webp",
+      "size_bytes": 26244,
+      "sha256": "7222c7a756c35f3017a3409eeb41e13c72401abb9984ecc83277b9601167dce0"
+    },
+    {
+      "path": "dist/assets/interface/pointer.webp",
+      "size_bytes": 6500,
+      "sha256": "5bab399ad5d1f37c9a5ee4b32637b410e421b06c82ecb1ebd49dc574151b70a3"
+    },
+    {
+      "path": "dist/assets/interface/quit.webp",
+      "size_bytes": 26466,
+      "sha256": "be5fd970e1ad68c4cc2d5b4cbdcfe40de6e52c1dfecbdcc2fcf4453ff3ec398d"
+    },
+    {
+      "path": "dist/assets/interface/rays.webp",
+      "size_bytes": 2406,
+      "sha256": "3c83e12c97fe2e152d06e5504a3268ef2d59b38a272fdc1152e50fb13152ed3d"
+    },
+    {
+      "path": "dist/assets/interface/settings.webp",
+      "size_bytes": 26598,
+      "sha256": "7df18976c0f9ee1a719a94ff3d137ec27362ca4d7d75df086a96afdb6f4ce375"
+    },
+    {
+      "path": "dist/assets/interface/start.webp",
+      "size_bytes": 39778,
+      "sha256": "7cdd4c4a3dd89c7ef103c96bbf32cc03c6c040d083e962b4d313f0b88f9dda51"
+    },
+    {
+      "path": "dist/assets/interface/tagline.webp",
+      "size_bytes": 23948,
+      "sha256": "31d15c2d10abdfb6d5e8bdc3b746ee807438309fa8b4ad4835def59d806cf167"
+    },
+    {
+      "path": "dist/assets/interface/warehouse.webp",
+      "size_bytes": 749894,
+      "sha256": "535556ac11f19470e3a63c8ba4cd3f3eca92d736b684208577bab0a518645fdf"
+    },
+    {
+      "path": "dist/assets/interface/wordmark.webp",
+      "size_bytes": 71654,
+      "sha256": "72175c013914862cd36d42d834bcf7b855c7f55d57d1b6b709710d08c7ecb11d"
+    },
+    {
+      "path": "dist/assets/mat-cardboard.webp",
+      "size_bytes": 37260,
+      "sha256": "33016364a241a3c0a42bda477d09ac81f06582ff73d8a0dfe80e4f90c93ac187"
+    },
+    {
+      "path": "dist/assets/mat-carton0.webp",
+      "size_bytes": 45688,
+      "sha256": "615fc2688900b9ef9cd3053ca8653f4893e2dc81532c5acfc8a102ec58eda066"
+    },
+    {
+      "path": "dist/assets/mat-carton1.webp",
+      "size_bytes": 44920,
+      "sha256": "fb406f52dbac8498c548a126ede1feafc790de7498e62dacc19fc1d7fd7fa698"
+    },
+    {
+      "path": "dist/assets/mat-carton2.webp",
+      "size_bytes": 44426,
+      "sha256": "968888436962cc55585c2c2ad216f9b8acd56e17f58f90c22a339b68110b1b7b"
+    },
+    {
+      "path": "dist/assets/mat-carton3.webp",
+      "size_bytes": 46390,
+      "sha256": "8582ecee5484e680d467b2da3d2fc3b3c802d71a6dacdc4c2661bd9141ec66d3"
+    },
+    {
+      "path": "dist/assets/mat-carton4.webp",
+      "size_bytes": 45448,
+      "sha256": "12d5374e75c27ea337147ea4bca861b71048e3060d31ef0ed9ccfc9a72ac0af1"
+    },
+    {
+      "path": "dist/assets/mat-carton5.webp",
+      "size_bytes": 45912,
+      "sha256": "a8f4a6e7618c2dad4a5087e9a1eb8f8f79ffa94275d77b2b864c8efe80c4f62c"
+    },
+    {
+      "path": "dist/assets/mat-cartontop0.webp",
+      "size_bytes": 43196,
+      "sha256": "05f8a36e08ee932ac7f6c068af217fa07a65e5574f6401cf19c0a107f5c04cf6"
+    },
+    {
+      "path": "dist/assets/mat-cartontop1.webp",
+      "size_bytes": 41860,
+      "sha256": "ad93c98f72c474ba84a98b708a02e4d0f5666f0b14655140411eb2d6dab39cbc"
+    },
+    {
+      "path": "dist/assets/mat-cartontop2.webp",
+      "size_bytes": 41762,
+      "sha256": "558d84a75dce94760f9e284b37c390b654e1c721ece0476288d55806166932df"
+    },
+    {
+      "path": "dist/assets/mat-cartontop3.webp",
+      "size_bytes": 43676,
+      "sha256": "f4f5f6096d1b4a2f86a53d47b789c50cb53323cd5eecaf8213d258c7fb8ec009"
+    },
+    {
+      "path": "dist/assets/mat-cartontop4.webp",
+      "size_bytes": 44062,
+      "sha256": "91d69d844d0ce1ba009cdb44797d12e708e3fad6b205d84c902c4d4541db5547"
+    },
+    {
+      "path": "dist/assets/mat-cartontop5.webp",
+      "size_bytes": 44266,
+      "sha256": "3022e58d84a8524845d67830cbd0c650affb82ad4377145e330762ac46c8f68f"
+    },
+    {
+      "path": "dist/assets/mat-cloth.webp",
+      "size_bytes": 47642,
+      "sha256": "7267d20f85062d05a89853e71d964cb0e3050510611833b72425b019aa051c23"
+    },
+    {
+      "path": "dist/assets/mat-concrete.webp",
+      "size_bytes": 301996,
+      "sha256": "f3883a4a2a99d549a42629336005391b7ff45c3ba67ac7bfef3a3e8fde6ec8c8"
+    },
+    {
+      "path": "dist/assets/mat-metal.webp",
+      "size_bytes": 49556,
+      "sha256": "3e7f65301db8ae81ec054368af0d2a72adcca03a32c98d62d4cbeccbc64dc56e"
+    },
+    {
+      "path": "dist/assets/mat-paint.webp",
+      "size_bytes": 41234,
+      "sha256": "8687677366019d7eb94f4d995635a6aacc6879aa9940744fb1542eec96eec235"
+    },
+    {
+      "path": "dist/assets/mat-rubber.webp",
+      "size_bytes": 39610,
+      "sha256": "81c71915123536d8faff54d4485ea994cc7e6261e3093470b6fbed6a8ae4adb3"
+    },
+    {
+      "path": "dist/assets/mat-skin.webp",
+      "size_bytes": 6136,
+      "sha256": "666368ca984bd60b5b9f22ecaa36a8e0e3d8bcdf1d9067acb83f88386a4abe9b"
+    },
+    {
+      "path": "dist/assets/mat-wood.webp",
+      "size_bytes": 57296,
+      "sha256": "dc46145a671e4804b86ce217531054d7e8fc459c9193578aefba751085334702"
+    },
+    {
+      "path": "dist/assets/package-front.webp",
+      "size_bytes": 195700,
+      "sha256": "a1e0e005b10778713feb84eb4093f3c958dd4eda6e1e426cb821c71b48f8b858"
+    },
+    {
+      "path": "dist/assets/package-side.webp",
+      "size_bytes": 97920,
+      "sha256": "383f2d0601be4177bcc0c1ac17495a46b4d776812fb471aacd158cc23f526a21"
+    },
+    {
+      "path": "dist/assets/package-top.webp",
+      "size_bytes": 105788,
+      "sha256": "0d626a263d36cd7941a49399fe1b5ac1e542a4e5a400a9caf26eb6254f05d4e1"
+    },
+    {
+      "path": "dist/assets/stamp.webp",
+      "size_bytes": 106520,
+      "sha256": "7da7831d5e5696c7fbd7352d66a79cde743251cb94f38aa6b6b510cad00d19e1"
+    },
+    {
+      "path": "dist/freight.js",
+      "size_bytes": 1445,
+      "sha256": "9f846bf33cf6fc38f6e0c7dd7eb082362b1c423d44c9f20f550cfc5b6eaebea3"
+    },
+    {
+      "path": "dist/gdg-unity-handoff.zip",
+      "size_bytes": 2146399,
+      "sha256": "3a83faea03fdd2530f3b2d05bc3d1ab503c5e2dce01e86685144b205d94cc0ed"
+    },
+    {
+      "path": "dist/geometry.js",
+      "size_bytes": 2169,
+      "sha256": "bc0d903f8370e487a87785165b7759de51932a9e852dc1731d08cec29bffffa9"
+    },
+    {
+      "path": "dist/handling.js",
+      "size_bytes": 2887,
+      "sha256": "6feb5e477b4133a8d484edbc08af8d457ead2065dccf770ea5420e0e96627012"
+    },
+    {
+      "path": "dist/index.html",
+      "size_bytes": 5210,
+      "sha256": "37549d5192a224ac53150b6d2ff4db6a5f41d76320627e5bb143cd639008a4dd"
+    },
+    {
+      "path": "dist/machinery.js",
+      "size_bytes": 10546,
+      "sha256": "a354bdc5b484ae0b4bb11e49d10688677f486f3388047fbbeffdf19a9588ea7e"
+    },
+    {
+      "path": "dist/mission.js",
+      "size_bytes": 6072,
+      "sha256": "b4bbb187cb6c150634be79bfae38255d047d32d6f76c7a40759389c4506d3097"
+    },
+    {
+      "path": "dist/renderer.js",
+      "size_bytes": 13591,
+      "sha256": "58e3774b87a90b740fe02babc5318d5b9c5dd92c49a0bce8c6cc8fcfe112655b"
+    },
+    {
+      "path": "dist/software.js",
+      "size_bytes": 12761,
+      "sha256": "9d5bab638ece1c8595f076c73a88e10bce7fdb94129c273610014f97ab4a963f"
+    },
+    {
+      "path": "dist/storage.js",
+      "size_bytes": 9287,
+      "sha256": "eac3d4f0e807058b8d574298421d39e7de005a68d28ae4618421237a281a65a1"
+    },
+    {
+      "path": "dist/style.css",
+      "size_bytes": 10243,
+      "sha256": "20dba6ce28c8bde86374cb358fffcd8067941916cb743a4d8ff507a3552f2b94"
+    },
+    {
+      "path": "dist/unity-migration.html",
+      "size_bytes": 9313,
+      "sha256": "15badf81df6c38e12009e2f826cae6330974baef7616f480fcd084ba85f03cfa"
+    },
+    {
+      "path": "dist/viewmodel.js",
+      "size_bytes": 5532,
+      "sha256": "70619d7472307eb6ef3f8a3ab7df877cd3fabb76cea8effdf4a3f90252812348"
+    },
+    {
+      "path": "dist/work.css",
+      "size_bytes": 6449,
+      "sha256": "cede3c7bd779c19edc650f92c04608f5e7f364f8ccd74d10f2041948fe1389cf"
+    },
+    {
+      "path": "dist/world.js",
+      "size_bytes": 2529,
+      "sha256": "7e1aa7f1d82f58ddf9bf239f565954197dd43fd8932011dada4b773a08c81965"
+    },
+    {
+      "path": "package.json",
+      "size_bytes": 55,
+      "sha256": "5c096470052a7bc805c7f6a20a6728d7a2065c91117d0626ed515c32b88b367b"
+    },
+    {
+      "path": "playtest/gdg-sector-b-playtest.jpg",
+      "size_bytes": 147100,
+      "sha256": "725fe4db481670bc628d62f8bd27c71f8077ee412f5b6dbc5fd140497b7910ed"
+    },
+    {
+      "path": "playtest/gdg-work-carry.jpg",
+      "size_bytes": 161132,
+      "sha256": "85bcadec02c8d60e6ae3622ca06bbe302cc7c245906b6fbb2d924e10ecdd1c91"
+    },
+    {
+      "path": "playtest/gdg-work-delivery.jpg",
+      "size_bytes": 146612,
+      "sha256": "02cdca36e52eacbaace1e03c4a0a0ec0d8ae61255922d7cb9f52d45e0f59105e"
+    },
+    {
+      "path": "playtest/gdg-work-loading.jpg",
+      "size_bytes": 293227,
+      "sha256": "b785f6c95a4ad3ccf2da5a1017310792241dd0f59d8ea0dce2e6092d09d46010"
+    },
+    {
+      "path": "playtest/gdg-work-menu.jpg",
+      "size_bytes": 293145,
+      "sha256": "1852adcf34a5aaba9898fe4f75f2b76343fdd8f289bc95352d843dc7e4fe425e"
+    },
+    {
+      "path": "scripts/check-mission.mjs",
+      "size_bytes": 3409,
+      "sha256": "ab287b2f92d3c35eea462e87e5b2a3f06a39993888f2dbe76563763a8589bee3"
+    },
+    {
+      "path": "scripts/export-layout.mjs",
+      "size_bytes": 1481,
+      "sha256": "06f30006ecdd5554b9f2a645ec7e8834b2ddc93ef5691da938ed386f896babcc"
+    }
+  ],
+  "export_only_files": [
+    "README.md",
+    "EXPORT_MANIFEST.json"
+  ],
+  "runtime_dependencies": [],
+  "build_step": null,
+  "tool_versions": {
+    "node": "v24.22.3",
+    "python": "Python 3.12.14"
+  },
+  "validation": {
+    "source_commit_matches_deployed_version": true,
+    "all_tracked_files_byte_identical": true,
+    "mission_regression": "passed, five deliveries and 303.2 m walking routes",
+    "javascript_syntax": "all dist/*.js and scripts/*.mjs passed",
+    "scene_export": "7095 static instances, 109 AABBs, 117 materials",
+    "nested_unity_zip_crc": "passed",
+    "archive_crc": "passed; checked after archive creation",
+    "archive_extracted_checksums": "passed; checked after archive creation",
+    "new_browser_playtest": "not performed for this export"
+  }
+}
