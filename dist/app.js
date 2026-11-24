@@ -109,10 +109,10 @@ function failShift(name){
 }
 function complete(){pauseShift(false);beep(630,.3);panel('complete','<div class="row"><span>출고 내역</span><b>30 / 30건 배송 완료</b></div><div class="row"><span>근무 시간</span><b>'+Math.floor(session.elapsed/60)+'분 '+Math.floor(session.elapsed%60)+'초</b></div><p>화물 30개의 배송을 마쳤습니다. 야간 근무에서 살아남았습니다.</p><div class="panel-actions">'+action('brief','근무 마치기',true)+action('resume','창고 둘러보기')+'</div>','전체 배송 완료','출고 02 / 근무 확인서');}
 let receiptUntil=0;
-function use(target=handlingTarget(session,worlds[0].blocks)){
- if(session.handAction||session.pendingUse||!canUse(session,target,worlds[0].blocks))return;
+function use(target=handlingTarget(session,worlds[0].blocks),locked=false){
+ if(session.handAction||session.pendingUse||!canUse(session,target,worlds[0].blocks,locked))return;
  if(session.flashlight||session.flashAmount>0){session.restoreTorch=session.flashlight||session.restoreTorch;session.flashlight=false;if(session.flashAmount>0){session.pendingUse=target;return;}}
- if(beginHandling(session,target,worlds[0].blocks))beep(235,.07,'sine',.035);
+ if(beginHandling(session,target,worlds[0].blocks,locked))beep(235,.07,'sine',.035);
 }
 function onHandling(result,now,id){
  if(session.restoreTorch){session.flashlight=true;session.restoreTorch=false;}
@@ -139,7 +139,7 @@ function targetCorners(pos,dock){
 function frame(now){if(mode!=='game')return;const dt=Math.min(.1,Math.max(0,(now-last)/1000));last=now;const s=session;
  if(keys.has('ArrowLeft'))s.yaw+=dt*1.65;if(keys.has('ArrowRight'))s.yaw-=dt*1.65;if(keys.has('ArrowUp'))s.pitch=Math.min(CONFIG.pitchLimit,s.pitch+dt);if(keys.has('ArrowDown'))s.pitch=Math.max(-CONFIG.pitchLimit,s.pitch-dt);
  const was=s.steps;const tick=1/PHYSICS.hz;if(s.encounterHit){keys.clear();jump=false;s.vx=s.vz=s.vy=0;accumulator=0;}else accumulator+=dt;while(accumulator>=tick){step(s,keys,worlds[0].blocks,tick,jump);jump=false;accumulator-=tick;}equipmentClearance(s,worlds[0].blocks,dt,parcelBlocks(s));updateViewmodel(s,dt);
- if(s.pendingUse&&s.flashAmount===0){const target=s.pendingUse;s.pendingUse=null;use(target.drop?dropTarget(s,worlds[0].blocks):target);if(!s.handAction&&s.restoreTorch){s.flashlight=true;s.restoreTorch=false;}}
+ if(s.pendingUse&&s.flashAmount===0){const target=s.pendingUse;s.pendingUse=null;use(target.drop?dropTarget(s,worlds[0].blocks):target,true);if(!s.handAction&&s.restoreTorch){s.flashlight=true;s.restoreTorch=false;}}
  if(s.grounded&&Math.floor(s.steps/1.12)>Math.floor(was/1.12))beep(95,.08,'sine',.04);
  const moving=s.steps>was+.002;const bob=settings.motion&&moving&&s.grounded?Math.sin(s.steps*5.5)*.014:0;
  const active=s.handAction;
