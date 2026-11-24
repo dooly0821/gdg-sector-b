@@ -2,13 +2,13 @@
   "emptyL": [
     {
       "component": "glove",
-      "triangles": 16768,
+      "triangles": 18704,
       "watertight": true,
       "components": 1
     },
     {
       "component": "sleeve",
-      "triangles": 3600,
+      "triangles": 6240,
       "watertight": true,
       "components": 1
     }
@@ -16,13 +16,13 @@
   "emptyR": [
     {
       "component": "glove",
-      "triangles": 16768,
+      "triangles": 18704,
       "watertight": true,
       "components": 1
     },
     {
       "component": "sleeve",
-      "triangles": 3600,
+      "triangles": 6240,
       "watertight": true,
       "components": 1
     }
@@ -30,13 +30,13 @@
   "carryL": [
     {
       "component": "glove",
-      "triangles": 34504,
+      "triangles": 36836,
       "watertight": true,
       "components": 1
     },
     {
       "component": "sleeve",
-      "triangles": 3600,
+      "triangles": 6240,
       "watertight": true,
       "components": 1
     }
@@ -44,13 +44,13 @@
   "carryR": [
     {
       "component": "glove",
-      "triangles": 34504,
+      "triangles": 36836,
       "watertight": true,
       "components": 1
     },
     {
       "component": "sleeve",
-      "triangles": 3600,
+      "triangles": 6240,
       "watertight": true,
       "components": 1
     }
@@ -58,13 +58,13 @@
   "supportL": [
     {
       "component": "glove",
-      "triangles": 22252,
+      "triangles": 24192,
       "watertight": true,
       "components": 1
     },
     {
       "component": "sleeve",
-      "triangles": 3600,
+      "triangles": 6240,
       "watertight": true,
       "components": 1
     }
@@ -72,13 +72,13 @@
   "torch": [
     {
       "component": "glove",
-      "triangles": 38840,
+      "triangles": 39964,
       "watertight": true,
       "components": 1
     },
     {
       "component": "sleeve",
-      "triangles": 3600,
+      "triangles": 6240,
       "watertight": true,
       "components": 1
     },

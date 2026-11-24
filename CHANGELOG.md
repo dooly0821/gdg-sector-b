@@ -37,3 +37,21 @@
 - Added original material textures, improved torch mesh, grip pose, viewmodel lighting, and packed runtime geometry.
 - Preserved V3 movement and mission logic; Q toggle and E interlock unchanged.
 - Added editable GLB/OBJ assets and generator. No finger skinning yet.
+
+## V3.5 glove articulation follow-up
+- Split relaxed/reaching finger curl into two serial joint regions in WebGL and CPU fallback, keeping the palm and cuff stationary.
+- Added rounded joint reinforcement and seam accents using existing glove materials/textures; regenerated source OBJ/GLB and packed runtime meshes.
+- Staggered flashlight finger wrap angles for the finger cascade; kept hand/tool transforms and authored contact clearance.
+- Restored missing mission/physics regression scripts and added finger continuity and Chromium smoke checks. See TEST-RESULTS.md for measured coverage and limits.
+
+## C-01 야간 분류동 확장
+- 기존 창고 서쪽 통로와 28 × 30m 분류동을 연결했습니다. 랙, 점검 데크, 격리 설비, 경광 및 천장 조명을 추가했습니다.
+- 네 괴물의 순찰과 추격, 적재귀의 예고 돌진, 녹령과 표찰귀의 손전등 반응을 추가했습니다. 관절 계층으로 팔꿈치를 포함한 동작을 제어합니다.
+- 장갑·손전등 모델과 빛이 카메라 전방을 향하도록 함께 정렬했습니다.
+- E로 상자를 임시 적치하고 다시 집거나 출고대에서 배송할 수 있습니다. 점프 입력으로 난간과 낮은 화물을 오르는 동작을 추가했습니다.
+
+## C-01 캐릭터 아트와 등장 패턴
+- 녹령의 굴곡진 천과 얼굴, 함귀의 찢어진 골판지, 적재귀의 목재와 롤러, 표찰귀의 인쇄 종이와 스캐너 눈을 별도의 3D 표면과 재질로 제작했습니다.
+- 괴물마다 13개 관절 변환을 적용했습니다. C-01 진입 후 순서·위치·시간이 달라지며, 방의 가려진 쪽에서 최대 두 종류가 활동합니다.
+- 장갑 손바닥과 관절 패딩의 볼륨을 늘렸습니다. 세 굽힘 지점과 손가락별 타이밍, 손목 관성은 빈손 자세에 적용합니다. 상자와 손전등 접촉 자세는 기존 접촉 여유를 유지합니다.
+- WebGL에 괴물 발밑 그림자, 녹령 윤곽광, 밝은 영역의 계조 보정을 적용했습니다.

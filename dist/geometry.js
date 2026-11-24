@@ -1,7 +1,9 @@
 import {MESH_DATA} from "./viewmodel-mesh-data.js";
 export const customShapes=Object.keys(MESH_DATA);
 const cache=new Map();
+export function registerGeometry(shape,vertices){cache.set(shape,vertices);}
 export function geometry(shape){
+ if(cache.has(shape))return cache.get(shape);
  if(MESH_DATA[shape]){if(!cache.has(shape)){const raw=atob(MESH_DATA[shape]),bytes=Uint8Array.from(raw,c=>c.charCodeAt(0));const packed=new Int16Array(bytes.buffer),out=new Float32Array(packed.length);for(let i=0;i<packed.length;i++)out[i]=packed[i]/(i%8<3?20000:i%8<6?32767:1000);cache.set(shape,out);}return cache.get(shape);}
 
  let v=[];const vert=(p,n,u)=>v.push(...p,...n,...u);

@@ -203,7 +203,11 @@ function conveyor(w,m) {
   w.cyl(x-.73,1.277,2.034,.047,.06,.047,m.redSwitch);
   w.cyl(x-.73,1.267,1.818,.024,.034,.024,m.green);
   w.sign(x-.51,.91,4.021,.31,.085,'C–04','#394043','#ddd6b7');
-  w.block(x-.72,zA-.085,x+.72,zB+.09,0,1.64);
+  // Follow the actual roller height rather than a 1.64 m invisible wall.
+  for(let a=zA-.085;a<zB+.09;a+=.35){
+    const b=Math.min(a+.35,zB+.09);
+    w.block(x-.72,a,x+.72,b,0,Math.max(height(a),height(b))+.062,'climb');
+  }
   w.block(x-1.16,2.98,x-.69,3.99,.41,1.11);
   w.shadow(x,(zA+zB)/2,2.08,zB-zA+.36);
 }
@@ -220,7 +224,7 @@ function freight(w,m){
     w.cyl(x+.148,.916,z-.105,.032,.024,.032,m.zinc);
     w.cyl(x-.118,.916,z+.077,.016,.015,.016,m.dark);
     w.shadow(x,z,.81,.81);
-    w.block(x-r,z-r,x+r,z+r,0,.93);
+    w.block(x-.303,z-.303,x+.303,z+.303,0,.916+.024/2,"climb");
   }
   drum(8.92,-11.18,m.red);
   drum(9.63,-11.33,m.blue);
@@ -238,7 +242,9 @@ function freight(w,m){
       w.box(x+t,.862,z-.176,.467,.335,.56,m.pack);
     }
     w.shadow(x,z,1.56,1.44);
-    w.block(x-.61,z-.54,x+.61,z+.54,0,1.04);
+    w.block(x-.605,z-.54,x+.605,z+.54,0,.20);
+    w.block(x-.4845,z-.46,x+.4845,z+.46,.20,.447+.493/2,"climb");
+    w.block(x-.4835,z-.456,x+.4835,z+.104,.447+.493/2,.862+.335/2,"climb");
   }
   pallet(9.19,-13.7);
   pallet(-7.44,-17.73);

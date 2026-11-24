@@ -1,3 +1,4 @@
+import {prepareFingerBend} from './hand-motion.js';
 // Perspective-correct, depth-buffered CPU rasterizer for systems without WebGL 2.
 // It consumes exactly the same scene instances, carton UVs, camera and mission.
 import {geometry} from './geometry.js';
@@ -29,11 +30,11 @@ function shadowField(parts){
 function vertexLight(P,n,m,lights,shadow,hand){
  const [x,y,z]=P,v=shadow(x,y,z),k=(n[1]+1)*.5;
  if(hand){let d=Math.max(0,dot(n,[-.53,.75,.39])),r=Math.max(0,dot(n,[.8,.25,-.4]));const h=unit(unit(P.map(v=>-v)).map((v,i)=>v+[-.53,.75,.39][i])),spec=/vm_(metal|rim)/.test(m.name)?Math.pow(Math.max(0,dot(n,h)),18)*2:0;return [.48+.74*d+.15*r+m.emission+spec,.49+.65*d+.17*r+m.emission+spec,.55+.51*d+.24*r+m.emission+spec];}
- let L=[.25+.27*k,.27+.33*k,.35+.43*k],di=Math.max(0,dot(n,[.37,.87,-.30]))*(.24+.76*v);
- L[0]+=.20*di;L[1]+=.23*di;L[2]+=.32*di;
- for(const [lx,ly,lz] of lights){let dx=lx-x,dy=ly-y,dz=lz-z,ds=dx*dx+dy*dy+dz*dz,inv=1/Math.sqrt(ds+.01),cone=clamp((dy*inv+.04)/.85,0,1);
-  let f=31/(ds+7)*cone*cone*(3-2*cone)*(.13+.87*Math.max(0,(dx*n[0]+dy*n[1]+dz*n[2])*inv))*(.29+.71*v);
-  L[0]+=f;L[1]+=.72*f;L[2]+=.44*f;
+ let L=[.065+.135*k,.075+.155*k,.10+.19*k],di=Math.max(0,dot(n,[.37,.87,-.30]))*(.24+.76*v);
+ L[0]+=.085*di;L[1]+=.105*di;L[2]+=.145*di;
+ for(const [lx,ly,lz,red=0] of lights){let dx=lx-x,dy=ly-y,dz=lz-z,ds=dx*dx+dy*dy+dz*dz,inv=1/Math.sqrt(ds+.01),cone=clamp((dy*inv+.04)/.85,0,1);
+  let f=(red?32:14)/(ds+7)*cone*cone*(3-2*cone)*(.13+.87*Math.max(0,(dx*n[0]+dy*n[1]+dz*n[2])*inv))*(.29+.71*v);
+  L[0]+=f;L[1]+=(red?.075:.72)*f;L[2]+=(red?.035:.44)*f;
  }return L.map(a=>a+m.emission);
 }
 function meshPart(o,texs,lights,shadow,hand,idx){
@@ -57,7 +58,7 @@ function meshPart(o,texs,lights,shadow,hand,idx){
    for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){let a=y*(nx+1)+x;tris.push(grid[a],grid[a+1],grid[a+nx+2],grid[a],grid[a+nx+2],grid[a+nx+1]);tids.push(0,0);}
   }
  }else for(let i=0;i<mesh.length/8;i++){tris.push(vertex(get(i,0),get(i,3),get(i,6)));if(i%3===0)tids.push(cart&&mesh[i*8+4]>.75?1:0);}
- return {p:new Float32Array(vec),tri:new Uint32Array(tris),ti:new Uint8Array(tids),tex:[texture,topMat],c:pos,r:Math.hypot(...sc)*(shape==='box'?.5:1),buf:new Float32Array(vec.length),shape};
+ return {p:new Float32Array(vec),tri:new Uint32Array(tris),ti:new Uint8Array(tids),tex:[texture,topMat],c:o.meshBounds?.center??pos,r:o.meshBounds?.radius??Math.hypot(...sc)*(shape==='box'?.5:1),buf:new Float32Array(vec.length),shape};
 }
 function mixv(a,b,t){return a.map((v,i)=>v+(b[i]-v)*t);}
 export class SoftwareRenderer{
@@ -77,12 +78,13 @@ export class SoftwareRenderer{
  render(eye,forward,parcels,pose,scale){
   const c=this.canvas,base={HIGH:1100,BALANCED:760,PERFORMANCE:520}[this.quality],w=Math.max(80,Math.floor(Math.min(base,c.clientWidth)*scale)),h=Math.max(60,Math.round(w*c.clientHeight/c.clientWidth));
   if(c.width!==w||c.height!==h||!this.image){c.width=w;c.height=h;this.image=this.ctx.createImageData(w,h);this.pixels=new Uint32Array(this.image.data.buffer);this.zbuffer=new Float32Array(w*h);}
-  this.f=h/(2*Math.tan(78*Math.PI/360));this.w=w;this.h=h;this.pixels.fill(0xff493b30);this.zbuffer.fill(0);
+  this.f=h/(2*Math.tan(78*Math.PI/360));this.w=w;this.h=h;this.pixels.fill(0xff100b09);this.zbuffer.fill(0);
   const cam=cameraView(eye,forward);this.vp=multiply(perspective(78*Math.PI/180,w/h,.045,95),cam);
   const draw=(group,offset,view,arms,flex)=>{for(let mesh of this.groups[group])this.drawMesh(mesh,offset,view,arms,mesh.shape.includes("_glove_")?flex:null);};
   draw(0,[0,0,0],cam,false);for(let off of parcels)draw(1,off,cam,false);
+  for(const actor of pose.actors??[])draw(actor.group,[0,0,0],multiply(cam,actor.matrix),false);
   if(pose.flight&&!pose.assembly)draw(1,[0,0,0],multiply(cam,pose.flight),false);
-  this.glow(cam);if(pose.flashlight>0)this.torch(pose.flashlight,pose.torchOffset,pose.torchLocal);this.zbuffer.fill(0);const local=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);for(const layer of pose.hands)draw(layer.group,layer.offset,layer.matrix??local,true,layer.flex);this.ctx.putImageData(this.image,0,0);
+  this.glow(cam);if(pose.flashlight>0)this.torch(pose.flashlight,pose.torchOffset,pose.torchLocal);const local=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);for(const layer of pose.hands)draw(layer.group,layer.offset,layer.matrix??local,true,layer.flex);this.ctx.putImageData(this.image,0,0);
  }
  // Depth-based fallback spotlight: illuminate visible geometry, not a flat HUD overlay.
  torch(power,off=[0,0,0],local={position:[.325,-.283,-.887],direction:[-.045,-.025,-1]}){
@@ -96,13 +98,13 @@ export class SoftwareRenderer{
  }
  glow(V){
   const F=this.f,W=this.w,H=this.h;
-  for(const [x,y,z] of this.lights){
+  for(const [x,y,z,red=0] of this.lights){
    const d=-(V[2]*x+V[6]*y+V[10]*z+V[14]);if(d<.3)continue;
    const cx=W*.5+F*(V[0]*x+V[4]*y+V[8]*z+V[12])/d,cy=H*.5-F*(V[1]*x+V[5]*y+V[9]*z+V[13])/d;
    const radius=Math.min(W*.22,F*1.30/d),iz=1/(d-.12),size=radius*radius;
    for(let py=Math.max(0,Math.floor(cy-radius));py<=Math.min(H-1,cy+radius);py++)for(let px=Math.max(0,Math.floor(cx-radius));px<=Math.min(W-1,cx+radius);px++){
     let i=py*W+px;if(this.zbuffer[i]>iz)continue;let q=((px-cx)**2+(py-cy)**2)/size;if(q>=1)continue;
-    let a=(1-q)**3*.16+Math.exp(-14*q)*.20,v=this.pixels[i],r=Math.min(255,(v&255)+a*245),g=Math.min(255,(v>>>8&255)+a*179),b=Math.min(255,(v>>>16&255)+a*99);
+    let a=(1-q)**3*.16+Math.exp(-14*q)*.20,v=this.pixels[i],r=Math.min(255,(v&255)+a*245),g=Math.min(255,(v>>>8&255)+a*(red?20:179)),b=Math.min(255,(v>>>16&255)+a*(red?12:99));
     this.pixels[i]=0xff000000|(b<<16)|(g<<8)|r;
    }
   }
@@ -112,7 +114,8 @@ export class SoftwareRenderer{
   const [a,b,c]=m.c,d=-(V[2]*a+V[6]*b+V[10]*c+oz),xx=V[0]*a+V[4]*b+V[8]*c+ox,yy=V[1]*a+V[5]*b+V[9]*c+oy;
   if(d+m.r<.055||Math.abs(xx)>Math.max(0,d)*this.w/(2*this.f)+m.r*2.3||Math.abs(yy)>Math.max(0,d)*this.h/(2*this.f)+m.r*1.7||m.r*this.f/Math.max(1,d)<.75)return;
   const p=m.p,s=m.buf,F=this.f,W=this.w*.5,H=this.h*.5;
-  for(let i=0;i<p.length;i+=8){let x=p[i],y=p[i+1],z=p[i+2];if(flex){const rel=[x-flex.pivot[0],y-flex.pivot[1],z-flex.pivot[2]],l=dot(rel,flex.forward),h=dot(rel,flex.normal),w=dot(rel,flex.width),t=clamp((l-.006)/.069,0,1),angle=flex.amount*t*t*(3-2*t)*(1+.20*clamp(w/.05,-1,1)),c=Math.cos(angle),q=Math.sin(angle),dl=l*c+h*q-l,dh=h*c-l*q-h;x+=flex.forward[0]*dl+flex.normal[0]*dh;y+=flex.forward[1]*dl+flex.normal[1]*dh;z+=flex.forward[2]*dl+flex.normal[2]*dh;}const Z=-(V[2]*x+V[6]*y+V[10]*z+oz);
+  const bend=prepareFingerBend(flex);
+  for(let i=0;i<p.length;i+=8){let x=p[i],y=p[i+1],z=p[i+2];if(bend)[x,y,z]=bend([x,y,z]);const Z=-(V[2]*x+V[6]*y+V[10]*z+oz);
    s[i]=(V[0]*x+V[4]*y+V[8]*z+ox);s[i+1]=(V[1]*x+V[5]*y+V[9]*z+oy);s[i+2]=Z;
    const iz=1/Math.max(.045,Z);s[i+3]=W+F*s[i]*iz;s[i+4]=H-F*s[i+1]*iz;s[i+5]=iz;
   }
@@ -140,7 +143,7 @@ export class SoftwareRenderer{
   for(let y=y0;y<=y1;y++){let wb=(x0+.5-ax)*ibx+(y+.5-ay)*iby,wc=(x0+.5-ax)*icx+(y+.5-ay)*icy;
    for(let x=x0,idx=y*W+x0;x<=x1;x++,idx++,wb+=ibx,wc+=icx){if(wb<-.00004||wc<-.00004||wb+wc>1.00004)continue;let iz=iz0+wb*(iz1-iz0)+wc*(iz2-iz0);if(iz<=zbuf[idx])continue;
     let z=1/iz,uvx=Math.floor((ur+ub*wb+uc*wc)*z)&mask,uvy=Math.floor((vr+vb*wb+vc*wc)*z)&mask,px=im[uvy*n+uvx];if((px>>>24)<100)continue;
-    let r=Math.min(255,(px&255)*(r0+rb*wb+rc*wc)*clear+69*fog),g=Math.min(255,((px>>>8)&255)*(g0+gb*wb+gc*wc)*clear+79*fog),bl=Math.min(255,((px>>>16)&255)*(b0+bb*wb+bc*wc)*clear+101*fog);
+    let r=Math.min(255,(px&255)*(r0+rb*wb+rc*wc)*clear+9*fog),g=Math.min(255,((px>>>8)&255)*(g0+gb*wb+gc*wc)*clear+11*fog),bl=Math.min(255,((px>>>16)&255)*(b0+bb*wb+bc*wc)*clear+15*fog);
     img[idx]=0xff000000|((bl|0)<<16)|((g|0)<<8)|(r|0);zbuf[idx]=iz;
    }
   }

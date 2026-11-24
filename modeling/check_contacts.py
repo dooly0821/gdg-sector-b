@@ -18,4 +18,25 @@ for z in np.linspace(-.77,-.61,10):prof.extend([(z,.0348),(z+.002,.0355)])
 prof.extend([(-.606,.036),(-.601,.039),(-.585,.039),(-.58,.034),(-.578,.0001)]);z,rad=np.array(prof).T;inside=(p[:,2]>=z.min())&(p[:,2]<=z.max());d=(r-np.interp(p[:,2],z,rad))*1.12;check('torch_barrel',d[inside]);
 for name,center,radii in [('guard',[.318,-.230,-.773],[.013,.008,.016]),('switch',[.318,-.221,-.773],[.010,.006,.011])]:
  d=np.linalg.norm((p-center)/radii,axis=1);report[name]={'sample_count':len(d),'min_normalized_radius':float(d.min()),'penetrating_samples':int(sum(d<1))};assert np.all(d>=1),name
+# Restrict each measurement to a fingertip neighbourhood on the packed mesh.
+# Contact with the switch housing is valid for the thumb; the four fingers
+# contact the carton or the handle. Distances are in the game's metre units.
+anchors=json.loads((root/'modeling/grip-anchors.json').read_text())
+contacts={}
+for pose,tips in anchors.items():
+ contacts[pose]={}
+ points=samples('vm_'+pose+'_glove')
+ for digit,anchor in tips.items():
+  local=points[np.linalg.norm(points-anchor,axis=1)<.019]
+  assert len(local), (pose,digit)
+  if pose=='torch':
+   q=inv(local)
+   d=(np.hypot(q[:,0]-.318,q[:,1]+.272)-np.interp(q[:,2],z,rad))*1.12
+  else:
+   q=np.abs(local-[0,-.584+.446*.88/2,-.864])-[.446/2,.446*.88/2,.446*.82/2]
+   d=np.linalg.norm(np.maximum(q,0),axis=1)+np.minimum(np.max(q,axis=1),0)
+  contacts[pose][digit]=local[d.argmin()].round(6).tolist()
+  check(pose+'_'+digit,d)
+  assert d.min()<=.005, (pose,digit,'gap',d.min())
+(root/'dist/grip-contacts.js').write_text('// Points on the packed glove at the nearest measured prop surface.\nexport const gripContacts='+json.dumps(contacts,indent=1)+';\n')
 (root/'modeling/contact-report.json').write_text(json.dumps(report,indent=2));print(json.dumps(report,indent=2))

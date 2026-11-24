@@ -108,8 +108,16 @@ export function buildArchitecture(w) {
   // Safety marking at the approach to the stair flight.
   for (let n=0;n<6;n++)box(11.83+n*.27,.019,15.5,.12,.015,.38,m.line,0,-.48);
   for(const x of [-15,15]){
-    box(x,4.3,0,.28,8.6,44.0,m.wall);
-    box(x-Math.sign(x)*.16,.46,0,.09,.92,43.87,m.wallDark);
+    if(x<0){
+      for(const [lo,hi] of [[-22,12],[16,22]]){
+        box(x,4.3,(lo+hi)/2,.28,8.6,hi-lo,m.wall);
+        box(x+.16,.46,(lo+hi)/2,.09,.92,hi-lo,m.wallDark);
+      }
+      box(x,6.1,14,.28,5,4,m.wall);
+    }else{
+      box(x,4.3,0,.28,8.6,44.0,m.wall);
+      box(x-.16,.46,0,.09,.92,43.87,m.wallDark);
+    }
     for(let n=0;n<8;n++) {
       const z=-19.25+n*5.5;
       sideWindow(x-Math.sign(x)*.16,z,4.65);
@@ -121,11 +129,21 @@ export function buildArchitecture(w) {
   }
   for(const z of [-22,22]){
     const s=Math.sign(z);
-    box(0,4.3,z,30,8.6,.27,m.wall);
-    box(0,.43,z-s*.152,29.9,.86,.07,m.wallDark);
+    if(z===22){
+      for(const x of [-9,9]){
+        box(x,4.3,z,12,8.6,.27,m.wall);
+        box(x,.43,z-s*.152,11.9,.86,.07,m.wallDark);
+      }
+      box(0,6.1,z,6,5,.27,m.wall);
+      w.sign(0,3.9,z-.17,3.6,.35,'D-02 / TRANSFER HALL','#402d29','#ecd2a0',pi);
+    }else{
+      box(0,4.3,z,30,8.6,.27,m.wall);
+      box(0,.43,z-s*.152,29.9,.86,.07,m.wallDark);
+    }
     box(0,5.48,z-s*.18,29.8,.08,.085,m.trim);
     for (const x of [-11.25,-3.75,3.75,11.25])endWindow(z-s*.20,x,6.39);
     for (const x of [-14.56,-7.5,0,7.5,14.56]){
+      if(z===22&&x===0)continue;
       box(x,4.22,z-s*.23,.20,8.44,.24,m.steel);
       box(x,4.22,z-s*.39,.31,8.44,.043,m.plate);
     }
@@ -192,8 +210,9 @@ export function buildArchitecture(w) {
       post(x,3.60,z,.99,.037,m.yellow);
       box(x,3.63,z,.12,.06,.12,m.plate);
     }
-    for (const height of [4.07,4.60])rail([x1,height,z1],[x2,height,z2],.058,m.yellow);
-    block(Math.min(x1,x2)-.045,Math.min(z1,z2)-.045,Math.max(x1,x2)+.045,Math.max(z1,z2)+.045,3.60,4.63);
+    const railWidth=.058,railTop=4.60;
+    for (const height of [4.07,railTop])rail([x1,height,z1],[x2,height,z2],railWidth,m.yellow);
+    block(Math.min(x1,x2)-.045,Math.min(z1,z2)-.045,Math.max(x1,x2)+.045,Math.max(z1,z2)+.045,3.60,railTop+railWidth/2,"rail");
   }
   deckRail(11.075,-19.94,11.075,6.96);
   deckRail(11.075,-19.94,14.74,-19.94);
@@ -207,7 +226,6 @@ export function buildArchitecture(w) {
     box(12.5,top-.017,z+run*.46,1.69,.061,.055,i===0||i===steps-1?m.line:m.edge);
     for(const x of [11.71,13.29]){
       box(x,top-.090,z,.055,.14,.198,m.plate);
-      block(x-.050,z-run*.5,x+.050,z+run*.5,top-.02,top+.97);
     }
   }
   for(const x of [11.66,13.34]){
@@ -217,7 +235,11 @@ export function buildArchitecture(w) {
       const t=i/6, z=14.95-7.92*t,y=.09+3.50*t;
       post(x,y,z,.97,.037,m.yellow);
     }
-    for(const ht of [.57,1.04])rail([x,.08+ht,15.05],[x,3.59+ht,6.98],.061,m.yellow);
+    const nearZ=6.98,farZ=15.05,nearY=3.59,farY=.08,width=.061;
+    for(const ht of [.57,1.04])rail([x,farY+ht,farZ],[x,nearY+ht,nearZ],width,m.yellow);
+    const topOffset=1.04+width/2*(farZ-nearZ)/Math.hypot(farZ-nearZ,nearY-farY);
+    block(x-.05,nearZ,x+.05,farZ,farY-.02,nearY+topOffset,"rail",
+     [nearY-.02,nearY+topOffset,farY-.02,farY+topOffset]);
   }
   w.sign(11.60,3.36,7.115,1.02,.26,'CATWALK','#3e4447','#e3d9bd');
   // Employee access and utility cabinets on the south wall.
@@ -230,7 +252,7 @@ export function buildArchitecture(w) {
     box(x,.25,z-.14,.81,.37,.024,m.steel);
     w.sign(x,2.8,z-.13,1.30,.32,'STAFF ACCESS','#33483f','#d4d8c1',pi);
   }
-  serviceDoor(1.65,21.73);
+  serviceDoor(6.2,21.73);
   for (const x of [-9.8,-9.12,-8.44]) {
     box(x,1.42,21.65,.63,.97,.32,m.plate);
     box(x,1.42,21.46,.55,.89,.07,m.shutter);

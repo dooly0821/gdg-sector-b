@@ -30,3 +30,25 @@ Node v22.16.0.
 - PASS: offline CPU renderer output at 1100×619 for empty, torch, and carry poses. These are not WebGL browser screenshots.
 - Source mesh checks: see modeling/mesh-report.json.
 - Not verified: real browser rendering, GPU frame rate, pointer lock, embedding, full contest eligibility.
+
+# V3.5 glove articulation follow-up — 2026-11-24
+- Base: `7ee6224b34c62af0b4d732ccc8b5ea77d17f1b8c` (`main`).
+- PASS: restored missing `check-physics.mjs` and `check-mission.mjs`. Five parcel pickup/delivery flows at 30/60/120 Hz, including upper parcel, Q during carry, distinct dock slots, cancellation and duplicate guards. Mission tests position the player at collision-free approaches; they do not simulate all walking routes. Separate physics checks exercise ramp ascent/descent, wall collision, jump height, airborne momentum and buffered bunny hop.
+- PASS: existing contact-motion (242 phases), hand-timing and dual-carry tests; 3,175,846 sampled transfer vertices. Finger-motion: 471,408 samples across both relaxed gloves, fixed palm and continuous two-joint bends.
+- PASS: packed static mesh contact samples. Minimum clearance: carry 3.99 mm, support 3.34 mm, torch barrel 4.96 mm; guard/switch have no penetrating samples. All glove meshes remain connected and watertight. These samples do not establish continuous triangle collision freedom or cover arbitrary world geometry; the original foreground viewmodel depth behavior remains.
+- PASS: actual headless Chromium WebGL2 startup, compiled shaders, Q keyboard equip and screenshots inspected at 1280×720; no page errors. SwiftShader was used, so hardware GPU performance, subjective smoothness, and complete browser-driven delivery routes remain unverified.
+- Browser reproduction: serve `dist` at port 8090, run `node scripts/check-browser.mjs` with Playwright available and `/usr/bin/chromium` installed; optional `QA_CAPTURE_DIR` saves screenshots. No runtime dependency or deployment setting was added.
+- Preserved: map, UI, all existing texture files, mission and movement source, Vercel configuration, and paths within `dist`.
+
+# C-01 야간 분류동 확장
+- PASS: 배송 5건의 집기·출고를 30/60/120Hz에서 검증했습니다. 상층 경사로 왕복, 공중 관성, 버니합 입력 버퍼와 기존 충돌도 통과했습니다.
+- PASS: check-expansion. 빈손/운반 중 전방 광축, 분류동 왕복, 난간과 화물 넘기, 천장에 막힌 동작 차단, 바닥 적치 후 재집기/출고, 괴물의 빛 반응과 복귀 시 화물 보존을 확인했습니다.
+- PASS: check-contact-motion, check-hand-timing, check-finger-motion, check-dual. 손전등 렌더 변환을 적용한 상자 전환 메시 표본 3,175,846개에서 관통이 검출되지 않았습니다. 이 검사는 모든 물체 및 프레임의 연속 충돌 검사까지 포함하지 않습니다.
+- PASS: Chromium WebGL2에서 Q/E 실제 입력으로 집기, 한 손 운반과 손전등, 바닥 적치, 다시 집기, 출고를 확인했습니다. 테스트는 상호작용 지점에 플레이어를 배치합니다. C-01 화면도 캡처했습니다. 브라우저의 전 구간 수동 플레이와 GPU 성능은 별도 확인이 필요합니다.
+
+# C-01 캐릭터 아트와 등장 패턴
+- PASS: 110개 이상 시드의 생성 시뮬레이션에서 네 종류, 여러 순찰 구역, 서로 다른 생성 시각을 확인했습니다. 같은 시드의 결과 재현과 동시 출현 제한도 통과했습니다.
+- PASS: 네 캐릭터의 관절별 메시 91,309개 삼각형을 검사했고, Chromium WebGL에서 캐릭터별 근접 프레임을 직접 렌더링했습니다.
+- PASS: 빈손 장갑의 실제 메시에서 263,500개 굽힘 표본을 확인했습니다. 손바닥 고정, 손가락별 타이밍, 세 관절의 연속 변형을 검사했습니다.
+- PASS: 두께를 늘린 여섯 장갑 메시가 모두 하나의 닫힌 표면으로 생성됩니다. 상자, 손전등 몸통, 가드 및 스위치 표본에서 관통이 나오지 않았습니다. 운반 전환의 3,260,057개 정점 표본도 통과했습니다. 이 검사는 모든 프레임의 연속 충돌을 판정하지 않습니다.
+- PASS: 기존 배송 5건과 버니합, 점프·난간, 손전등 전방 광축, 상자 내려놓기와 재집기. Chromium WebGL2에서 Q/E 입력으로 기존 한 손 운반·적치·재집기·출고도 확인했습니다. GPU 프레임률과 원본 콘셉트 이미지에 대한 픽셀 일치 검사는 수행하지 않았습니다.
