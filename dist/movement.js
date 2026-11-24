@@ -179,7 +179,7 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
  if(dt<=0)return;s.vx??=0;s.vz??=0;s.jumpBuffer??=0;
  if(jump)s.jumpBuffer=P.jumpBuffer;else s.jumpBuffer=Math.max(0,s.jumpBuffer-dt);
  const blocks=[...nearbyBlocks(staticBlocks,s.x,s.z),...dynamic,...bounds];
- const duck=keys.has('ControlLeft')||keys.has('ControlRight');
+ const duck=keys.has('KeyC');
  const current=s.bodyHeight??P.height,target=duck?1.06:P.height;
  const height=current+clamp(target-current,-dt*4,dt*4);
  s.bodyHeight=height<=current||!blocks.some(b=>contact(s.x,s.z,b,P.radius)&&overlaps(s.y,b,s.z,s.x,height))?height:current;
