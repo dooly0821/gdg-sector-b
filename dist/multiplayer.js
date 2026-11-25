@@ -155,9 +155,13 @@ export function interpolateCoopHaunt(s,dt,now=performance.now()){
   if(!a.netTarget)continue;
   const t=1-Math.exp(-dt*13);a.netSince=Math.min(.32,(a.netSince??0)+dt);
   const visual=a.netTrack?.samples?.length>1?remoteAt(a.netTrack,now):null;
-  const target=visual?[visual.x,visual.surfaceY??0,visual.z]:a.netTarget;
-  a.x+=(target[0]-a.x)*t;a.surfaceY+=(target[1]-a.surfaceY)*t;a.z+=(target[2]-a.z)*t;
-  const yaw=visual?.yaw??a.netYaw;a.yaw+=Math.atan2(Math.sin(yaw-a.yaw),Math.cos(yaw-a.yaw))*t;
+  // Do not add visual buffering to an imminent capture: near monsters stay
+  // close to their latest authoritative position. Blend the transition.
+  const distance=Math.hypot(finite(s.x)-a.netTarget[0],finite(s.z)-a.netTarget[2]),buffer=clamp((distance-4)/5,0,1);
+  const target=visual?[blend(a.netTarget[0],visual.x,buffer),blend(a.netTarget[1],visual.surfaceY??0,buffer),blend(a.netTarget[2],visual.z,buffer)]:a.netTarget;
+  const motion=1-Math.exp(-dt*(13+(1-buffer)*9));
+  a.x+=(target[0]-a.x)*motion;a.surfaceY+=(target[1]-a.surfaceY)*motion;a.z+=(target[2]-a.z)*motion;
+  const yaw=visual?a.netYaw+Math.atan2(Math.sin(visual.yaw-a.netYaw),Math.cos(visual.yaw-a.netYaw))*buffer:a.netYaw;a.yaw+=Math.atan2(Math.sin(yaw-a.yaw),Math.cos(yaw-a.yaw))*motion;
   a.speed=blend(finite(a.speed),finite(a.netSpeed),t);
   a.phase=blend(a.phase,a.netPhase+finite(a.netRate,1)*a.netSince,1-Math.exp(-dt*14));a.age=blend(a.age,a.netAgeBase+a.netSince,t);
   a.timer=Math.max(0,finite(a.netTimer)-a.netSince);

@@ -12,6 +12,7 @@ let track=null;
 for(let i=0;i<6;i++){const t=i*150,arrival=t+80+[0,30,-15,55,-20,10][i];track=appendRemote(track,{x:t*.007,z:0,y:0,yaw:0,vx:7,vz:0,grounded:true,steps:t*.007},t,arrival,10000+t);}
 let prior=0;
 for(let t=track.delay;t<850;t+=1000/60){const p=remoteAt(track,t,true);assert.ok(Number.isFinite(p.x)&&p.x>=prior-1e-6);assert.ok(p.x-prior<.14);prior=p.x;}
+const priorTime=track.renderTime;track.delay+=25;remoteAt(track,850,true);assert.ok(track.renderTime>=priorTime,'adaptive delay must not rewind motion');
 const last=track.samples.at(-1).pose;assert.ok(remoteAt(track,9999,true).x<=last.x+1.051);
 const staticBlocks=[[0,0,2,2,0,2]],dynamic=[[1,1,3,3,0,1]],index=indexBlocks(staticBlocks),merged=indexBlocks(dynamic,index);
 assert.equal(queryBlocks(index,0,0,4,4).length,1);assert.equal(queryBlocks(merged,0,0,4,4).length,2);

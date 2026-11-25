@@ -13,7 +13,7 @@ export function appendRemote(track,pose,sample,received,serverTime){
   const serverDelta=Number.isFinite(serverTime)&&Number.isFinite(last.serverTime)?serverTime-last.serverTime:time-last.time;
   const expected=last.time+clamp(serverDelta,1,800);
   time=Math.max(last.time+1,expected+clamp(time-expected,-12,12));
-  if(serverDelta<0||serverDelta>1600||Math.hypot(pose.x-last.pose.x,pose.z-last.pose.z)>12){a.length=0;}
+  if(serverDelta<0||serverDelta>1600||Math.hypot(pose.x-last.pose.x,pose.z-last.pose.z)>12){a.length=0;delete t.renderTime;}
  }
  a.push({time,received,serverTime,pose:{...pose}});
  while(a.length>12||a.length>2&&time-a[1].time>1500)a.shift();
@@ -21,7 +21,8 @@ export function appendRemote(track,pose,sample,received,serverTime){
 }
 export function remoteAt(track,now,extrapolate=false){
  const a=track?.samples;if(!a?.length)return null;
- const target=now-track.delay,first=a[0],last=a.at(-1);
+ const requested=now-track.delay,target=Math.max(requested,track.renderTime??requested),first=a[0],last=a.at(-1);
+ track.renderTime=target;
  if(target<=first.time)return {...first.pose};
  for(let i=1;i<a.length;i++){
   const b=a[i],p=a[i-1];if(target>b.time)continue;
