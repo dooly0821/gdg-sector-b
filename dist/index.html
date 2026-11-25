@@ -18,13 +18,15 @@
     <h1 class="menu-logo"><img src="assets/interface/wordmark.webp" alt="GDG — Graveyard Delivery Group"></h1>
     <img class="menu-tagline" src="assets/interface/tagline.webp" alt="초자연적 현상이 보고된 물류 구역에서 배송 임무를 수행하세요.">
     <nav class="menu-actions" aria-label="메인 메뉴">
-      <button class="art-button start-button" id="start" aria-label="게임 시작"><img src="assets/interface/start.webp" alt=""><img class="rays" src="assets/interface/rays.webp" alt=""><img class="stamp-pointer" src="assets/interface/pointer.webp" alt=""><span class="resume-label" hidden>이어서 근무</span></button>
+      <div class="mode-choices" aria-label="플레이 모드">
+        <button class="mode-button mode-single" id="start" aria-label="싱글플레이"><span class="mode-index">01 / SOLO SHIFT</span><span class="mode-name">싱글플레이</span><span class="mode-detail">1인 · 개인 배송 임무</span><svg aria-hidden="true"><use href="#i-play"/></svg><span class="resume-label" hidden>이어서 근무</span></button>
+        <button class="mode-button mode-coop" data-pane="coop" aria-label="멀티플레이"><span class="mode-index">02 / CO-OP SHIFT</span><span class="mode-name">멀티플레이</span><span class="mode-detail">온라인 2–4인 · 협동 배송</span><svg aria-hidden="true"><use href="#i-pad"/></svg></button>
+      </div>
       <button class="art-button" data-pane="manual" aria-label="조작 방법"><img src="assets/interface/manual.webp" alt=""></button>
       <button class="art-button" data-pane="settings" aria-label="설정"><img src="assets/interface/settings.webp" alt=""></button>
       <button class="art-button" data-pane="quit" aria-label="종료"><img src="assets/interface/quit.webp" alt=""></button>
     </nav>
   </div>
-  <button class="facility-link coop-link" data-pane="coop"><svg><use href="#i-pad"/></svg>협동 근무 · 2–4인</button>
   <button class="facility-link" data-pane="map"><svg><use href="#i-map"/></svg>구역 지도</button>
 </main>
 <section id="loading" hidden aria-label="Sector B 구역 진입">

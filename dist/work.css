@@ -25,3 +25,17 @@
 #coop-notice{min-height:1.5em;overflow-wrap:anywhere}
 #coop-team{position:absolute;right:22px;top:74px;color:#d7cdb3;background:#111713cc;border:1px solid #8c7c57;padding:6px 10px;font:600 11px/1.6 monospace;pointer-events:none;z-index:2}
 @media(max-width:640px){.facility-link.coop-link{bottom:65px}#coop-team{right:8px;top:61px;font-size:9px}}
+
+/* Competition entry: both modes are primary choices, independent of backend availability. */
+.mode-choices{display:grid;gap:calc(7 * var(--s));width:92%;margin-bottom:calc(6 * var(--s))}
+.mode-button{position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:calc(4 * var(--s));min-height:calc(104 * var(--s));padding:calc(12 * var(--s)) calc(21 * var(--s));border:1px solid #d2ac65;border-radius:2px;text-align:left;transition:transform .14s,filter .14s;background:#e9b948;color:#231b13;box-shadow:3px 3px 0 #0b0a09a0;cursor:pointer}
+.mode-button.mode-coop{background:linear-gradient(110deg,#302a20f5,#171a18f5);color:#edd3a3;border-color:#bfa16d}
+.mode-button:hover,.mode-button:focus-visible{transform:translateX(4px);filter:brightness(1.15);outline:2px dashed #ffe1a0;outline-offset:3px}
+.mode-button:disabled{opacity:.6;cursor:wait}
+.mode-index{font:800 clamp(8px,calc(13 * var(--s)),12px)/1.1 monospace;letter-spacing:.13em;opacity:.83}
+.mode-name{font:900 clamp(18px,calc(36 * var(--s)),34px)/1.13 sans-serif;letter-spacing:-.055em}
+.mode-detail{font:600 clamp(9px,calc(15 * var(--s)),13px)/1.2 sans-serif;opacity:.85}
+.mode-button svg{position:absolute;right:calc(19 * var(--s));top:50%;transform:translateY(-50%);width:calc(36 * var(--s));height:calc(36 * var(--s));fill:none;stroke:currentColor;stroke-width:1.7}
+.mode-button .resume-label{position:absolute;top:auto;bottom:calc(9 * var(--s));left:auto;right:calc(12 * var(--s));width:auto;background:none;padding:0;color:inherit;font:700 clamp(8px,calc(11 * var(--s)),10px)/1.1 sans-serif;transform:none}
+.mode-button:has(.resume-label:not([hidden])) svg{top:42%}
+.mode-button .resume-label[hidden]{display:none}

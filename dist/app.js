@@ -53,7 +53,7 @@ function coopLobby(){
   const isHost=snap.host===snap.you,roster=snap.players.map(p=>'<div class="row"><span>'+p.name+(p.id===snap.you?' · 나':'')+'</span><b>'+(p.id===snap.host?'방장':'입장')+'</b></div>').join('');
   panel('coop','<p>방 코드</p><div class="coop-code">'+snap.room+'</div><p>접속 작업자 '+snap.players.length+' / 4</p>'+roster+note+'<div class="panel-actions">'+action('coop-copy','초대 링크 복사')+(isHost?action('coop-start','협동 근무 시작',true):'')+action('coop-leave','방 나가기')+'</div>','협동 대기실','GDG / ONLINE SHIFT');
  }
- if($('#coop-notice'))$('#coop-notice').textContent=coopError||(snap?'방장만 시작 가능 · 최소 2명':'정식 서버 공유 저장소 연결이 필요할 수 있습니다.');
+ if($('#coop-notice'))$('#coop-notice').textContent=coopError||(snap?'방장만 시작 가능 · 최소 2명':'방 만들기 또는 참가를 선택하세요. 서버에 연결되지 않아도 싱글플레이는 이용할 수 있습니다.');
 }
 function coopMessage(e){coopError=e.message||String(e);if(pane==='coop'&&$('#coop-notice'))$('#coop-notice').textContent=coopError;else if(mode==='game')say(coopError,3);}
 async function coopConnect(op){
@@ -124,7 +124,7 @@ function toMenu(){
  $('#briefing').hidden=false;
  const continuing=!!session&&deliveryCount(session)<MISSION_TOTAL;
  $('#start .resume-label').hidden=!continuing;
- $('#start').setAttribute('aria-label',continuing?'이어서 근무':'게임 시작');
+ $('#start').setAttribute('aria-label',continuing?'싱글플레이 이어서 근무':'싱글플레이');
  $('#start').focus();audioOn();
 }
 function clockOut(){
