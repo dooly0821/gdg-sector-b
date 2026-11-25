@@ -1,3 +1,5 @@
+import {updateClimber} from './climber.js';
+import {DRESSING_HIDE} from './dressing.js';
 import {parcelBlocks} from './mission.js';
 import {closedLocker,lockerDoorBlocks,lockerEntry} from './lockers.js';
 import {HIDING_POINTS,REFUGES} from './annex.js';
@@ -202,6 +204,8 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
    return;
   }
   const hiding=closedLocker(s),entry=hiding?lockerEntry(hiding):null;
+  const climb=updateClimber(actor,s,nav,local,dt,!!hiding);
+  if(climb?.handled){if(climb.hit){actor.speed=0;captured=type.name;s.handAction=null;s.pendingUse=null;s.vault=null;s.jumpBuffer=0;s.vx=s.vz=s.vy=0;s.failed=true;s.capturedBy=i;}return;}
   const safe=s.grounded&&REFUGES.some(([x,y,z,r])=>Math.abs(s.y-y)<.09&&Math.hypot(s.x-x,s.z-z)<r);
   const pursuit=actor.pursuit??false,torchOn=(s.flashAmount??0)>.25;
   const detectRange=type.range*(s.bodyHeight<1.2&&!torchOn?.67:1);
@@ -303,7 +307,7 @@ export function updateHaunt(s,blocks,forward,dt,rng=Math.random){
    if(nearLast||actor.inspect){
     actor.checked??=[];
     if(!actor.inspect){
-     actor.inspect=HIDING_POINTS.filter(p=>!actor.checked.includes(p)&&Math.hypot(p[0]-actor.lastKnown[0],p[1]-actor.lastKnown[1])<7&&clear(blocks,p[0],p[1],sizes[i],type.float,bodyHeights[i])).sort((a,b)=>Math.hypot(a[0]-actor.x,a[1]-actor.z)-Math.hypot(b[0]-actor.x,b[1]-actor.z))[0]??null;
+     actor.inspect=[...HIDING_POINTS,...DRESSING_HIDE].filter(p=>!actor.checked.includes(p)&&Math.hypot(p[0]-actor.lastKnown[0],p[1]-actor.lastKnown[1])<7&&clear(blocks,p[0],p[1],sizes[i],type.float,bodyHeights[i])).sort((a,b)=>Math.hypot(a[0]-actor.x,a[1]-actor.z)-Math.hypot(b[0]-actor.x,b[1]-actor.z))[0]??null;
     }
     if(actor.inspect&&Math.hypot(actor.x-actor.inspect[0],actor.z-actor.inspect[1])<.85){actor.checked.push(actor.inspect);actor.state='inspect';actor.timer=.65+i*.13;}
     else if(!actor.inspect&&!actor.fakeDone&&(actor.lost??0)>2.1){
@@ -411,6 +415,7 @@ export function hauntLayers(s){
    [.23*Math.sin(a.phase*.97)+reach*.12,.16*Math.cos(a.phase*.67),.22*Math.sin(a.phase*.78)]
   ];
   if(['inspect','ambush','guard','lockerWait'].includes(a.state)){angles[1][1]+=.75*Math.sin(a.age*2.7);angles[1][2]+=.29*Math.cos(a.age*2.1);angles[0][0]+=.13;}
+  if(['climbUp','climbDown','climbTop','climbWindup'].includes(a.state)){const step=Math.sin(a.phase*1.5);angles[0][0]+=.30;angles[2][0]-=.75+step*.26;angles[3][0]-=.75-step*.26;angles[6][0]-=.18+Math.max(0,step)*.40;angles[7][0]-=.18+Math.max(0,-step)*.40;if(a.state==='climbWindup'){angles[0][0]+=.35;angles[2][0]-=.45;angles[3][0]-=.45;}}
   const reaction=a.lightReaction??0,reveal=a.reveal??0;
   if(reaction>0){angles[1][2]+=(i===0||i===3?.48:.25)*reaction*Math.sin(a.phase*2.3);angles[0][0]+=(i===0||i===3?-.20:.18)*reaction;angles[2][0]-=.20*reaction;}
   angles[1][1]+=.35*reveal*Math.sin(a.phase*2.1);angles[0][0]+=.15*reveal;

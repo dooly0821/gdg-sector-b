@@ -3,6 +3,7 @@ import {equipmentClearance} from './contact.js';
 import {vaultPose} from './hand-motion.js';
 import {updateHaunt,hauntLayers,SPAWN_BALANCE} from './haunt.js';
 import {HIDING_POINTS,REFUGES} from './annex.js';
+import {DRESSING,DRESSING_HIDE} from './dressing.js';
 import {LOCKERS,lockerDoorBlocks,lockerLayers,lockerTarget,useLocker,closedLocker,lockerPrompt} from './lockers.js';
 import {createScene,CONFIG,PARCELS,DOCK,newShift,step,forward,nextTarget,handlingTarget,dropTarget,canUse,parcelPositions,parcelBlocks,deliveryCount,shiftParcel,MISSION_TOTAL} from './mission.js';
 import {PHYSICS} from "./movement.js";
@@ -32,8 +33,9 @@ function plan(){
  for(const [x,z] of [[-37,65],[-22,74],[-7,65],[8,74]])shapes+=rect(x-1.35,z-1,2.7,2,'#55594f');
  for(const [x,z] of [[-32,68],[-2,68]])shapes+=rect(x-1.5,z-1.5,3,3,'#71988b');
  shapes+=label(-40,-5,'C-01 분류동')+label(-13,-18,'B 메인 창고')+label(-40,24,'D-03 반품동')+label(-13,24,'D-02 이송동')+label(-40,56,'C-02 폐기물 처리동')+label(-13,56,'D-04 격리실험동');
+ for(const {stairs:[x,z],rack:[rx,rz],stack:[sx,sz]} of DRESSING){shapes+=rect(x-1.2,z-2.95,2.4,5.6,'#887757')+rect(rx-1.71,rz-.86,3.42,1.72,'#55594f')+rect(sx-1.2,sz-1,2.5,2.4,'#55594f');}
  for(const {x,z} of LOCKERS)shapes+='<rect x="'+(X(x)-2.8)+'" y="'+(Y(z)-2.8)+'" width="5.6" height="5.6" fill="#d6b77d" stroke="#fff1cf" stroke-width=".6"/>';
- for(const [x,z] of HIDING_POINTS)shapes+='<rect x="'+(X(x)-2.3)+'" y="'+(Y(z)-2.3)+'" width="4.6" height="4.6" fill="#a9c6e0"/>';
+ for(const [x,z] of [...HIDING_POINTS,...DRESSING_HIDE])shapes+='<rect x="'+(X(x)-2.3)+'" y="'+(Y(z)-2.3)+'" width="4.6" height="4.6" fill="#a9c6e0"/>';
  for(const [x,y,z] of REFUGES)shapes+='<circle cx="'+X(x)+'" cy="'+Y(z)+'" r="3.1" fill="#79cda6" stroke="#c5ebd8" stroke-width=".6"/>';
  const lines=(session?.cargo??PARCELS).map((p,i)=>{if(session&&session.states[i]!=='AVAILABLE')return '';const pos=session?.parked?.[i]??p.pos;return '<circle cx="'+X(pos[0])+'" cy="'+Y(pos[2])+'" r="2" fill="#f3bd51"/>';}).join('');
  return '<svg class="map-drawing" viewBox="0 0 306 516" aria-label="GDG 시설 평면도">'+shapes+lines+'<rect x="'+(X(DOCK[0])-4)+'" y="'+(Y(DOCK[2])-2)+'" width="8" height="4" fill="#9bc8cf"/><circle cx="'+X(session?.x??1.7)+'" cy="'+Y(session?.z??15)+'" r="3" fill="#f1f1e2"/></svg><div class="map-key"><span>● 화물</span><span style="color:#9bc8cf">■ 출고대</span><span>● 작업자</span><span style="color:#a9c6e0">■ 은신처 입구</span><span style="color:#d6b77d">■ 철제 사물함</span><span style="color:#79cda6">● 높은 피신 지점</span></div>';
@@ -50,12 +52,12 @@ function openPane(name){
  '<h3>02 / 은신 방법</h3><article class="creature-guide"><h4>철제 사물함 <small>LOCKER / 6곳</small></h4><p>상자를 내려놓고 사물함 정면에서 E를 눌러 문을 엽니다. 너무 가까우면 뒤로 물러나 다시 E를 누르세요. 문이 완전히 열리면 W로 내부 중앙까지 들어간 뒤 E로 문을 닫습니다.</p><p>문이 닫히면 자동으로 문 쪽을 바라봅니다. 실제 가로 통풍구 사이로 귀신을 관찰할 수 있으며 마우스로 시점을 움직일 수 있습니다. Q로 손전등을 끄고 기다리세요. 귀신은 문 앞을 약 4.5~6.5초 조사하고 다른 통로로 떠납니다. 소등하지 않으면 더 오래 머물 수 있습니다. 충분히 멀어진 것을 확인하고 E로 문을 열어 W로 나가세요. 너무 빨리 열면 다시 추격당할 수 있습니다.</p></article><p><b>C를 누른 채 W A S D로 이동</b>하여 빈 선반 아래, 상자 뒤 또는 SERVICE / LOW CLEARANCE 표시가 붙은 낮은 은신처 안으로 들어가세요. C를 놓으면 머리 위 공간이 충분할 때 일어납니다. 낮은 은신처는 별도의 상호작용 키 없이 들어갑니다.</p>'+
  '<p>구조물이 귀신과 나 사이의 시야를 가리게 하고, Q로 손전등을 끄세요. 움직임을 멈추면 발소리를 줄일 수 있습니다. 달리기, 점프 착지, 상자 집기·내려놓기는 소음을 발생시킵니다. 앉아 있다고 무적이 되는 것은 아닙니다.</p>'+
  '<h3>03 / 추격 및 피신</h3><p>귀신은 마지막으로 본 위치와 소리를 기억합니다. 은신처 입구를 확인하고 떠나는 척 다시 돌아올 수도 있습니다. 발소리가 멀어졌다고 바로 뛰어나오지 마세요. 추격을 끊으려면 시야를 차단한 채 거리를 충분히 벌리거나 지정된 높은 피신 지점으로 이동하세요.</p>'+
- '<p>상자를 내려놓고 발판을 향해 W + SPACE로 연속 등반하세요. B-12 상층 선반과 C-02 폐기물 처리동, D-04 격리실험동의 ESCAPE DECK은 지정 피신 지점입니다. 해당 발판 중앙에 착지하면 일반 지상 추격을 끊을 수 있습니다. 모든 높은 물체가 안전한 것은 아닙니다.</p>'+
+ '<p>각 구역의 SERVICE PLATFORM은 실제 계단을 W로 걸어 올라갑니다. 아래쪽 공간이나 LOW ACCESS 선반은 C로 들어가 숨을 수 있습니다. 일반 적재물은 W + SPACE로 넘어가세요. 상층 피신 지점도 적재귀에게는 안전하지 않을 수 있습니다.</p><p>상자를 내려놓고 발판을 향해 W + SPACE로 연속 등반하세요. B-12 상층 선반과 C-02 폐기물 처리동, D-04 격리실험동의 ESCAPE DECK은 지정 피신 지점입니다. 해당 발판 중앙에 착지하면 일반 지상 추격을 끊을 수 있지만, 적재귀는 C-02와 D-04 발판의 계단을 따라 올라올 수 있습니다. 모든 높은 물체가 안전한 것은 아닙니다.</p>'+
  '<p>새 귀신은 '+SPAWN_BALANCE.minDistance+'~'+SPAWN_BALANCE.maxDistance+'m 거리의 가려진 위치에서 등장하며 '+SPAWN_BALANCE.grace+'초 동안 추격과 공격을 시작하지 않습니다. 관제실 경고와 방향성 위협음을 듣고 도주 경로를 확보하세요. 기존 귀신에게 붙잡히면 즉시 근무 실패입니다.</p>'+
  '<h3>04 / 개체별 생존 공략</h3>'+
  '<article class="creature-guide"><h4>녹령 <small>빛 회피형</small></h4><p>평상시 시야를 끊고 조용히 이동하세요. 발견되면 Q로 손전등을 켜 몸을 직접 비추면 물러납니다. 빛을 떼면 다시 추격하므로 그 사이 우회로 또는 높은 피신 지점으로 이동하세요. 빛만 켜 놓는 것은 방어가 아닙니다.</p></article>'+
  '<article class="creature-guide"><h4>함귀 <small>소음 추적형</small></h4><p>네 개체 중 소음 감도가 가장 높습니다. 가까이 있을 때 달리기와 상자 조작을 피하고 C로 천천히 이동하세요. 직접 비춘 빛에 더 빨라지므로 손전등을 끄고 구조물 뒤로 시야를 끊으세요. 한 번 숨었다고 안심하지 마세요.</p></article>'+
- '<article class="creature-guide"><h4>적재귀 <small>고속 돌진형</small></h4><p>기본 추격 속도가 가장 빠르고 공격 준비 거리도 깁니다. 정면에서 맞서거나 직선으로만 도망치지 말고 선반과 기둥을 돌아 거리를 벌리세요. 손전등은 오히려 자극합니다. 상자를 내려놓고 파쿠르를 통해 지정 피신 지점으로 이동하세요.</p></article>'+
+ '<article class="creature-guide"><h4>적재귀 <small>고속 돌진형</small></h4><p>기본 추격 속도가 가장 빠르고 공격 준비 거리도 깁니다. 정면에서 맞서거나 직선으로만 도망치지 말고 선반과 기둥을 돌아 거리를 벌리세요. 손전등은 오히려 자극합니다. 적재귀는 낮은 상자·작업 발판과 폐기물동·격리동의 ESCAPE DECK까지 느리게 따라 올라옵니다. 높은 곳은 시간을 버는 수단입니다. 올라오는 동안 반대편으로 내려가거나 철제 사물함에 숨으세요.</p></article>'+
  '<article class="creature-guide"><h4>표찰귀 <small>화물 반응형</small></h4><p>직접 비춘 손전등 빛으로 일시적으로 물러나게 할 수 있습니다. 표찰귀가 약 4m 이내에 있을 때 운반 중인 상자를 E로 정상적으로 내려놓으면 사라집니다. 배송 완료가 아닌 임시 적치이며, 내려놓을 공간이 필요합니다. 너무 가까워지기 전에 행동하세요. 격리동에서는 천장 이동 및 하강도 주의하세요.</p></article>'+
  '<h3>05 / 지도 및 이동 팁</h3><p>구역 지도의 파란 사각형은 낮은 은신처 입구, 금색 사각형은 철제 사물함, 초록 원은 지정 피신 지점입니다. ESC → 구역 지도로 확인할 수 있습니다. 마우스가 고정되지 않으면 왼쪽 버튼을 누른 채 드래그하거나 방향키로 시점을 돌리세요.</p></div>'+
  '<div class="panel-actions">'+action('map','구역 지도')+'</div>'+links,'조작 방법 및 공략','WORK 모드 / 근무자 생존 매뉴얼');
