@@ -11,9 +11,10 @@ async function redis(config,cmd){
 }
 const key=code=>'gdg:coop:v1:'+code;
 const release="if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('DEL',KEYS[1]) else return 0 end";
+const acquire="if not redis.call('SET',KEYS[1],ARGV[1],'NX','PX',ARGV[2]) then return {0} end; return {1,redis.call('GET',KEYS[2]) or ''}";
 const commit="if redis.call('GET',KEYS[1])~=ARGV[1] then return 0 end; redis.call('SET',KEYS[2],ARGV[2],'EX',ARGV[3]); redis.call('DEL',KEYS[1]); return 1";
 async function durable(config,body){
- const now=Date.now();
+ let now=Date.now();
  if(body.op==='list'){
   const values=await redis(config,['MGET',...PUBLIC_SERVERS.map(s=>key(s.id))]);
   return {servers:PUBLIC_SERVERS.map((s,i)=>publicStatus(s.id,values[i]?JSON.parse(values[i]):null,now))};
@@ -28,10 +29,12 @@ async function durable(config,body){
  if(!/^[A-Z2-9]{6}$/.test(code))throw new RoomError('6자리 방 코드를 입력하세요.');
  if(body.op==='enter'&&!publicServer(code))throw new RoomError('공개 서버를 찾을 수 없습니다.',404);
  const stateKey=key(code),lockKey=stateKey+':lock',token=randomBytes(16).toString('hex');
- if(!await redis(config,['SET',lockKey,token,'NX','PX',8000]))throw new RoomError('방 상태 동기화 중입니다. 다시 시도하세요.',423);
+ const locked=await redis(config,['EVAL',acquire,2,lockKey,stateKey,token,8000]);
+ if(!Array.isArray(locked)||Number(locked[0])!==1)throw new RoomError('방 상태 동기화 중입니다. 다시 시도하세요.',423);
  let committed=false;
  try{
-  const value=await redis(config,['GET',stateKey]);let room=value?JSON.parse(value):null,result;
+  const value=locked[1];let room=value?JSON.parse(value):null,result;
+  now=Math.max(Date.now(),room?.lastTick??0);
   if(body.op==='enter'){
    const status=publicStatus(code,room,now);
    if(!status.joinable)throw new RoomError(status.count>=4?'서버가 가득 찼습니다.':'이미 근무가 진행 중입니다.',409);

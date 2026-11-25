@@ -1,21 +1,29 @@
 import {basis} from './world.js';
+import {nudgeCoopPosition} from './movement.js';
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),finite=(v,d=0)=>Number.isFinite(v)?v:d,blend=(a,b,t)=>a+(b-a)*t;
 export class CoopClient{
  constructor(onState,onError,input){this.onState=onState;this.onError=onError;this.input=input;this.room=null;this.token=null;this.snapshot=null;this.seq=0;this.queue=[];this.running=false;this.busy=false;this.peers=new Map();}
  async request(op,extra={}){
+  const sent=performance.now();
   const res=await fetch('/api/room',{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify({op,room:this.room,token:this.token,...extra}),signal:AbortSignal.timeout(10000)});
   let data;try{data=await res.json();}catch{throw Error('협동 서버에 연결할 수 없습니다.');}
-  if(!res.ok){const e=new Error(data.error||'서버 연결 오류');e.status=res.status;throw e;}return data;
+  if(!res.ok){const e=new Error(data.error||'서버 연결 오류');e.status=res.status;throw e;}
+  const received=performance.now(),rtt=received-sent;
+  this.rtt=this.rtt==null?rtt:blend(this.rtt,rtt,.2);
+  if(data.snapshot){data.snapshot.netReceived=received;data.snapshot.netSample=received-Math.min(rtt*.5,500);data.snapshot.netRtt=rtt;}
+  return data;
  }
  accept(data){
   if(data.token)this.token=data.token;
   if(!data.snapshot)return;
+  if(this.snapshot?.room===data.snapshot.room&&Number.isFinite(data.snapshot.serverTime)&&data.snapshot.serverTime<(this.snapshot.serverTime??0))return;
   this.snapshot=data.snapshot;this.room=data.snapshot.room;
   this.queue=this.queue.filter(q=>q.seq>data.snapshot.ack);
   this.onState?.(data.snapshot);
  }
  async connect(op,room=null,nickname){
   if(this.running)return;
-  this.room=room;this.seq=0;this.queue=[];this.peers.clear();
+  this.room=room;this.seq=0;this.queue=[];this.peers.clear();this.rtt=null;this.contention=0;
   this.accept(await this.request(op,{nickname}));this.running=true;this.poll();
  }
  async action(op){
@@ -24,27 +32,33 @@ export class CoopClient{
   if(this.busy){this.pendingAction=op;return;}
   this.busy=true;try{const data=await this.request(op);if(this.running)this.accept(data);}catch(e){if(e.status===423)this.pendingAction=op;else this.onError?.(e);}finally{this.busy=false;}
  }
- command(type){if(this.running&&this.snapshot?.phase==='playing'&&this.queue.length<64)this.queue.push({seq:++this.seq,type});}
+ command(type){if(this.running&&this.snapshot?.phase==='playing'&&this.queue.length<64){this.queue.push({seq:++this.seq,type});if(!this.busy&&this.runPoll){clearTimeout(this.timer);this.timer=setTimeout(this.runPoll,0);}}}
  poll(){
   if(!this.running)return;
   const run=async()=>{
    if(!this.running)return;
+   let collided=false;
    if(!this.busy){
     this.busy=true;
     const pending=this.pendingAction;this.pendingAction=null;
     try{
      const input=this.input?.()??{keys:[],yaw:0,pitch:0};
      const data=await this.request(pending||'sync',pending?{}:{input,commands:this.queue.slice(0,16)});
-     if(this.running){this.accept(data);this.failures=0;}
+     if(this.running){this.accept(data);this.failures=0;this.contention=Math.max(0,(this.contention??0)-1);}
     }catch(e){
      if(this.running&&e.status!==423){this.failures=(this.failures??0)+1;if(this.failures>=3||e.status===401||e.status===404)this.onError?.(e);if(e.status===401||e.status===404){this.running=false;return;}}
-     else if(this.running&&pending)this.pendingAction=pending;
+     else if(this.running){collided=true;this.contention=Math.min(5,(this.contention??0)+1);if(pending)this.pendingAction=pending;}
     }finally{this.busy=false;}
    }
-   if(this.running)this.timer=setTimeout(run,this.snapshot?.phase==='playing'?150:850);
-  };this.timer=setTimeout(run,100);
+   if(this.running){
+    const playing=this.snapshot?.phase==='playing',players=this.snapshot?.players?.length??2;
+    const normal=clamp(35+finite(this.rtt,120)*.25+Math.max(0,players-2)*15,55,155);
+    const delay=collided?Math.min(220,45+20*this.contention)+Math.random()*65:playing?(this.queue.length?Math.min(45,normal):normal)+Math.random()*28:850+Math.random()*80;
+    this.timer=setTimeout(run,delay);
+   }
+  };this.runPoll=run;this.timer=setTimeout(run,70+Math.random()*70);
  }
- async leave(){const room=this.room,token=this.token;this.running=false;clearTimeout(this.timer);this.room=this.token=null;this.snapshot=null;this.pendingAction=null;this.peers.clear();try{if(room&&token)await this.request('leave',{room,token});}catch{}}
+ async leave(){const room=this.room,token=this.token;this.running=false;clearTimeout(this.timer);this.room=this.token=null;this.snapshot=null;this.pendingAction=null;this.runPoll=null;this.peers.clear();try{if(room&&token)await this.request('leave',{room,token});}catch{}}
 }
 export function peerLayers(client,s,dt,group){
  if(!client?.snapshot)return [];
@@ -54,9 +68,14 @@ export function peerLayers(client,s,dt,group){
   if(Math.hypot(p.x-s.x,p.z-s.z)>35)continue;
   seen.add(p.id);let old=client.peers.get(p.id);
   if(!old||Math.hypot(old.x-p.x,old.z-p.z)>4){old={...p};client.peers.set(p.id,old);}
-  const alpha=1-Math.exp(-dt*13);for(const k of ['x','y','z','bodyHeight','steps'])old[k]+=(p[k]-old[k])*alpha;
+  const alpha=1-Math.exp(-dt*12),age=clamp((performance.now()-finite(client.snapshot.netSample,performance.now()))/1000,0,.14),ahead=p.grounded!==false&&!p.vault?age:0;
+  for(const [k,v] of [['x','vx'],['z','vz']])old[k]+=(p[k]+finite(p[v])*ahead-old[k])*alpha;
+  for(const k of ['y','bodyHeight'])old[k]+=(p[k]-old[k])*alpha;
+  const targetSpeed=Math.hypot(finite(p.vx),finite(p.vz));
+  old.visualSpeed=blend(finite(old.visualSpeed,targetSpeed),targetSpeed,alpha);
+  old.steps=blend(old.steps+old.visualSpeed*dt,p.steps+targetSpeed*ahead,1-Math.exp(-dt*7));
   old.yaw+=Math.atan2(Math.sin(p.yaw-old.yaw),Math.cos(p.yaw-old.yaw))*alpha;
-  const speed=Math.hypot(p.vx??0,p.vz??0),bob=Math.sin(old.steps*10)*Math.min(.035,speed*.008),sy=Math.max(.61,Math.min(1,old.bodyHeight/1.7));
+  const speed=old.visualSpeed,bob=Math.sin(old.steps*10)*Math.min(.035,speed*.008),sy=Math.max(.61,Math.min(1,old.bodyHeight/1.7));
   const axes=basis(Math.sin(old.steps*5)*Math.min(.06,speed*.01),Math.PI+old.yaw,0);
   const matrix=new Float32Array([...axes.flatMap((a,i)=>[...a.map(v=>v*(i===1?sy:1)),0]),old.x,old.y+bob,old.z,1]);
   layers.push({group,matrix,root:[old.x,old.y+1,old.z],skinName:'player',skin:{name:'player',root:matrix,floor:p.grounded!==false&&!p.vault?old.y:null,state:{speed,steps:old.steps,bodyHeight:old.bodyHeight,carried:p.carried??-1,vault:!!p.vault}}});
@@ -66,23 +85,74 @@ export function peerLayers(client,s,dt,group){
  for(const id of client.peers.keys())if(!seen.has(id))client.peers.delete(id);
  return layers;
 }
+// Reconcile against the pose at the estimated server sample time.
+export function recordCoopPrediction(s,now){
+ const h=s.netHistory??=[];h.push({t:now,x:s.x,y:s.y,z:s.z,cx:s.netAppliedX??0,cz:s.netAppliedZ??0});
+ while(h.length>180||h.length>1&&h[1].t<now-1800)h.shift();
+}
+function historyAt(s,time){
+ const h=s.netHistory??[];if(!h.length)return null;
+ if(time<=h[0].t)return time<h[0].t-120?null:h[0];
+ for(let i=1;i<h.length;i++)if(h[i].t>=time){const a=h[i-1],b=h[i],u=clamp((time-a.t)/Math.max(1,b.t-a.t),0,1);return Object.fromEntries(['x','y','z','cx','cz'].map(k=>[k,blend(a[k],b[k],u)]));}
+ return h[h.length-1];
+}
 export function applyCoopSnapshot(s,snap,first=false){
- if(!s||!snap)return;
- const v=snap.self,oldHidden=s.coopHidden;
- const me=snap.players.find(p=>p.id===snap.you);
- const hidden=!!me?.hidden;
- // Locally predict normal walking. Correct larger differences and all
- // transitions (climbing, hiding, death) using the authoritative snapshot.
- const err=Math.hypot(s.x-v.x,s.z-v.z),vertical=Math.abs(s.y-v.y);
- const hard=first||err>1.15||vertical>.38||hidden!==oldHidden||v.failed;
- if(hard){for(const k of ['x','y','z','vx','vy','vz','grounded','bodyHeight','steps','vault'])s[k]=v[k]??(k==='vault'?null:s[k]);}
- else {s.x+=(v.x-s.x)*.15;s.z+=(v.z-s.z)*.15;s.y+=(v.y-s.y)*.15;}
- if(first){s.yaw=v.yaw;s.pitch=v.pitch;}else if(hidden&&!oldHidden){s.yaw=0;s.pitch=0;}
+ if(!s||!snap?.self)return;
+ const v=snap.self,hidden=!!snap.players.find(p=>p.id===snap.you)?.hidden,oldHidden=!!s.coopHidden;
+ const now=finite(snap.netReceived,performance.now()),sampleAt=finite(snap.netSample,now);
+ const history=historyAt(s,sampleAt),age=clamp((now-sampleAt)/1000,0,.18);
+ const dx=history?v.x-history.x-((s.netAppliedX??0)-history.cx):v.x+finite(v.vx)*age-s.x;
+ const dz=history?v.z-history.z-((s.netAppliedZ??0)-history.cz):v.z+finite(v.vz)*age-s.z;
+ const err=Math.hypot(dx,dz),vertical=Math.abs(s.y-v.y);
+ const verticalConflict=s.grounded&&v.grounded&&vertical>.40;
+ const mismatch=!!s.grounded!==!!v.grounded||!!s.vault!==!!v.vault;
+ s.netMismatchAt=mismatch?(s.netMismatchAt??now):null;
+ const hard=first||hidden!==oldHidden||v.failed||err>3.25||verticalConflict||mismatch&&now-s.netMismatchAt>1000&&vertical>.45;
+ if(hard){
+  for(const k of ['x','y','z','vx','vy','vz','grounded','bodyHeight','steps','vault'])s[k]=v[k]??(k==='vault'?null:s[k]);
+  s.netHistory=[];s.netAppliedX=s.netAppliedZ=0;s.netCorrection=[0,0];s.netMismatchAt=null;
+ }else if(!s.vault&&!v.vault&&s.grounded&&v.grounded&&!hidden){
+  const dead=.07+Math.min(.12,finite(snap.netRtt)*.00025),amount=Math.max(0,err-dead),weight=err>0?Math.min(1.8,amount)/err:0;
+  s.netCorrection=[dx*weight,dz*weight];
+ }else s.netCorrection=[0,0];
+ s.netGrounded=!!v.grounded&&!v.vault;
+ if(first){s.yaw=v.yaw;s.pitch=v.pitch;s.coopVisualClock=snap.elapsed??0;}else if(hidden&&!oldHidden){s.yaw=0;s.pitch=0;}
  for(const k of ['cargo','states','parked','deliveryOrder','lockers','lockerRevision','elapsed'])s[k]=snap[k];
+ const prevAction=s.handAction;
  for(const k of ['carried','flashlight','handAction','failed','capturedBy','noise','horrorEvent'])s[k]=v[k]??(k==='carried'?-1:k==='flashlight'||k==='failed'?false:null);
+ if(s.handAction&&prevAction&&s.handAction.index===prevAction.index&&s.handAction.placing===prevAction.placing)
+  s.handAction={...s.handAction,time:Math.max(s.handAction.time,prevAction.time)};
  if(first)s.flashAmount=v.flashAmount??0;
  s.skipLockerAdvance=true;s.coopHidden=hidden;
- // Keep rendered ghosts continuous between authoritative network snapshots.
- s.haunt=snap.haunt.map(a=>{const old=s.haunt?.find(p=>p.kind===a.kind);if(!old||Math.hypot(old.x-a.x,old.z-a.z)>5)return {...a};return {...a,x:old.x,z:old.z,surfaceY:old.surfaceY??0,netTarget:[a.x,a.surfaceY??0,a.z],netYaw:a.yaw,yaw:old.yaw};});
+ s.haunt=(snap.haunt??[]).map(a=>{
+  const old=s.haunt?.find(p=>p.kind===a.kind),elapsed=snap.elapsed??0;
+  const fresh=!old||Math.hypot(old.x-a.x,old.z-a.z)>5||a.age+.15<(old.netAgeBase??old.age);
+  const interval=elapsed-(old?.netElapsed??elapsed),rate=!fresh&&interval>.001?clamp((a.phase-(old.netPhase??old.phase))/interval,0,45):1+finite(a.speed)*(a.kind===2?5.3:2.4);
+  return {...a,...(fresh?{}:{x:old.x,z:old.z,surfaceY:old.surfaceY??0,yaw:old.yaw,phase:old.phase,age:old.age,speed:old.speed}),
+   surfaceY:fresh?(a.surfaceY??0):(old.surfaceY??0),netTarget:[a.x,a.surfaceY??0,a.z],netYaw:a.yaw,netPhase:a.phase,netAgeBase:a.age,netElapsed:elapsed,netSince:0,netRate:rate,netSpeed:a.speed,netTimer:a.timer};
+ });
 }
-export function interpolateCoopHaunt(s,dt){for(const a of s.haunt??[]){if(!a.netTarget)continue;const t=1-Math.exp(-dt*14);a.x+=(a.netTarget[0]-a.x)*t;a.surfaceY+= (a.netTarget[1]-a.surfaceY)*t;a.z+=(a.netTarget[2]-a.z)*t;a.yaw+=Math.atan2(Math.sin(a.netYaw-a.yaw),Math.cos(a.netYaw-a.yaw))*t;}}
+export function advanceCoopPrediction(s,blocks,dynamic,dt,now){
+ if(!s.coopHidden&&s.grounded&&s.netGrounded&&!s.vault&&s.netCorrection){
+  const [dx,dz]=s.netCorrection,len=Math.hypot(dx,dz),limit=Math.min(1-Math.exp(-dt*7),len>0?1.65*dt/len:0),x=s.x,z=s.z;
+  nudgeCoopPosition(s,blocks,dx*limit,dz*limit,dynamic);
+  const mx=s.x-x,mz=s.z-z;s.netAppliedX=(s.netAppliedX??0)+mx;s.netAppliedZ=(s.netAppliedZ??0)+mz;
+  s.netCorrection=[dx-mx,dz-mz];
+  if(len<.008||Math.hypot(mx,mz)<.0001&&len>.008)s.netCorrection=[0,0];
+ }
+ s.coopVisualClock=(s.coopVisualClock??s.elapsed??0)+dt;
+ const a=s.handAction;
+ if(a){const contact=a.duration*(a.placing?.72:.30),limit=a.result?a.duration-.001:Math.max(a.time,contact-.001);a.time=Math.min(limit,a.time+dt);}
+ recordCoopPrediction(s,now);
+}
+export function interpolateCoopHaunt(s,dt){
+ for(const a of s.haunt??[]){
+  if(!a.netTarget)continue;
+  const t=1-Math.exp(-dt*13);a.netSince=Math.min(.32,(a.netSince??0)+dt);
+  a.x+=(a.netTarget[0]-a.x)*t;a.surfaceY+=(a.netTarget[1]-a.surfaceY)*t;a.z+=(a.netTarget[2]-a.z)*t;
+  a.yaw+=Math.atan2(Math.sin(a.netYaw-a.yaw),Math.cos(a.netYaw-a.yaw))*t;
+  a.speed=blend(finite(a.speed),finite(a.netSpeed),t);
+  a.phase=blend(a.phase,a.netPhase+finite(a.netRate,1)*a.netSince,1-Math.exp(-dt*14));a.age=blend(a.age,a.netAgeBase+a.netSince,t);
+  a.timer=Math.max(0,finite(a.netTimer)-a.netSince);
+ }
+}

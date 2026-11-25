@@ -234,3 +234,11 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
  if(s.vy<=0&&(next<=floor+.003||(wasGrounded&&old-floor<=P.groundSnap&&old>=floor))){s.y=floor;s.vy=0;s.grounded=true;}else{s.y=next;s.grounded=false;}
  s.elapsed+=dt;
 }
+
+// Apply small network corrections without changing input velocity or crossing walls.
+export function nudgeCoopPosition(s,staticBlocks,dx,dz,dynamic=[]){
+ if(!Number.isFinite(dx)||!Number.isFinite(dz)||s.vault)return;
+ const blocks=[...nearbyBlocks(staticBlocks,s.x,s.z),...dynamic,...bounds],n=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.025));
+ const clear=(x,z)=>!blocks.some(b=>overlaps(s.y,b,z,x,s.bodyHeight??P.height)&&contact(x,z,b,P.radius));
+ for(let i=0;i<n;i++){const x=s.x+dx/n,z=s.z+dz/n;if(clear(x,z)){s.x=x;s.z=z;}else{if(clear(x,s.z))s.x=x;if(clear(s.x,z))s.z=z;}}
+}

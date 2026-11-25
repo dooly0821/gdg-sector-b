@@ -51,20 +51,22 @@ export function decodeGLB(data){
 }
 function footSamples(asset){
  if(!asset.rig.footed)return [];
- const {positions,joints,weights}=asset,out=[],seen=new Set();
+ const {positions,joints,weights}=asset,cells=new Map();
  for(let i=0;i<positions.length/3;i++){
   const p=Array.from(positions.subarray(i*3,i*3+3));
   if(p[1]>.065)continue;
-  const k=p.map(v=>Math.round(v*55)).join(':');if(seen.has(k))continue;seen.add(k);
-  out.push({p,j:Array.from(joints.subarray(i*4,i*4+4)),w:Array.from(weights.subarray(i*4,i*4+4))});
+  const k=[Math.floor(p[0]*16),Math.floor(p[2]*16)].join(':');if(cells.has(k)&&cells.get(k).p[1]<=p[1])continue;
+  cells.set(k,{p,j:Array.from(joints.subarray(i*4,i*4+4)),w:Array.from(weights.subarray(i*4,i*4+4))});
  }
- return out;
+ return [...cells.values()];
 }
 function groundRoot(matrix,bones,samples,floor){
  if(!samples.length||!Number.isFinite(floor))return matrix;
  let lo=Infinity;
- for(const {p,j,w} of samples){let xyz=[0,0,0];for(let k=0;k<4;k++){if(!w[k])continue;const m=bones.subarray(j[k]*16,j[k]*16+16);for(let i=0;i<3;i++)xyz[i]+=w[k]*(m[i]*p[0]+m[4+i]*p[1]+m[8+i]*p[2]+m[12+i]);}
-  lo=Math.min(lo,matrix[1]*xyz[0]+matrix[5]*xyz[1]+matrix[9]*xyz[2]);
+ for(const {p,j,w} of samples){let height=0;for(let k=0;k<4;k++){if(!w[k])continue;const o=j[k]*16;
+  const x=bones[o]*p[0]+bones[o+4]*p[1]+bones[o+8]*p[2]+bones[o+12],y=bones[o+1]*p[0]+bones[o+5]*p[1]+bones[o+9]*p[2]+bones[o+13],z=bones[o+2]*p[0]+bones[o+6]*p[1]+bones[o+10]*p[2]+bones[o+14];
+  height+=w[k]*(matrix[1]*x+matrix[5]*y+matrix[9]*z);
+ }lo=Math.min(lo,height);
  }
  const root=new Float32Array(matrix);
  root[13]=floor-clamp(lo,-.28,.28);return root;

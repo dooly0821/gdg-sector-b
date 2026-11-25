@@ -1,7 +1,7 @@
 import {sectorName,clock,telemetry,progressBar,decorateManual,updateHud} from './ui-art.js';
 import {normalizeNickname,escapeNickname} from './nickname.js';
 import {PUBLIC_SERVERS,serverName} from './public-servers.js';
-import {CoopClient,peerLayers,applyCoopSnapshot,interpolateCoopHaunt} from './multiplayer.js';
+import {CoopClient,peerLayers,applyCoopSnapshot,interpolateCoopHaunt,advanceCoopPrediction} from './multiplayer.js';
 import {drawTraversalDebug} from './traversal-debug.js';
 import {equipmentClearance} from './contact.js';
 import {vaultPose} from './hand-motion.js';
@@ -294,7 +294,9 @@ function targetCorners(pos,dock){
 }
 function frame(now){if(mode!=='game')return;const dt=Math.min(.067,Math.max(0,(now-last)/1000));last=now;const s=session;
  if(keys.has('ArrowLeft'))s.yaw+=dt*1.65;if(keys.has('ArrowRight'))s.yaw-=dt*1.65;if(keys.has('ArrowUp'))s.pitch=Math.min(CONFIG.pitchLimit,s.pitch+dt);if(keys.has('ArrowDown'))s.pitch=Math.max(-CONFIG.pitchLimit,s.pitch-dt);
- const was=s.steps;const tick=1/PHYSICS.hz;if(coopStarting&&coop?.snapshot?.phase!=='playing'){accumulator=0;s.vx=s.vz=s.vy=0;}else if(s.encounterHit){keys.clear();jump=false;s.vx=s.vz=s.vy=0;accumulator=0;}else accumulator+=dt;while(accumulator>=tick){step(s,keys,worlds[0].blocks,tick,jump);jump=false;accumulator-=tick;}const interactionBlocks=worlds[0].blocks.concat(lockerDoorBlocks(s));equipmentClearance(s,worlds[0].blocks,dt,parcelBlocks(s).concat(lockerDoorBlocks(s)));
+ const was=s.steps;const tick=1/(coopStarting?60:PHYSICS.hz);if(coopStarting&&coop?.snapshot?.phase!=='playing'){accumulator=0;s.vx=s.vz=s.vy=0;}else if(s.encounterHit){keys.clear();jump=false;s.vx=s.vz=s.vy=0;accumulator=0;}else accumulator+=dt;while(accumulator>=tick){step(s,keys,worlds[0].blocks,tick,jump);jump=false;accumulator-=tick;}const doors=lockerDoorBlocks(s),dynamic=parcelBlocks(s).concat(doors);const interactionBlocks=worlds[0].blocks.concat(doors);
+ if(coopStarting&&coop?.snapshot?.phase==='playing')advanceCoopPrediction(s,worlds[0].blocks,dynamic,dt,now);
+ equipmentClearance(s,worlds[0].blocks,dt,dynamic);
  if(s.lockerLook){const a=s.lockerLook;a.t=Math.min(1,a.t+dt/.44);const t=a.t*a.t*(3-2*a.t);s.yaw=a.yaw+Math.atan2(Math.sin(-a.yaw),Math.cos(-a.yaw))*t;s.pitch=a.pitch*(1-t);if(a.t>=1)s.lockerLook=null;}updateViewmodel(s,dt);
  if(s.pendingUse&&s.flashAmount===0){const target=s.pendingUse;s.pendingUse=null;use(target.drop?dropTarget(s,interactionBlocks):target,true);if(!s.handAction&&s.restoreTorch){s.flashlight=true;s.restoreTorch=false;}}
  if(s.grounded&&Math.floor(s.steps/1.12)>Math.floor(was/1.12))beep(95,.08,'sine',.04);
@@ -329,12 +331,13 @@ function frame(now){if(mode!=='game')return;const dt=Math.min(.067,Math.max(0,(n
  s.viewHeight=eyeHeight<(s.viewHeight??eyeHeight)?eyeHeight:(s.viewHeight??eyeHeight)+(eyeHeight-(s.viewHeight??eyeHeight))*(1-Math.exp(-dt*19));
  const eye=[s.x,s.y+s.viewHeight+bob-.040*brace-(s.landKick??0)*.8,s.z];
  const view=brace?forward({...s,pitch:s.pitch-.070*reach}):facing;
- const pose=choreography(s,eye,available,moving,keys.has('ShiftLeft')||keys.has('ShiftRight'),s.elapsed,view);
- pose.actors=[...hauntLayers(s),...lockerLayers(s,LOCKER_DOOR_GROUP),...(hiddenLocker?[]:workerLegLayers(s)),...peerLayers(coop,s,dt,TEAM_WORKER_GROUP)];pose.clock=s.elapsed;
+ const visualTime=coopStarting?(s.coopVisualClock??s.elapsed):s.elapsed;
+ const pose=choreography(s,eye,available,moving,keys.has('ShiftLeft')||keys.has('ShiftRight'),visualTime,view);
+ pose.actors=[...hauntLayers(s),...lockerLayers(s,LOCKER_DOOR_GROUP),...(hiddenLocker?[]:workerLegLayers(s)),...peerLayers(coop,s,dt,TEAM_WORKER_GROUP)];pose.clock=visualTime;
  if(hiddenLocker){pose.hands=[];if(Math.floor(s.elapsed*1.6)>Math.floor((s.elapsed-dt)*1.6)&&s.haunt.some(a=>Math.hypot(a.x-s.x,a.z-s.z)<8))beep(43,.15,'sine',.055);}
  // Hysteresis: lower render resolution only after sustained slow frames.
  if(dt>.025){s.slowFrames=(s.slowFrames??0)+1;s.fastFrames=0;}else if(dt<.018){s.fastFrames=(s.fastFrames??0)+1;s.slowFrames=0;}else{s.slowFrames=0;s.fastFrames=0;}
- if((s.slowFrames??0)>=10){s.adaptiveScale=Math.max(.65,(s.adaptiveScale??1)-.10);s.slowFrames=0;}
+ if((s.slowFrames??0)>=(coopStarting?5:10)){s.adaptiveScale=Math.max(coopStarting?.50:.65,(s.adaptiveScale??1)-.10);s.slowFrames=0;}
  if((s.fastFrames??0)>=180){s.adaptiveScale=Math.min(1,(s.adaptiveScale??1)+.05);s.fastFrames=0;}
  renderer.render(eye,view,parcelPositions(s,pose.hidden),pose,settings.scale*(s.adaptiveScale??1));
  if(s.showTraversal||document.querySelector('#traversal-debug'))drawTraversalDebug(s,worlds[0].blocks,renderer,pose,eye,view);
@@ -359,7 +362,8 @@ function frame(now){if(mode!=='game')return;const dt=Math.min(.067,Math.max(0,(n
  $('#taskLine').textContent=target?(target.dock?shiftParcel(s,s.carried).id+' → 02번 출고대':target.id+' · '+areaNames[target.area]):'전체 배송 완료';
  const directions=['N','NE','E','SE','S','SW','W','NW'];const bearing=((Math.round(-s.yaw*180/Math.PI)%360)+360)%360;
  $('#heading').textContent=directions[Math.round(bearing/45)%8]+'  '+String(bearing).padStart(3,'0')+'°';
- updateHud(s,!!hiddenLocker,deliveryCount(s),MISSION_TOTAL,plan,now,settings.hints);
+ if(!coopStarting||now-(s.lastCoopHud??-1000)>=80){s.lastCoopHud=now;updateHud(s,!!hiddenLocker,deliveryCount(s),MISSION_TOTAL,plan,now,settings.hints);}
+ if(coopStarting){s.netFrameMs=(s.netFrameMs??dt*1000)*.94+dt*1000*.06;if(now-(s.lastNetInfo??-1000)>600){s.lastNetInfo=now;const team=$('#coop-team');if(team)team.title='FPS '+Math.round(1000/Math.max(1,s.netFrameMs))+' · 서버 응답 '+Math.round(coop?.rtt??0)+' ms';}}
  if(now>radioUntil)$('#radio').textContent='';if(now>receiptUntil)$('#receipt').hidden=true;
  if(!coopStarting&&finishAt!==null&&s.elapsed>=finishAt){finishAt=null;complete();return;}
  raf=requestAnimationFrame(frame);

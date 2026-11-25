@@ -77,6 +77,7 @@ function command(room,p,cmd){
  syncShared(room,p);detach(p);
 }
 export function tickRoom(room,now=Date.now()){
+ now=Math.max(now,room.lastTick??now);
  prune(room,now);canStart(room,now);
  const delta=Math.min(.40,Math.max(0,(now-room.lastTick)/1000));room.lastTick=now;
  if(room.phase!=='playing'||!delta)return;
@@ -113,7 +114,7 @@ function ghostPublic(a){return Object.fromEntries(ghostFields.filter(k=>a[k]!==u
 function selfState(room,p){const s=attach(room,p),out={};for(const k of ['x','y','z','yaw','pitch','vx','vy','vz','grounded','bodyHeight','steps','carried','flashlight','flashAmount','handAction','vault','failed','capturedBy','noise','horrorEvent'])if(s[k]!==undefined)out[k]=s[k];detach(p);return out;}
 export function snapshot(room,p){
  const q=room.shared;const players=Object.values(room.players).map(a=>{attach(room,a);const pub=publicPlayer(a);detach(a);return pub;});
- return {room:room.code,phase:room.phase,host:room.host,you:p.id,ack:p.commandSeq,players,self:selfState(room,p),cargo:q.cargo,states:q.states,parked:q.parked,deliveryOrder:q.deliveryOrder,lockers:q.lockers,lockerRevision:q.lockerRevision,elapsed:q.elapsed,haunt:q.haunt.map(ghostPublic),events:room.events,difficulty:teamDifficulty(Math.max(1,live(room).length))};
+ return {room:room.code,phase:room.phase,serverTime:room.lastTick,host:room.host,you:p.id,ack:p.commandSeq,players,self:selfState(room,p),cargo:q.cargo,states:q.states,parked:q.parked,deliveryOrder:q.deliveryOrder,lockers:q.lockers,lockerRevision:q.lockerRevision,elapsed:q.elapsed,haunt:q.haunt.map(ghostPublic),events:room.events,difficulty:teamDifficulty(Math.max(1,live(room).length))};
 }
 export function operateRoom(room,body,now=Date.now()){
  check(room&&room.phase!=='closed','방을 찾을 수 없습니다.',404);
@@ -123,7 +124,7 @@ export function operateRoom(room,body,now=Date.now()){
   const p=addPlayer(room,now,body.nickname);room.updatedAt=now;return {token:p.token,snapshot:snapshot(room,p)};
  }
  const p=Object.values(room.players).find(p=>p.token===body.token);check(p,'방 연결이 만료되었습니다.',401);
- p.lastSeen=now;tickRoom(room,now);room.updatedAt=now;
+ now=Math.max(now,room.lastTick??now);p.lastSeen=now;tickRoom(room,now);room.updatedAt=now;
  if(op==='leave'){removePlayer(room,p);return {left:true};}
  if(op==='start'){check(p.id===room.host,'방장만 근무를 시작할 수 있습니다.',403);check(room.phase==='lobby','이미 근무 준비 중입니다.',409);check(Object.keys(room.players).length>=2,'최소 2명이 입장해야 합니다.',409);room.phase='loading';room.lastTick=now;}
  else if(op==='ready'){check(['loading','playing'].includes(room.phase),'아직 근무를 시작하지 않았습니다.',409);p.ready=true;canStart(room,now);}
