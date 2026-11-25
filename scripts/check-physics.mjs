@@ -53,22 +53,22 @@ function crossing(name,position,passed,{keys=w,landing,props=blocks}={}){
  assert.equal(s.carried,position.carried??-1);
  console.log('PASS vault:',name);
 }
-crossing('C-01 rail head-on',annex,s=>s.z>7.46,{landing:0});
-crossing('rail at contact', {...annex,z:6.859},s=>s.z>7.46,{landing:0});
+crossing('C-01 rail head-on',annex,s=>s.z>7.46,{keys:sprint,landing:0});
+crossing('rail at contact', {...annex,z:6.859},s=>s.z>7.46,{keys:sprint,landing:0});
 crossing('diagonal sprint',{...annex,z:6.4,yaw:Math.PI*1.25,vx:4.8,vz:4.8},s=>s.z>7.46&&s.x>-33,{keys:sprint,landing:0});
-crossing('warehouse upper rail',deck,s=>s.x<10.78,{landing:0});
-crossing('warehouse ramp rail',ramp,s=>s.x<11.35,{landing:0});
-crossing('ascending diagonal on ramp',{...ramp,yaw:Math.PI/4,vx:-3,vz:-3},s=>s.x<11.35&&s.z<11,{landing:0});
+crossing('warehouse upper rail',deck,s=>s.x<10.78,{keys:sprint,landing:0});
+crossing('warehouse ramp rail',ramp,s=>s.x<11.35,{keys:sprint,landing:0});
+crossing('ascending diagonal on ramp',{...ramp,yaw:Math.PI/4,vx:-3,vz:-3},s=>s.x<11.35&&s.z<11,{keys:sprint,landing:0});
 crossing('low cargo',{x:-21,y:0,z:11.38,yaw:0,vz:-P.walk},s=>s.z<10.28,{landing:.72});
 crossing('warehouse pallet top',{x:9.19,y:0,z:-14.72,yaw:Math.PI},s=>s.z>-14,{landing:1.0295});
-crossing('flashlight',{...annex,flashlight:true,flashAmount:1},s=>s.z>7.46);
-crossing('one-hand box and flashlight',{...annex,carried:0,flashlight:true,flashAmount:1},s=>s.z>7.46);
+crossing('flashlight',{...annex,flashlight:true,flashAmount:1},s=>s.z>7.46,{keys:sprint});
+crossing('one-hand box and flashlight',{...annex,carried:0,flashlight:true,flashAmount:1},s=>s.z>7.46,{keys:sprint});
 
 const fixture={x:0,y:0,z:1,yaw:0};
 const rail=[-2,-.04,2,.04,0,1.22,'rail'];
 function blocked(name,position,props,minZ){
  const s=Object.assign(newShift(),position);
- step(s,w,props,dt,true);
+ step(s,sprint,props,dt,true);
  assert.ok(!s.vault,name+' refuses to vault');
  for(let i=0;i<180;i++)step(s,w,props,dt);
  assert.ok(s.z>=minZ,name+' never crosses');

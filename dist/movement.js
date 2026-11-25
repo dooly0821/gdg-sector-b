@@ -16,7 +16,7 @@ function heightSpan(b,x,z){
  const dx=x-clamp(x,b[0],b[2]);
  return Math.sqrt(Math.max(0,P.radius*P.radius-dx*dx));
 }
-function railTop(b,x,z){return blockHeight(b,z-(b[7]?heightSpan(b,x,z):0),1);}
+function railTop(b,x,z){const span=b[7]?heightSpan(b,x,z):0;return Math.max(blockHeight(b,z-span,1),blockHeight(b,z+span,1));}
 function railSupport(b,x,z){return b[6]==='rail'&&contact(x,z,b,.105);}
 function overlaps(y,b,z,x,height=P.height){
  if(!b[7])return y<b[5]-.012&&y+height>b[4]+.012;
@@ -272,6 +272,7 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
 export function nudgeCoopPosition(s,staticBlocks,dx,dz,dynamic=[]){
  if(!Number.isFinite(dx)||!Number.isFinite(dz)||s.vault)return;
  const blocks=[...nearbyBlocks(staticBlocks,s.x,s.z),...dynamic,...bounds],n=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.025));
- const clear=(x,z)=>!blocks.some(b=>overlaps(s.y,b,z,x,s.bodyHeight??P.height)&&contact(x,z,b,P.radius));
+ const rail=s.onRail&&s.netOnRail?blocks.find(b=>railSupport(b,s.x,s.z)&&Math.abs(railTop(b,s.x,s.z)-s.y)<.035):null;
+ const clear=(x,z)=>(!rail||railSupport(rail,x,z)&&Math.abs(railTop(rail,x,z)-s.y)<.08)&&!blocks.some(b=>overlaps(s.y,b,z,x,s.bodyHeight??P.height)&&contact(x,z,b,P.radius));
  for(let i=0;i<n;i++){const x=s.x+dx/n,z=s.z+dz/n;if(clear(x,z)){s.x=x;s.z=z;}else{if(clear(x,s.z))s.x=x;if(clear(s.x,z))s.z=z;}}
 }

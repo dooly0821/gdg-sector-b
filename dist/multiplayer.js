@@ -115,7 +115,7 @@ export function applyCoopSnapshot(s,snap,first=false){
   const dead=.07+Math.min(.12,finite(snap.netRtt)*.00025),amount=Math.max(0,err-dead),weight=err>0?Math.min(1.8,amount)/err:0;
   s.netCorrection=[dx*weight,dz*weight];
  }else s.netCorrection=[0,0];
- s.netGrounded=!!v.grounded&&!v.vault;
+ s.netGrounded=!!v.grounded&&!v.vault;s.netOnRail=!!v.onRail;
  if(first){s.yaw=v.yaw;s.pitch=v.pitch;s.coopVisualClock=snap.elapsed??0;}else if(hidden&&!oldHidden){s.yaw=0;s.pitch=0;}
  for(const k of ['cargo','states','parked','deliveryOrder','lockers','lockerRevision','elapsed','cargoDeadlines','shiftEvents'])s[k]=snap[k];
  const prevAction=s.handAction;

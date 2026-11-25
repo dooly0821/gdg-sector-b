@@ -15,3 +15,18 @@ for(const hz of [60,120]){
  assert.ok(air.vx>4&&Math.hypot(air.vx,air.vz)<=P.bhopCap+.001);
  console.log('PASS freerun',hz,'Hz');
 }
+
+// Actual upper catwalk and annex rails, including Space without directional input.
+import {createScene,newShift,step} from '../dist/mission.js';
+const [{blocks}]=createScene();
+for(const hz of [60,120]){
+ const dt=1/hz;
+ for(const start of [{x:11.65,y:3.6,z:-18,yaw:Math.PI/2,expected:4.629},{x:-34,y:.86,z:6.3,yaw:Math.PI,expected:1.8775}]){
+  const s=Object.assign(newShift(),start);step(s,idle,blocks,dt,true);assert.ok(s.vault?.perch,'actual map rail '+start.x);
+  for(let i=0;s.vault&&i<hz;i++)step(s,idle,blocks,dt);assert.ok(s.grounded&&s.onRail&&Math.abs(s.y-start.expected)<.035,'actual rail top '+start.x+' '+s.y);
+ }
+ const a=make({x:0,z:15,cargo:[{special:'heavy'}],carried:0}),b=make({x:0,z:15});
+ for(let i=0;i<hz;i++){move(a,sprint,[],dt,false,flat);move(b,sprint,[],dt,false,flat);}
+ assert.ok(Math.abs(Math.hypot(a.vx,a.vz)-5.95)<.02);assert.ok(Math.abs(Math.hypot(b.vx,b.vz)-7)<.02);
+}
+console.log('PASS actual rail geometry, heavy freight movement');

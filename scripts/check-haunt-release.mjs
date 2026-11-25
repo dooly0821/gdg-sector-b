@@ -1,5 +1,5 @@
 import {spawnSync} from 'node:child_process';
-for(const name of ['check-coop','check-coop-stability','check-haunt-tactics','check-survival-response','check-haunt-navigation','check-locker-hiding','check-spawn-balance','check-freerun','check-shift-events']){
+for(const name of ['check-coop','check-coop-stability','check-haunt-tactics','check-survival-response','check-haunt-navigation','check-locker-hiding','check-spawn-balance','check-freerun','check-shift-events','check-physics']){
  const result=spawnSync(process.execPath,['scripts/'+name+'.mjs'],{stdio:'inherit',timeout:120000});
  if(result.error||result.status!==0){console.error('FAIL',name,result.error??result.status);process.exit(1);}
 }
