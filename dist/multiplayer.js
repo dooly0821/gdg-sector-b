@@ -109,7 +109,7 @@ export function applyCoopSnapshot(s,snap,first=false){
  s.netMismatchAt=mismatch?(s.netMismatchAt??now):null;
  const hard=first||hidden!==oldHidden||v.failed||err>3.25||verticalConflict||mismatch&&now-s.netMismatchAt>1000&&vertical>.45;
  if(hard){
-  for(const k of ['x','y','z','vx','vy','vz','grounded','bodyHeight','steps','vault'])s[k]=v[k]??(k==='vault'?null:s[k]);
+  for(const k of ['x','y','z','vx','vy','vz','grounded','bodyHeight','steps','vault','onRail'])s[k]=v[k]??(k==='vault'?null:s[k]);
   s.netHistory=[];s.netAppliedX=s.netAppliedZ=0;s.netCorrection=[0,0];s.netMismatchAt=null;
  }else if(!s.vault&&!v.vault&&s.grounded&&v.grounded&&!hidden){
   const dead=.07+Math.min(.12,finite(snap.netRtt)*.00025),amount=Math.max(0,err-dead),weight=err>0?Math.min(1.8,amount)/err:0;
@@ -117,13 +117,13 @@ export function applyCoopSnapshot(s,snap,first=false){
  }else s.netCorrection=[0,0];
  s.netGrounded=!!v.grounded&&!v.vault;
  if(first){s.yaw=v.yaw;s.pitch=v.pitch;s.coopVisualClock=snap.elapsed??0;}else if(hidden&&!oldHidden){s.yaw=0;s.pitch=0;}
- for(const k of ['cargo','states','parked','deliveryOrder','lockers','lockerRevision','elapsed'])s[k]=snap[k];
+ for(const k of ['cargo','states','parked','deliveryOrder','lockers','lockerRevision','elapsed','cargoDeadlines','shiftEvents'])s[k]=snap[k];
  const prevAction=s.handAction;
- for(const k of ['carried','flashlight','handAction','failed','capturedBy','noise','horrorEvent'])s[k]=v[k]??(k==='carried'?-1:k==='flashlight'||k==='failed'?false:null);
+ for(const k of ['carried','flashlight','handAction','failed','capturedBy','noise','horrorEvent','cargoSignalAt'])s[k]=v[k]??(k==='carried'?-1:k==='flashlight'||k==='failed'?false:null);
  if(s.handAction&&prevAction&&s.handAction.index===prevAction.index&&s.handAction.placing===prevAction.placing)
   s.handAction={...s.handAction,time:Math.max(s.handAction.time,prevAction.time)};
  if(first)s.flashAmount=v.flashAmount??0;
- s.skipLockerAdvance=true;s.coopHidden=hidden;
+ s.skipLockerAdvance=true;s.coopPrediction=true;s.coopHidden=hidden;
  s.haunt=(snap.haunt??[]).map(a=>{
   const old=s.haunt?.find(p=>p.kind===a.kind),elapsed=snap.elapsed??0;
   const fresh=!old||Math.hypot(old.x-a.x,old.z-a.z)>5||a.age+.15<(old.netAgeBase??old.age);

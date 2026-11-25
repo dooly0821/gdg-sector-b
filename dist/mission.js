@@ -1,4 +1,5 @@
 import {buildDenseDressing} from './density.js';
+import {markSpecialCargo,createShiftEvents,beginSpecial,cargoSignal} from './shift-events.js';
 import {buildDressing} from './dressing.js';
 import {traceBox} from './contact.js';
 import {buildLockers,lockerDoorBlocks,advanceLockers,closedLocker} from './lockers.js';
@@ -38,7 +39,7 @@ function shuffle(items,rng){
  return selected;
 }
 export function randomCargo(rng=Math.random){
- return shuffle(cargoPools.flatMap((pool,i)=>shuffle(pool,rng).slice(0,[4,4,4,4,3,3,4,4][i])),rng).map((p,i)=>({id:'B-'+String(i+1).padStart(2,'0'),area:p.area,pos:p.pos.slice()}));
+ return markSpecialCargo(shuffle(cargoPools.flatMap((pool,i)=>shuffle(pool,rng).slice(0,[4,4,4,4,3,3,4,4][i])),rng).map((p,i)=>({id:'B-'+String(i+1).padStart(2,'0'),area:p.area,pos:p.pos.slice()})),rng);
 }
 export const shiftParcel=(s,i)=>s?.cargo?.[i]??PARCELS[i];
 const sceneBlocks=new WeakSet();
@@ -70,7 +71,7 @@ export function createScene(){
  sceneBlocks.add(w.blocks);
  return [w,parcel,empty,carry,flashlight];
 }
-export function newShift(rng){return {cargo:typeof rng==='function'?randomCargo(rng):null,x:1.7,y:0,z:15,yaw:.24,pitch:-.04,vy:0,vx:0,vz:0,flashlight:false,flashAmount:0,grounded:true,states:Array(typeof rng==='function'?MISSION_TOTAL:PARCELS.length).fill('AVAILABLE'),carried:-1,elapsed:0,steps:0};}
+export function newShift(rng){return {cargo:typeof rng==='function'?randomCargo(rng):null,cargoDeadlines:{},shiftEvents:typeof rng==='function'?createShiftEvents(rng):null,x:1.7,y:0,z:15,yaw:.24,pitch:-.04,vy:0,vx:0,vz:0,flashlight:false,flashAmount:0,grounded:true,states:Array(typeof rng==='function'?MISSION_TOTAL:PARCELS.length).fill('AVAILABLE'),carried:-1,elapsed:0,steps:0};}
 export const deliveryCount=s=>s.states.filter(k=>k==='DELIVERED').length;
 export const forward=s=>[-Math.sin(s.yaw)*Math.cos(s.pitch),Math.sin(s.pitch),-Math.cos(s.yaw)*Math.cos(s.pitch)];
 export function surface(x,z,y){
@@ -95,6 +96,7 @@ export function step(s,keys,blocks,dt,jump=false){
  else if(!vault&&s.vault)radius=s.vault.rail||s.vault.high?6:4;
  else if(s.grounded&&Math.floor(s.steps/.90)>previousStep)radius=s.bodyHeight<1.3?1.4:speed*1.1;
  if(radius)s.noise={x:s.x,y:s.y+.2,z:s.z,radius,time:s.elapsed};
+ if(!s.coopPrediction)cargoSignal(s);
  const zone=s.z>=54?(s.x<-15?'waste':'lab'):s.z>=22?(s.x<-15?'returns':'transfer'):s.x<-15?'annex':'warehouse';
  if(s.zone&&s.zone!==zone&&s.elapsed>(s.lastZoneEvent??-10)+5){s.horrorEvent={type:'zone',time:s.elapsed};s.lastZoneEvent=s.elapsed;s.zoneScare=zone;}
  s.zone=zone;
@@ -212,7 +214,7 @@ export function interact(s,target,blocks,locked=false){
   s.noise={x:target.pos[0],y:target.pos[1],z:target.pos[2],radius:4.5,time:s.elapsed};s.horrorEvent={type:'drop',time:s.elapsed};return 'dropped';
  }
  if(target.dock&&s.carried>=0&&s.states[s.carried]==='CARRIED'){s.deliveryOrder??=s.states.flatMap((v,i)=>v==='DELIVERED'?[i]:[]);s.deliveryOrder.push(s.carried);s.states[s.carried]='DELIVERED';s.carried=-1;s.horrorEvent={type:'delivery',time:s.elapsed};s.noise={x:s.x,y:s.y+.5,z:s.z,radius:7,time:s.elapsed};return 'delivered';}
- if(!target.dock&&s.carried===-1&&s.states[target.index]==='AVAILABLE'){s.carried=target.index;s.states[target.index]='CARRIED';s.horrorEvent={type:'pickup',time:s.elapsed};s.noise={x:s.x,y:s.y+.5,z:s.z,radius:5,time:s.elapsed};return 'picked';}
+ if(!target.dock&&s.carried===-1&&s.states[target.index]==='AVAILABLE'){s.carried=target.index;s.states[target.index]='CARRIED';beginSpecial(s,target.index);s.horrorEvent={type:'pickup',time:s.elapsed};s.noise={x:s.x,y:s.y+.5,z:s.z,radius:5,time:s.elapsed};return 'picked';}
  return null;
 }
 export function baySlot(n){return [DOCK[0]+((n%3)-1)*.65,DOCK[1]+Math.floor(n/6)*.484,DOCK[2]+(Math.floor((n%6)/3)-.5)*.60];}

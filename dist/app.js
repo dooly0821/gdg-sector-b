@@ -1,3 +1,4 @@
+import {tickShiftEvents,eventLighting,specialLabel} from './shift-events.js';
 import {sectorName,clock,telemetry,progressBar,decorateManual,updateHud} from './ui-art.js';
 import {normalizeNickname,escapeNickname} from './nickname.js';
 import {PUBLIC_SERVERS,serverName} from './public-servers.js';
@@ -28,7 +29,7 @@ let sound,master,hum;
 function audioOn(){try{if(!sound){sound=new AudioContext();master=sound.createGain();master.gain.value=0;master.connect(sound.destination);hum=sound.createOscillator();hum.frequency.value=56;hum.type='sine';hum.connect(master);hum.start();}sound.resume().catch(()=>{});master.gain.setTargetAtTime(settings.audio&&mode==='game'?.026*(settings.volume??1):0,sound.currentTime,.4);}catch{}}
 function beep(hz,time=.12,type='sine',gain=.1){if(!sound||!settings.audio||settings.volume<=0)return;let o=sound.createOscillator(),g=sound.createGain(),now=sound.currentTime;o.type=type;o.frequency.setValueAtTime(hz,now);o.frequency.exponentialRampToValueAtTime(hz*.68,now+time);g.gain.setValueAtTime(Math.max(.0001,gain*(settings.volume??1)),now);g.gain.exponentialRampToValueAtTime(.0001,now+time);o.connect(g);g.connect(sound.destination);o.start();o.stop(now+time+.02);}
 function say(line,duration=5){$('#radio').innerHTML='<strong>관제실</strong>'+line;radioUntil=performance.now()+duration*1000;}
-const rows=[['W A S D','이동'],['MOUSE','시점 회전'],['SHIFT','달리기'],['C (누르고 유지)','앉기 / 은신'],['C + W A S D','앉은 채 이동 / 낮은 은신처 진입'],['W + SPACE','선반 · 난간 · 상자 등반'],['SPACE / WHEEL','점프 · 연속 점프 · 방향 입력 중 장애물 넘기'],['C + SPACE','달리기 중 앉기 점프 · 버니합'],['Q','손전등 들기 / 내리기'],['E','상자 들기 · 다시 눌러 내려놓기'],['ESC','일시 정지']];
+const rows=[['W A S D','이동'],['MOUSE','시점 회전'],['SHIFT','달리기'],['C (누르고 유지)','앉기 / 은신'],['C + W A S D','앉은 채 이동 / 낮은 은신처 진입'],['W + SPACE','난간 위 올라서기 · 선반 · 상자 등반'],['SHIFT + W + SPACE','달리면서 난간 넘기'],['C + SPACE + A/D','공중 버니합 방향 전환'],['SPACE / WHEEL','점프 · 연속 점프 · 방향 입력 중 장애물 넘기'],['C + SPACE','달리기 중 앉기 점프 · 버니합'],['Q','손전등 들기 / 내리기'],['E','상자 들기 · 다시 눌러 내려놓기'],['ESC','일시 정지']];
 const links='<a class="doc" href="characters.html" target="_blank" rel="noopener">캐릭터 검수실 ↗</a><div class="panel-actions"><a class="doc" href="unity-migration.html" target="_blank" rel="noopener">Unity 이식 가이드 ↗</a></div>';
 function action(name,label,primary=false){return '<button class="'+(primary?'primary':'secondary')+'" data-action="'+name+'">'+label+'</button>';}
 function plan(){
@@ -127,6 +128,7 @@ function onCoopState(snap){
  if(team){team.hidden=false;team.textContent='CO-OP '+serverName(snap.room)+' · 생존 '+snap.players.filter(p=>!p.failed).length+'/'+snap.players.length+' · 개체 '+snap.haunt.length+'/'+snap.difficulty.maxActive+'\n'+snap.players.map(p=>p.name+(p.id===snap.you?' (나)':'')+(p.failed?' · 사망':p.hidden?' · 은신':' · 생존')).join('\n');}
  for(const event of snap.events??[]){if(event.seq<=coopEventSeq)continue;coopEventSeq=event.seq;
   if(event.type==='haunt'){(session.hauntSounds??=[]).push(event);}
+  else if(event.type==='anomaly'){beep(event.phase==='start'?58:180,.35,'triangle',.12);say(event.message,4);}
   else if(event.type==='notice'&&(!event.player||event.player===snap.you))say(event.message,3);
   else if(event.type==='door'&&event.player===snap.you)beep(112,.19,'triangle',.08);
   else if(event.type==='cargo'&&event.player===snap.you){beep(event.result==='delivered'?620:235,.12);say(event.id+' · '+(event.result==='delivered'?'팀 배송 완료':event.result==='picked'?'집화 완료':'임시 적치 완료'),2.5);}
@@ -155,7 +157,8 @@ function openPane(name){
  if(name==='manual')panel(name,
  '<div class="survival-manual"><p>GDG 상자 30개를 한 개씩 02번 출고대로 운반하세요. 가까이 다가가 노란 조준 표시가 생기면 E로 집고, 출고대에서 E로 배송합니다.</p>'+
  '<h3>01 / 기본 조작</h3>'+rows.map(([k,l])=>'<div class="row"><span>'+l+'</span><kbd>'+k+'</kbd></div>').join('')+
- '<h3>02 / 은신 방법</h3><article class="creature-guide"><h4>철제 사물함 <small>LOCKER / 12곳</small></h4><p>상자를 내려놓고 사물함 정면에서 E를 눌러 문을 엽니다. 너무 가까우면 뒤로 물러나 다시 E를 누르세요. 문이 완전히 열리면 W로 내부 중앙까지 들어간 뒤 E로 문을 닫습니다.</p><p>문이 닫히면 자동으로 문 쪽을 바라봅니다. 실제 가로 통풍구 사이로 귀신을 관찰할 수 있으며 마우스로 시점을 움직일 수 있습니다. Q로 손전등을 끄고 기다리세요. 귀신은 문 앞을 약 4.5~6.5초 조사하고 다른 통로로 떠납니다. 소등하지 않으면 더 오래 머물 수 있습니다. 충분히 멀어진 것을 확인하고 E로 문을 열어 W로 나가세요. 너무 빨리 열면 다시 추격당할 수 있습니다.</p></article><p><b>C를 누른 채 W A S D로 이동</b>하여 빈 선반 아래, 상자 뒤 또는 SERVICE / LOW CLEARANCE 표시가 붙은 낮은 은신처 안으로 들어가세요. C를 놓으면 머리 위 공간이 충분할 때 일어납니다. 낮은 은신처는 별도의 상호작용 키 없이 들어갑니다.</p>'+
+ '<h3>02 / 특수 화물 및 이상 현상</h3><p>소음 화물은 주기적으로 소리를 내고, 중량 화물은 이동 속도가 감소합니다. 긴급 화물은 첫 집화 후 70초를 넘기면 소음이 발생하며, 격리 화물은 강한 이상 신호를 냅니다. 정전 시 비상등과 손전등을 이용하세요. 모든 화물은 지연되어도 배송할 수 있습니다.</p>'+
+ '<h3>03 / 은신 방법</h3><article class="creature-guide"><h4>철제 사물함 <small>LOCKER / 12곳</small></h4><p>상자를 내려놓고 사물함 정면에서 E를 눌러 문을 엽니다. 너무 가까우면 뒤로 물러나 다시 E를 누르세요. 문이 완전히 열리면 W로 내부 중앙까지 들어간 뒤 E로 문을 닫습니다.</p><p>문이 닫히면 자동으로 문 쪽을 바라봅니다. 실제 가로 통풍구 사이로 귀신을 관찰할 수 있으며 마우스로 시점을 움직일 수 있습니다. Q로 손전등을 끄고 기다리세요. 귀신은 문 앞을 약 4.5~6.5초 조사하고 다른 통로로 떠납니다. 소등하지 않으면 더 오래 머물 수 있습니다. 충분히 멀어진 것을 확인하고 E로 문을 열어 W로 나가세요. 너무 빨리 열면 다시 추격당할 수 있습니다.</p></article><p><b>C를 누른 채 W A S D로 이동</b>하여 빈 선반 아래, 상자 뒤 또는 SERVICE / LOW CLEARANCE 표시가 붙은 낮은 은신처 안으로 들어가세요. C를 놓으면 머리 위 공간이 충분할 때 일어납니다. 낮은 은신처는 별도의 상호작용 키 없이 들어갑니다.</p>'+
  '<p>구조물이 귀신과 나 사이의 시야를 가리게 하고, Q로 손전등을 끄세요. 움직임을 멈추면 발소리를 줄일 수 있습니다. 달리기, 점프 착지, 상자 집기·내려놓기는 소음을 발생시킵니다. 앉아 있다고 무적이 되는 것은 아닙니다.</p>'+
  '<h3>03 / 추격 및 피신</h3><p>귀신은 마지막으로 본 위치와 소리를 기억합니다. 은신처 입구를 확인하고 떠나는 척 다시 돌아올 수도 있습니다. 발소리가 멀어졌다고 바로 뛰어나오지 마세요. 추격을 끊으려면 시야를 차단한 채 거리를 충분히 벌리거나 지정된 높은 피신 지점으로 이동하세요.</p>'+
  '<p>각 구역의 SERVICE PLATFORM은 실제 계단을 W로 걸어 올라갑니다. 아래쪽 공간이나 LOW ACCESS 선반은 C로 들어가 숨을 수 있습니다. 일반 적재물은 W + SPACE로 넘어가세요. 상층 피신 지점도 적재귀에게는 안전하지 않을 수 있습니다.</p><p>상자를 내려놓고 발판을 향해 W + SPACE로 연속 등반하세요. B-12 상층 선반과 C-02 폐기물 처리동, D-04 격리실험동의 ESCAPE DECK은 지정 피신 지점입니다. 해당 발판 중앙에 착지하면 일반 지상 추격을 끊을 수 있지만, 적재귀는 C-02와 D-04 발판의 계단을 따라 올라올 수 있습니다. 모든 높은 물체가 안전한 것은 아닙니다.</p>'+
@@ -304,6 +307,8 @@ function frame(now){if(mode!=='game')return;const dt=Math.min(.067,Math.max(0,(n
  const moving=s.steps>was+.002;const bob=settings.motion&&moving&&s.grounded?Math.sin(s.steps*5.5)*.014:0;
  const active=s.handAction;
  if(active&&!coopStarting){const result=advanceHandling(s,interactionBlocks,dt);if(result)onHandling(result,now,active.target.id);}
+ if(!coopStarting){const event=tickShiftEvents(s);if(event){beep(event.phase==='start'?58:180,.35,'triangle',.12);say(event.message,4);}}
+ const signal=s.cargoSignalAt;if(Number.isFinite(signal)&&signal!==s.lastRenderedSignal&&s.carried>=0){s.lastRenderedSignal=signal;beep(s.cargo?.[s.carried]?.special==='cursed'?47:142,.25,'triangle',.07);}
  const facing=forward(s);
  let threat=null;if(coopStarting){interpolateCoopHaunt(s,dt);}else{const hauntSteps=Math.max(1,Math.ceil(dt*60));for(let k=0;k<hauntSteps&&!threat;k++)threat=updateHaunt(s,worlds[0].blocks,facing,dt/hauntSteps);}
  if(threat){canvas.classList.remove('captured');failShift(threat);return;}
@@ -333,7 +338,7 @@ function frame(now){if(mode!=='game')return;const dt=Math.min(.067,Math.max(0,(n
  const view=brace?forward({...s,pitch:s.pitch-.070*reach}):facing;
  const visualTime=coopStarting?(s.coopVisualClock??s.elapsed):s.elapsed;
  const pose=choreography(s,eye,available,moving,keys.has('ShiftLeft')||keys.has('ShiftRight'),visualTime,view);
- pose.actors=[...hauntLayers(s),...lockerLayers(s,LOCKER_DOOR_GROUP),...(hiddenLocker?[]:workerLegLayers(s)),...peerLayers(coop,s,dt,TEAM_WORKER_GROUP)];pose.clock=visualTime;
+ pose.actors=[...hauntLayers(s),...lockerLayers(s,LOCKER_DOOR_GROUP),...(hiddenLocker?[]:workerLegLayers(s)),...peerLayers(coop,s,dt,TEAM_WORKER_GROUP)];pose.clock=visualTime;const lighting=eventLighting(s);pose.gridPower=lighting.power;
  if(hiddenLocker){pose.hands=[];if(Math.floor(s.elapsed*1.6)>Math.floor((s.elapsed-dt)*1.6)&&s.haunt.some(a=>Math.hypot(a.x-s.x,a.z-s.z)<8))beep(43,.15,'sine',.055);}
  // Hysteresis: lower render resolution only after sustained slow frames.
  if(dt>.025){s.slowFrames=(s.slowFrames??0)+1;s.fastFrames=0;}else if(dt<.018){s.fastFrames=(s.fastFrames??0)+1;s.slowFrames=0;}else{s.slowFrames=0;s.fastFrames=0;}
@@ -357,9 +362,10 @@ function frame(now){if(mode!=='game')return;const dt=Math.min(.067,Math.max(0,(n
  if(s.handAction)msg=s.handAction.placing?'상자 내려놓는 중':'상자 드는 중';
  if(l&&!s.handAction&&s.carried<0){msg=lockerPrompt(s,l);brackets.hidden=true;if(hiddenLocker){msg='은신 중 · 문틈 관찰 / Q 소등 / E 열기';mark.hidden=true;}}
  if(!msg&&!document.pointerLockElement&&!drag)msg='드래그로 시점 회전 · WASD 이동';
- $('#torch-status').textContent='Q · 손전등 '+(s.flashlight?'ON':'OFF');p.innerHTML=msg;$('#delivered').textContent=deliveryCount(s)+' / '+MISSION_TOTAL;
+ $('#torch-status').textContent='Q · 손전등 '+(s.flashlight?'ON':'OFF')+(s.shiftEvents?.active?' · '+(s.shiftEvents.active.kind==='blackout'?'정전':'전파 간섭'):'');p.innerHTML=msg;$('#delivered').textContent=deliveryCount(s)+' / '+MISSION_TOTAL;
  $('#carry-status span').textContent=s.handAction?(s.handAction.placing?'내려놓는 중':'드는 중'):s.carried>=0?(s.flashlight?'한 손 운반 중':'운반 중'):'빈손';
- $('#taskLine').textContent=target?(target.dock?shiftParcel(s,s.carried).id+' → 02번 출고대':target.id+' · '+areaNames[target.area]):'전체 배송 완료';
+ const special=specialLabel(s,s.carried>=0?s.carried:target?.index??-1);
+ $('#taskLine').textContent=(target?(target.dock?shiftParcel(s,s.carried).id+' → 02번 출고대':target.id+' · '+(areaNames[target.area]??'')):'전체 배송 완료')+(special?' · '+special:'');
  const directions=['N','NE','E','SE','S','SW','W','NW'];const bearing=((Math.round(-s.yaw*180/Math.PI)%360)+360)%360;
  $('#heading').textContent=directions[Math.round(bearing/45)%8]+'  '+String(bearing).padStart(3,'0')+'°';
  if(!coopStarting||now-(s.lastCoopHud??-1000)>=80){s.lastCoopHud=now;updateHud(s,!!hiddenLocker,deliveryCount(s),MISSION_TOTAL,plan,now,settings.hints);}

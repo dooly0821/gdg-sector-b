@@ -1,6 +1,7 @@
 // Authoritative room simulation. All clients share one cargo list, one ghost
 // director and one door state. Clients send controls, never claimed deliveries.
 import {randomBytes} from 'node:crypto';
+import {createShiftEvents,tickShiftEvents} from '../dist/shift-events.js';
 import {normalizeNickname} from '../dist/nickname.js';
 import {createScene,newShift,randomCargo,step,forward,handlingTarget,canUse,dropTarget,deliveryCount,MISSION_TOTAL,parcelBlocks} from '../dist/mission.js';
 import {beginHandling,advanceHandling,toggleFlashlight,updateViewmodel} from '../dist/handling.js';
@@ -19,9 +20,9 @@ const spawns=[[1.7,15],[.7,15],[2.7,15],[1.7,16.1]];
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const finite=(v,d=0)=>Number.isFinite(v)?v:d;
 const publicPlayer=p=>({id:p.id,name:p.name,ready:p.ready,failed:!!p.state.failed,hidden:!!closedLocker(p.state),x:p.state.x,y:p.state.y,z:p.state.z,yaw:p.state.yaw,pitch:p.state.pitch,bodyHeight:p.state.bodyHeight??1.7,steps:p.state.steps,carried:p.state.carried,flashlight:!!p.state.flashlight,vx:p.state.vx,vy:p.state.vy,vz:p.state.vz,grounded:p.state.grounded!==false,vault:!!p.state.vault});
-const sharedKeys=['cargo','states','parked','deliveryOrder','lockers','lockerRevision','horrorEvent'];
+const sharedKeys=['cargo','states','parked','deliveryOrder','lockers','lockerRevision','horrorEvent','cargoDeadlines','shiftEvents'];
 function attach(room,p){
- const s=p.state,q=room.shared;for(const k of sharedKeys)s[k]=q[k];
+ const s=p.state,q=room.shared;q.cargoDeadlines??={};for(const k of sharedKeys)s[k]=q[k];
  s.elapsed=q.elapsed;s.skipLockerAdvance=true;s.id=p.id;return s;
 }
 function detach(p){for(const k of sharedKeys)delete p.state[k];delete p.state.hauntSounds;delete p.state.teamView;}
@@ -37,7 +38,7 @@ function addPlayer(room,now,nickname){
  detach(p);room.players[id]=p;if(!room.host)room.host=id;return p;
 }
 export function createRoom(code,now=Date.now(),nickname){
- const room={code,phase:'lobby',host:null,players:{},shared:{cargo:randomCargo(Math.random),states:Array(MISSION_TOTAL).fill('AVAILABLE'),parked:{},deliveryOrder:[],lockers:{},lockerRevision:0,elapsed:0,haunt:[],hauntSounds:[],hauntDirector:{delay:9,bag:[]}},events:[],eventSeq:0,lastTick:now,updatedAt:now};
+ const room={code,phase:'lobby',host:null,players:{},shared:{cargo:randomCargo(Math.random),cargoDeadlines:{},shiftEvents:createShiftEvents(),states:Array(MISSION_TOTAL).fill('AVAILABLE'),parked:{},deliveryOrder:[],lockers:{},lockerRevision:0,elapsed:0,haunt:[],hauntSounds:[],hauntDirector:{delay:9,bag:[]}},events:[],eventSeq:0,lastTick:now,updatedAt:now};
  const p=addPlayer(room,now,nickname);return {room,player:p};
 }
 const live=room=>Object.values(room.players).filter(p=>!p.state.failed);
@@ -81,7 +82,7 @@ export function tickRoom(room,now=Date.now()){
  prune(room,now);canStart(room,now);
  const delta=Math.min(.40,Math.max(0,(now-room.lastTick)/1000));room.lastTick=now;
  if(room.phase!=='playing'||!delta)return;
- const q=room.shared,players=live(room);if(!players.length){room.phase='failed';return;}
+ const q=room.shared,players=live(room);q.cargoDeadlines??={};q.shiftEvents??=createShiftEvents();if(!players.length){room.phase='failed';return;}
  const blocks=world().blocks,dt=1/60,ticks=Math.min(24,Math.floor(delta/dt+(room.fraction??0)));
  room.fraction=Math.min(.99,Math.max(0,delta/dt+(room.fraction??0)-ticks));
  for(let k=0;k<ticks;k++){
@@ -97,7 +98,7 @@ export function tickRoom(room,now=Date.now()){
    }
    syncShared(room,p);
   }
-  q.elapsed+=dt;
+  q.elapsed+=dt;const anomaly=tickShiftEvents(q);if(anomaly)pushEvent(room,anomaly);
   for(const p of active){const s=attach(room,p);s.teamView=forward(s);}
   const anchor=active[0].state;Object.assign(q,{x:anchor.x,y:anchor.y,z:anchor.z,bodyHeight:anchor.bodyHeight,flashAmount:anchor.flashAmount,grounded:anchor.grounded});
   q.teamPlayers=active.map(p=>p.state);q.hauntSounds=[];
@@ -111,10 +112,10 @@ export function tickRoom(room,now=Date.now()){
 }
 const ghostFields=['kind','x','z','yaw','phase','age','life','speed','aggression','state','timer','fade','surfaceY','surfaceRoll','lightReaction','reveal','pursuit','spawnGrace','targetId'];
 function ghostPublic(a){return Object.fromEntries(ghostFields.filter(k=>a[k]!==undefined).map(k=>[k,a[k]]));}
-function selfState(room,p){const s=attach(room,p),out={};for(const k of ['x','y','z','yaw','pitch','vx','vy','vz','grounded','bodyHeight','steps','carried','flashlight','flashAmount','handAction','vault','failed','capturedBy','noise','horrorEvent'])if(s[k]!==undefined)out[k]=s[k];detach(p);return out;}
+function selfState(room,p){const s=attach(room,p),out={};for(const k of ['x','y','z','yaw','pitch','vx','vy','vz','grounded','bodyHeight','steps','onRail','carried','flashlight','flashAmount','handAction','vault','failed','capturedBy','noise','horrorEvent','cargoSignalAt'])if(s[k]!==undefined)out[k]=s[k];detach(p);return out;}
 export function snapshot(room,p){
  const q=room.shared;const players=Object.values(room.players).map(a=>{attach(room,a);const pub=publicPlayer(a);detach(a);return pub;});
- return {room:room.code,phase:room.phase,serverTime:room.lastTick,host:room.host,you:p.id,ack:p.commandSeq,players,self:selfState(room,p),cargo:q.cargo,states:q.states,parked:q.parked,deliveryOrder:q.deliveryOrder,lockers:q.lockers,lockerRevision:q.lockerRevision,elapsed:q.elapsed,haunt:q.haunt.map(ghostPublic),events:room.events,difficulty:teamDifficulty(Math.max(1,live(room).length))};
+ return {room:room.code,phase:room.phase,serverTime:room.lastTick,host:room.host,you:p.id,ack:p.commandSeq,players,self:selfState(room,p),cargo:q.cargo,cargoDeadlines:q.cargoDeadlines??{},shiftEvents:q.shiftEvents??null,states:q.states,parked:q.parked,deliveryOrder:q.deliveryOrder,lockers:q.lockers,lockerRevision:q.lockerRevision,elapsed:q.elapsed,haunt:q.haunt.map(ghostPublic),events:room.events,difficulty:teamDifficulty(Math.max(1,live(room).length))};
 }
 export function operateRoom(room,body,now=Date.now()){
  check(room&&room.phase!=='closed','방을 찾을 수 없습니다.',404);
