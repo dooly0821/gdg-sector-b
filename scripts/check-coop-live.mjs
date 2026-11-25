@@ -49,9 +49,9 @@ async function stage(n){
 let health,data;
 for(let i=0;i<8;i++){
  const start=performance.now();health=await fetch(URL,{signal:AbortSignal.timeout(6000)});data=await health.json();console.log('GDG_HEALTH '+JSON.stringify({http:health.status,ms:Math.round(performance.now()-start),online:data.online,storage:data.storage,region:data.region,maxPlayers:data.maxPlayers,netRevision:data.netRevision??1}));
- if(health.ok&&data.online&&data.netRevision===2)break;
+ if(health.ok&&data.online&&data.netRevision===3)break;
  await wait(1500);
 }
-if(!health?.ok||!data?.online||data.netRevision!==2)throw Error('production revision 2 not yet visible');
+if(!health?.ok||!data?.online||data.netRevision!==3)throw Error('production revision 3 not yet visible');
 const reports=[];for(const n of [2,4]){reports.push(await stage(n));await wait(400);}
 console.log('GDG_SUMMARY '+JSON.stringify({reports,requests}));
