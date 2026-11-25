@@ -36,7 +36,8 @@ export function workerLegLayers(s){
   const leg=multiply(translate(hip),multiply(transform([swing,0,0],[0,0,0],1),translate(hip.map(v=>-v))));
   const lift=.63*(1-Math.cos(swing));
   leg[13]-=lift;
-  return {group:ACTOR_START+CREATURE_GROUP_COUNT+2+i,matrix:multiply(root,leg)};
+  const skin={name:'player',root,lowerOnly:true,floor:s.grounded&&!s.vault?s.y:null,state:{speed:Math.hypot(s.vx,s.vz),steps:s.steps,bodyHeight:s.bodyHeight??1.7,carried:s.carried??-1,vault:!!s.vault}};
+  return {group:ACTOR_START+CREATURE_GROUP_COUNT+2+i,matrix:multiply(root,leg),skinName:'player',skin:i===0?skin:null};
  });
 }
 export function beginHandling(s,target,blocks,locked=false){

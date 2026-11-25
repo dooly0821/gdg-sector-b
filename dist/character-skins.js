@@ -83,8 +83,21 @@ async function upload(gl,asset){
  function attribute(i,data,size,type){const b=gl.createBuffer();buffers.push(b);gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,data,gl.STATIC_DRAW);gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,size,type,false,0,0);}
  attribute(0,asset.positions,3,gl.FLOAT);attribute(1,asset.normals,3,gl.FLOAT);attribute(2,asset.uv,2,gl.FLOAT);attribute(9,asset.joints,4,asset.joints instanceof Uint8Array?gl.UNSIGNED_BYTE:gl.UNSIGNED_SHORT);attribute(10,asset.weights,4,gl.FLOAT);
  const ib=gl.createBuffer();buffers.push(ib);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,asset.indices,gl.STATIC_DRAW);gl.bindVertexArray(null);
+ // Separate the player lower body for the local first-person view. Do not render
+ // the head or duplicated arms, which would intersect the existing viewmodel.
+ const leg=[];
+ if(asset.rig.footed){
+  for(let i=0;i<asset.indices.length;i+=3){
+   const tri=asset.indices.subarray(i,i+3);
+   if([...tri].every(v=>{
+    if(asset.positions[v*3+1]>.76)return false;
+    let w=0;for(let k=0;k<4;k++)if([4,5,8,9,13,14].includes(asset.joints[v*4+k]))w+=asset.weights[v*4+k];return w>.30;
+   }))leg.push(...tri);
+  }
+ }
+ const legBuffer=gl.createBuffer();buffers.push(legBuffer);gl.bindVertexArray(vao);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,legBuffer);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,asset.indices instanceof Uint32Array?new Uint32Array(leg):new Uint16Array(leg),gl.STATIC_DRAW);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);gl.bindVertexArray(null);
  const base=await texture(gl,asset.base,2048),emit=await texture(gl,asset.emit,1536);
- return {vao,buffers,base,emit,rig:asset.rig,feet:footSamples(asset),length:asset.indices.length,type:asset.indices instanceof Uint32Array?gl.UNSIGNED_INT:gl.UNSIGNED_SHORT};
+ return {vao,buffers,ib,legBuffer,legLength:leg.length,base,emit,rig:asset.rig,feet:footSamples(asset),length:asset.indices.length,type:asset.indices instanceof Uint32Array?gl.UNSIGNED_INT:gl.UNSIGNED_SHORT};
 }
 export class CharacterSkins{
  constructor(gl){this.gl=gl;this.models=new Map();this.failures=[];}
@@ -107,7 +120,8 @@ export class CharacterSkins{
   gl.uniform1i(u.worldObject,1);gl.uniform1f(u.character,1);gl.uniform1f(u.clay,clay?1:0);gl.uniform1f(u.actorOpacity,opacity??1);gl.uniform1f(u.flexAmount,0);
   gl.activeTexture(gl.TEXTURE3);gl.bindTexture(gl.TEXTURE_2D,model.base);gl.uniform1i(u.skinBase,3);gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,model.emit);gl.uniform1i(u.skinEmission,4);
   gl.bindVertexArray(model.vao);gl.vertexAttrib3f(3,0,0,0);gl.vertexAttrib3f(4,1,0,0);gl.vertexAttrib3f(5,0,1,0);gl.vertexAttrib3f(6,0,0,1);gl.vertexAttrib4f(7,1,1,1,0);gl.vertexAttrib4f(8,0,.15,1,2);
-  gl.drawElements(gl.TRIANGLES,model.length,model.type,0);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,skin.lowerOnly?model.legBuffer:model.ib);
+  gl.drawElements(gl.TRIANGLES,skin.lowerOnly?model.legLength:model.length,model.type,0);
   gl.uniform1i(u.skinActive,0);gl.activeTexture(gl.TEXTURE0);return true;
  }
 }
