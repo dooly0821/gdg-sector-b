@@ -1,6 +1,6 @@
 // First-person GLB viewmodels. Original gameplay choreography remains authoritative.
 import {multiply} from './world.js';
-const names=['empty','flashlight','boxcarry'];
+const names=['empty','flashlight','boxcarry','boxflashlight'];
 const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x)),smooth=x=>{x=clamp(x);return x*x*(3-2*x)};
 const identity=()=>new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);
 const mix=(a,b,t)=>a+(b-a)*t;
@@ -65,7 +65,7 @@ async function upload(gl,model){
 const SIZE=.446/.75;
 const ROOT=mat([0,-.584+.135*SIZE,-.864+.365*SIZE],[0,0,0,1],SIZE);
 const shifted=(m,p)=>multiply(mat(p),m);
-export function fpPlan(pose){
+export function fpPlan(pose,dedicated=false){
  const f=pose.fp;if(!f)return null;
  // Preserve contact and vault IK; the simultaneous steady state composes
  // the left cargo arm, parcel and the right-only flashlight mesh.
@@ -74,6 +74,14 @@ export function fpPlan(pose){
  if(f.action&&pose.assembly){const l=pose.hands.find(h=>h.group===6);if(!l?.matrix)return null;return {name:'boxcarry',matrix:multiply(l.matrix,ROOT),contact:true};}
  if(f.holding){
   const l=pose.hands.find(h=>h.group===6),matrix=shifted(ROOT,l?.offset??[0,0,0]);
+  if(dedicated&&f.flash>=.52){
+   // At transfer, align the new box centre to the existing carried carton.
+   // Then raise the dedicated model into the validated 78-degree camera framing.
+   const progress=clamp((f.flash-.52)/.48),blend=smooth(progress),bob=f.bob??[0,0,0];
+   const from=[matrix[12]+.29*SIZE,matrix[13]+.065*SIZE,matrix[14]+.025*SIZE];
+   const to=[bob[0]*.65,-.265+bob[1]*.65,-.864+.365*SIZE-.05+bob[2]*.65];
+   return {name:'boxflashlight',matrix:mat(from.map((v,i)=>mix(v,to[i],blend)),[0,0,0,1],SIZE),contact:false,progress};
+  }
   if(f.flash>.001){
    const lift=smooth((f.flash-.52)/.24),tool=f.flash>=.76;
    const torchOffset=pose.hands.some(h=>h.group===7)?pose.torchOffset:f.bob;
@@ -95,13 +103,19 @@ export class FPModels{
   }
  }
  draw(u,pose){
-  const plan=fpPlan(pose);if(!plan)return false;const model=this.models.get(plan.name);if(!model)return false;
+  const plan=fpPlan(pose,this.models.has('boxflashlight'));if(!plan)return false;const model=this.models.get(plan.name);if(!model)return false;
   const torch=plan.combined?this.models.get('flashlight'):null;
   if(plan.combined&&!torch?.meshes.some(mesh=>mesh.some(p=>p.rightCount>0)))return false;
   const gl=this.gl,f=pose.fp,t=f.t,speed=f.speed,walk=smooth(speed/.8),run=smooth((speed-4.5)/2.5);
   let nodes=nodePoses(model,null,0);
   if(plan.name==='empty')nodes=blendPoses(nodePoses(model,'Empty_Idle',t),blendPoses(nodePoses(model,'Empty_Walk',t),nodePoses(model,'Empty_Run',t),run),walk*.8);
   if(plan.name==='boxcarry'&&!plan.contact)nodes=blendPoses(nodePoses(model,'Carry_Idle',t),nodePoses(model,'Carry_Walk',t),walk*.65);
+  if(plan.name==='boxflashlight'){
+   const motion=blendPoses(nodePoses(model,'Combined_Idle',t),blendPoses(nodePoses(model,'Combined_Walk',t),nodePoses(model,'Combined_Run',t),run),walk*.70);
+   const equip=nodePoses(model,'Combined_Equip',plan.progress*(model.clips.get('Combined_Equip')?.duration??.32),false);
+   // Using the same equip path in reverse prevents discontinuities on Q toggles.
+   nodes=blendPoses(equip,motion,smooth((plan.progress-.84)/.16));
+  }
   // World contact is handled by the existing flight matrix, not duplicated clip motion.
   gl.uniform1i(u.fpActive,1);gl.uniform1i(u.skinActive,0);gl.uniform1i(u.worldObject,1);gl.uniform1f(u.flexAmount,0);gl.uniform1f(u.character,0);gl.uniform1f(u.clay,0);gl.uniform1f(u.actorOpacity,1);gl.uniform3f(u.offset,0,0,0);
   const visit=(asset,poses,i,parent,rightOnly=false)=>{
