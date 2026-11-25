@@ -18,7 +18,7 @@ const world=()=>scene??=createScene()[0];
 const spawns=[[1.7,15],[.7,15],[2.7,15],[1.7,16.1]];
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const finite=(v,d=0)=>Number.isFinite(v)?v:d;
-const publicPlayer=p=>({id:p.id,name:p.name,ready:p.ready,failed:!!p.state.failed,hidden:!!closedLocker(p.state),x:p.state.x,y:p.state.y,z:p.state.z,yaw:p.state.yaw,pitch:p.state.pitch,bodyHeight:p.state.bodyHeight??1.7,steps:p.state.steps,carried:p.state.carried,flashlight:!!p.state.flashlight,vx:p.state.vx,vz:p.state.vz});
+const publicPlayer=p=>({id:p.id,name:p.name,ready:p.ready,failed:!!p.state.failed,hidden:!!closedLocker(p.state),x:p.state.x,y:p.state.y,z:p.state.z,yaw:p.state.yaw,pitch:p.state.pitch,bodyHeight:p.state.bodyHeight??1.7,steps:p.state.steps,carried:p.state.carried,flashlight:!!p.state.flashlight,vx:p.state.vx,vy:p.state.vy,vz:p.state.vz,grounded:p.state.grounded!==false,vault:!!p.state.vault});
 const sharedKeys=['cargo','states','parked','deliveryOrder','lockers','lockerRevision','horrorEvent'];
 function attach(room,p){
  const s=p.state,q=room.shared;for(const k of sharedKeys)s[k]=q[k];
