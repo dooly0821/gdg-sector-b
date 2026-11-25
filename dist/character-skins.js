@@ -21,11 +21,13 @@ export function playerAngles(state){
  a[2][0]=-stride*.64;a[3][0]=stride*.64;a[6][0]=-.12-.08*c*speed;a[7][0]=-.12+.08*c*speed;
  if(state.carried>=0){a[2]=[-.50,0,-.08];a[3]=[-.50,0,.08];a[6][0]=-.58;a[7][0]=-.58;}
  if(state.vault){a[0][0]=.20;a[2][0]=-.70;a[3][0]=-.70;a[6][0]=-.35;a[7][0]=-.35;a[4][0]=-.30;a[5][0]=.25;a[8][0]=.55;a[9][0]=.28;}
+ for(let i=2;i<count;i++)for(let k=0;k<3;k++)a[i][k]*=.58;
+ a[0][0]*=.70;
  return a;
 }
 export function creatureAngles(kind,input){
  const a=Array.from({length:count},(_,i)=>(input[i]??[0,0,0]).map(x=>Number.isFinite(x)?x:0));
- const float=kind===0||kind===3,strength=[.66,.65,.58,.67][kind]??.65;
+ const float=kind===0||kind===3,strength=[.58,.46,.32,.59][kind]??.46;
  for(let i=0;i<count;i++)for(let k=0;k<3;k++)a[i][k]=clamp(a[i][k]*strength,-.85,.85);
  a[1][2]=clamp(a[1][2],-.33,.33);a[0][0]=clamp(a[0][0],-.26,.36);
  if(float){for(const i of [4,5,8,9,13,14])a[i]=[0,0,0];a[12][2]*=1.15;}
