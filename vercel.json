@@ -1,6 +1,6 @@
 {
   "framework": null,
-  "buildCommand": "node scripts/check-coop.mjs && node scripts/check-coop-stability.mjs && node scripts/check-haunt-tactics.mjs && node scripts/check-survival-response.mjs && node scripts/check-haunt-navigation.mjs && node scripts/check-locker-hiding.mjs && node scripts/check-spawn-balance.mjs",
+  "buildCommand": "node scripts/check-haunt-release.mjs",
   "installCommand": "",
   "outputDirectory": "dist",
   "regions": [
