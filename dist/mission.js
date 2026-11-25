@@ -83,7 +83,7 @@ export function parcelBlocks(s){
 }
 export function step(s,keys,blocks,dt,jump=false){
  const dynamic=sceneBlocks.has(blocks)?parcelBlocks(s).filter(b=>b[0]<s.x+3&&b[2]>s.x-3&&b[1]<s.z+3&&b[3]>s.z-3):[];
- advanceLockers(s,dt);
+ if(!s.skipLockerAdvance)advanceLockers(s,dt);
  if(sceneBlocks.has(blocks))dynamic.push(...lockerDoorBlocks(s).filter(b=>b[0]<s.x+3&&b[2]>s.x-3&&b[1]<s.z+3&&b[3]>s.z-3));
  if(closedLocker(s)){s.vx=s.vz=s.vy=0;s.jumpBuffer=0;s.elapsed+=dt;return;}
  const grounded=s.grounded,vy=s.vy,previousStep=Math.floor(s.steps/.90),vault=s.vault;

@@ -71,11 +71,11 @@ export function useLocker(s,l){
  s.noise={x:l.x,y:.8,z:l.z,radius:2.1,time:s.elapsed};
  return closing?'closing':'opening';
 }
-export function advanceLockers(s,dt){
+export function advanceLockers(s,dt,occupants=[s]){
  for(const l of LOCKERS){
   const st=state(s,l);if(st.open===st.target)continue;
   const old=st.open,next=clamp(old+Math.sign(st.target-old)*dt/.48,0,1);
-  if(door(l,next).some(b=>overlap(s,b))){if(st.target===0)st.target=1;continue;}
+  if(door(l,next).some(b=>occupants.some(p=>overlap(p,b)))){if(st.target===0)st.target=1;continue;}
   st.open=next;if(Math.abs(old-next)>1e-7)s.lockerRevision=(s.lockerRevision??0)+1;
  }
 }

@@ -24,6 +24,7 @@
       <button class="art-button" data-pane="quit" aria-label="종료"><img src="assets/interface/quit.webp" alt=""></button>
     </nav>
   </div>
+  <button class="facility-link coop-link" data-pane="coop"><svg><use href="#i-pad"/></svg>협동 근무 · 2–4인</button>
   <button class="facility-link" data-pane="map"><svg><use href="#i-map"/></svg>구역 지도</button>
 </main>
 <section id="loading" hidden aria-label="Sector B 구역 진입">
@@ -35,7 +36,7 @@
   <div class="work-mission"><strong><svg><use href="#i-box"/></svg> WORK 모드</strong><div><b>배송 작업</b> <span id="delivered">0 / 30</span></div><small id="taskLine"></small></div>
   <div class="work-compass" aria-label="방위"><span id="heading"></span><i></i></div>
   <div id="reticle"></div><div id="target-brackets" hidden></div><div id="waypoint" hidden></div><div id="radio" aria-live="polite"></div><div id="prompt"></div>
-  <div id="torch-status">Q · 손전등 OFF</div><div id="carry-status"><svg><use href="#i-box"/></svg><span>빈손</span></div><output id="receipt" hidden></output><button class="pause-icon" id="pause" aria-label="일시 정지">Ⅱ</button>
+  <div id="coop-team" hidden aria-live="polite"></div><div id="torch-status">Q · 손전등 OFF</div><div id="carry-status"><svg><use href="#i-box"/></svg><span>빈손</span></div><output id="receipt" hidden></output><button class="pause-icon" id="pause" aria-label="일시 정지">Ⅱ</button>
 </section>
 <section id="ended" hidden><div><img src="assets/interface/wordmark.webp" alt="GDG"><h2>근무를 종료했습니다</h2><button class="primary" data-action="brief">메인 메뉴로</button></div></section>
 <div id="modal" hidden><section class="panel" role="dialog" aria-modal="true" aria-labelledby="paneTitle"><div class="panel-head"><small id="eyebrow">GDG DISPATCH</small><button class="square" id="close" aria-label="닫기"><svg><use href="#i-close"/></svg></button></div><h2 id="paneTitle"></h2><div id="paneBody"></div></section></div><script type="module" src="app.js"></script></body></html>

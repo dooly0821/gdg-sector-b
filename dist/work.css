@@ -16,3 +16,12 @@
 .creature-guide h4{font:800 16px/1.4 sans-serif;color:#e8dfcf;margin:0 0 5px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .creature-guide h4 small{font-size:10px;letter-spacing:.04em;color:#bfac8a}
 .map-key{flex-wrap:wrap;gap:8px 14px}
+
+/* Cooperative menu and HUD keep the original art-button layout intact. */
+.facility-link.coop-link{bottom:75px;letter-spacing:.04em}
+.coop-label{display:flex;flex-direction:column;gap:6px;color:#d8c7a7;font-size:12px;margin:14px 0}
+.coop-label input{width:100%;background:#111613;border:1px solid #6a6654;color:#e8ddc4;padding:12px;font:700 18px monospace;letter-spacing:.18em;text-transform:uppercase}
+.coop-code{font:800 28px/1.5 monospace;letter-spacing:.2em;color:#e6bd74}
+#coop-notice{min-height:1.5em;overflow-wrap:anywhere}
+#coop-team{position:absolute;right:22px;top:74px;color:#d7cdb3;background:#111713cc;border:1px solid #8c7c57;padding:6px 10px;font:600 11px/1.6 monospace;pointer-events:none;z-index:2}
+@media(max-width:640px){.facility-link.coop-link{bottom:65px}#coop-team{right:8px;top:61px;font-size:9px}}

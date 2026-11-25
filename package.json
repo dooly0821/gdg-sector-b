@@ -1,1 +1,1 @@
-{"name":"gdg-sector-b","private":true,"type":"module"}
+{"name":"gdg-sector-b","private":true,"type":"module","scripts":{"start":"node server/index.mjs","test:coop":"node scripts/check-coop.mjs","test:climb":"node scripts/check-climb-routes.mjs"},"engines":{"node":">=20"}}
