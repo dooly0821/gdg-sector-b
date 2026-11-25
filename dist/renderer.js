@@ -1,3 +1,4 @@
+import {CharacterSkins} from './character-skins.js';
 import {defaultFingers} from './hand-motion.js';
 import {CORE} from './annex.js';
 import {geometry} from './geometry.js';
@@ -7,6 +8,8 @@ precision highp float;
 layout(location=0) in vec3 p;layout(location=1) in vec3 n;layout(location=2) in vec2 uv;
 layout(location=3) in vec3 origin;layout(location=4) in vec3 ax;layout(location=5) in vec3 ay;layout(location=6) in vec3 az;
 layout(location=7) in vec4 colorTex;layout(location=8) in vec4 params;
+layout(location=9) in vec4 skinJoints;layout(location=10) in vec4 skinWeights;
+uniform bool skinActive;uniform mat4 skinBones[15];
 uniform mat4 VP,lightVP,objectMatrix;uniform bool worldObject;uniform vec3 offset;uniform vec3 flexPivot,flexForward,flexNormal,flexWidth;uniform float flexAmount;uniform vec4 digitWidths,knuckles,digitLengths,fingerAmounts;
 out vec3 P,N;out vec2 UV,tile;out vec4 C,Q,shadowPos;
 float acrossHand(float w,vec4 a){
@@ -17,6 +20,7 @@ float acrossHand(float w,vec4 a){
 }
 void main(){
  mat3 m=mat3(ax,ay,az);vec3 pp=p,nn=n;
+ if(skinActive){mat4 skin=skinBones[int(skinJoints.x)]*skinWeights.x+skinBones[int(skinJoints.y)]*skinWeights.y+skinBones[int(skinJoints.z)]*skinWeights.z+skinBones[int(skinJoints.w)]*skinWeights.w;pp=(skin*vec4(p,1.)).xyz;nn=normalize(mat3(skin)*n);}
  if(abs(flexAmount)>.00001){
   vec3 rel=pp-flexPivot;
   float w=dot(rel,flexWidth);
@@ -57,7 +61,7 @@ void main(){
 const fs=`#version 300 es
 precision highp float;precision highp sampler2DArray;
 in vec3 P,N;in vec2 UV,tile;in vec4 C,Q,shadowPos;
-uniform sampler2DArray atlas;uniform sampler2D shadowMap,floorTex;uniform vec3 eye,lamps[8];uniform float lampRed[8];uniform float shadowStep,hand,clock,torchPower,clay,character,actorOpacity;uniform vec3 torchPos,torchDir,core;uniform vec4 footprints[2];
+uniform sampler2DArray atlas;uniform sampler2D shadowMap,floorTex,skinBase,skinEmission;uniform bool skinActive;uniform vec3 eye,lamps[8];uniform float lampRed[8];uniform float shadowStep,hand,clock,torchPower,clay,character,actorOpacity;uniform vec3 torchPos,torchDir,core;uniform vec4 footprints[2];
 out vec4 outColor;
 float visibility(vec3 n){
  if(hand>.5||shadowStep==0.)return 1.;vec3 s=shadowPos.xyz/shadowPos.w*.5+.5;
@@ -74,7 +78,7 @@ void main(){
   if(actorOpacity<=(threshold[px.x+px.y*4]+.5)/16.)discard;
  }
  vec3 n=normalize(N);float e=Q.x;vec2 st=Q.w>0.?UV:tile;
- vec4 sampleC=Q.w==3.?texture(floorTex,UV):texture(atlas,vec3(st,C.w));if(sampleC.a<.4)discard;
+ vec4 sampleC=skinActive?texture(skinBase,UV):(Q.w==3.?texture(floorTex,UV):texture(atlas,vec3(st,C.w)));if(sampleC.a<.4)discard;
  if(Q.w==5.||(character>.5&&Q.w!=2.))sampleC.rgb=mix(vec3(.90),sampleC.rgb,.21);
  if(clay>.5){sampleC=vec4(1.);e=0.;}
  float grit=dot(sampleC.rgb,vec3(.299,.587,.114));
@@ -130,6 +134,7 @@ void main(){
   sheen=0.;mist=0.;
  }
  vec3 col=base*lit+vec3(1.,.80,.55)*sheen+base*e;
+ if(skinActive&&clay<.5)col+=texture(skinEmission,UV).rgb*1.45;
  if(Q.w==4.&&clay<.5){
   float rim=pow(1.-abs(dot(n,v)),2.3);
   col+=vec3(.36,.74,.54)*rim*(.72+.08*sin(clock*1.8));
@@ -157,7 +162,7 @@ export class Renderer{
  constructor(canvas){
   this.canvas=canvas;this.gl=canvas.getContext('webgl2',{alpha:false,antialias:true,powerPreference:'high-performance'});if(!this.gl)throw Error('WebGL 2 is unavailable. Enable graphics acceleration in desktop Chrome, then reload.');
   const gl=this.gl;this.program=compile(gl,vs,fs);this.depthProgram=compile(gl,vs,depthFS);
-  this.loc={};for(let p of [this.program,this.depthProgram]){let u={};for(let k of ['VP','offset','lightVP','worldObject','objectMatrix','clock','core','clay','character','actorOpacity','atlas','shadowMap','floorTex','eye','lamps','lampRed[0]','shadowStep','hand','torchPower','torchPos','torchDir','flexPivot','flexForward','flexNormal','flexWidth','flexAmount','digitWidths','knuckles','digitLengths','fingerAmounts','footprints[0]'])u[k]=gl.getUniformLocation(p,k);this.loc[p===this.program?'main':'depth']=u;}
+  this.loc={};for(let p of [this.program,this.depthProgram]){let u={};for(let k of ['VP','offset','lightVP','worldObject','objectMatrix','clock','core','clay','character','actorOpacity','atlas','shadowMap','floorTex','eye','lamps','lampRed[0]','shadowStep','hand','torchPower','torchPos','torchDir','flexPivot','flexForward','flexNormal','flexWidth','flexAmount','digitWidths','knuckles','digitLengths','fingerAmounts','footprints[0]','skinActive','skinBones[0]','skinBase','skinEmission'])u[k]=gl.getUniformLocation(p,k);u.skinBones=u['skinBones[0]'];this.loc[p===this.program?'main':'depth']=u;}
   this.buffers={};
   const lv=cameraView([-8,88,25],[-10,-88,5]);const ortho=new Float32Array([1/50,0,0,0,0,1/70,0,0,0,0,-2/180,0,0,0,-1,1]);this.lightVP=multiply(ortho,lv);
  }
@@ -205,10 +210,11 @@ export class Renderer{
   this.groups=[];
   for(let i=0;i<worlds.length;i++){
    this.groups.push(this.batch(worlds[i],slots,i===0));
-   progress(.67+.27*(i+1)/worlds.length,'창고 메시 준비 중');
+   progress(.67+.16*(i+1)/worlds.length,'창고 메시 준비 중');
    await new Promise(r=>requestAnimationFrame(r));
   }
   this.lights=worlds[0].lights;
+  this.skins=new CharacterSkins(gl);await this.skins.load((p,label)=>progress(.83+.16*p,label));
   this.setQuality('BALANCED');
  }
  batch(world,slots,chunked){
@@ -257,7 +263,7 @@ export class Renderer{
   const width=Math.max(2,Math.round(c.clientWidth*ratio)),height=Math.max(2,Math.round(c.clientHeight*ratio));if(c.width!==width||c.height!==height){c.width=width;c.height=height;}
   const aspect=width/height,proj=perspective(78*Math.PI/180,aspect,.045,95),vp=multiply(proj,cameraView(eye,forward));this.vp=vp;
   gl.viewport(0,0,width,height);gl.clearColor(.025,.032,.046,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.useProgram(this.program);
-  const u=this.loc.main;gl.uniform1f(u.character,0);gl.uniform1f(u.clay,0);gl.uniformMatrix4fv(u.VP,false,vp);gl.uniformMatrix4fv(u.lightVP,false,this.lightVP);gl.uniform3fv(u.eye,eye);const right=unit(cross(forward,[0,1,0])),up=cross(right,forward),off=pose.torchOffset??[0,0,0];
+  const u=this.loc.main;gl.uniform1i(u.skinActive,0);gl.uniform1f(u.character,0);gl.uniform1f(u.clay,0);gl.uniformMatrix4fv(u.VP,false,vp);gl.uniformMatrix4fv(u.lightVP,false,this.lightVP);gl.uniform3fv(u.eye,eye);const right=unit(cross(forward,[0,1,0])),up=cross(right,forward),off=pose.torchOffset??[0,0,0];
   // A viewmodel can overlap nearby geometry; the light origin stays near the eye
   // to avoid placing a light source on the far side of a wall.
   const local=pose.torchLocal?.position??[.325,-.283,-.887],dir=pose.torchLocal?.direction??[-.045,-.025,-1];
@@ -280,6 +286,7 @@ export class Renderer{
    const transparent=[];
    for(const actor of pose.actors){
     if(actor.root&&!planes.every(p=>p[0]*actor.root[0]+p[1]*actor.root[1]+p[2]*actor.root[2]+p[3]>-3.1))continue;
+    if(actor.skinName&&this.skins?.has(actor.skinName)){if(actor.skin)this.skins.draw(u,actor.skin,actor.opacity,pose.clay);continue;}
     gl.uniform1f(u.character,actor.prop?0:1);
     gl.uniform1f(u.actorOpacity,actor.opacity??1);
     gl.uniformMatrix4fv(u.objectMatrix,false,actor.matrix);

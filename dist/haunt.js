@@ -484,12 +484,14 @@ export function hauntLayers(s){
   const opacity=emergence*(1-leaving)*flicker;
   const surface=a.surfaceY??0,roll=a.surfaceRoll??0;
   const root=matrix([a.x,surface+rise*(1-Math.min(1,surface))-.09*coil-(1-emergence)*.14+leaving*(float?.24:-.09),a.z],[0,a.yaw,roll]);
+  const skinName=['ghost','boxhead','imp','wraith'][i];
+  const skin={name:skinName,kind:i,root,angles,floor:!float&&Math.abs(roll)<.02&&emergence>.98&&leaving<.02&&!['climbUp','climbDown','climbTop','climbWindup'].includes(a.state)?surface:null};
   const boneMatrices=[];
   return joints.map(({pivot,parent},j)=>{
    const joint=multiply(matrix(pivot,angles[j]),matrix(pivot.map(v=>-v)));
    const bone=multiply(parent===undefined?root:boneMatrices[parent],joint);
    boneMatrices.push(bone);
-   return {group:ACTOR_START+i*joints.length+j,matrix:bone,opacity,root:[a.x,surface+1,a.z],
+   return {group:ACTOR_START+i*joints.length+j,matrix:bone,opacity,skinName,skin:j===0?skin:null,root:[a.x,surface+1,a.z],
     footprint:j===0&&surface<.5?[a.x,a.z,i===2?.37:i===1?.45:.62,float?.16:.49]:null};
   });
  });

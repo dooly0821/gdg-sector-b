@@ -59,7 +59,7 @@ export function peerLayers(client,s,dt,group){
   const speed=Math.hypot(p.vx??0,p.vz??0),bob=Math.sin(old.steps*10)*Math.min(.035,speed*.008),sy=Math.max(.61,Math.min(1,old.bodyHeight/1.7));
   const axes=basis(Math.sin(old.steps*5)*Math.min(.06,speed*.01),Math.PI+old.yaw,0);
   const matrix=new Float32Array([...axes.flatMap((a,i)=>[...a.map(v=>v*(i===1?sy:1)),0]),old.x,old.y+bob,old.z,1]);
-  layers.push({group,matrix,root:[old.x,old.y+1,old.z]});
+  layers.push({group,matrix,root:[old.x,old.y+1,old.z],skinName:'player',skin:{name:'player',root:matrix,floor:p.grounded!==false&&!p.vault?old.y:null,state:{speed,steps:old.steps,bodyHeight:old.bodyHeight,carried:p.carried??-1,vault:!!p.vault}}});
   // The same shared parcel batch is rendered in the teammate's hands.
   if(p.carried>=0){const x=old.x-Math.sin(old.yaw)*.42,z=old.z-Math.cos(old.yaw)*.42,m=new Float32Array([...basis(0,Math.PI+old.yaw,0).flatMap(a=>[...a,0]),x,old.y+.90*sy,z,1]);layers.push({group:1,matrix:m,root:[x,old.y+1,z],prop:true});}
  }
