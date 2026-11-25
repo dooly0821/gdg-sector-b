@@ -22,12 +22,13 @@ async function durable(config,body){
  if(!/^[A-Z2-9]{6}$/.test(code))throw new RoomError('6자리 방 코드를 입력하세요.');
  const stateKey=key(code),lockKey=stateKey+':lock',token=randomBytes(16).toString('hex');
  if(!await redis(config,['SET',lockKey,token,'NX','PX',8000]))throw new RoomError('방 상태 동기화 중입니다. 다시 시도하세요.',423);
+ let committed=false;
  try{
   const value=await redis(config,['GET',stateKey]);if(!value)throw new RoomError('방을 찾을 수 없습니다.',404);
   const room=JSON.parse(value);room.shared.stateless=true;const result=operateRoom(room,body,now);
   if(!await redis(config,['EVAL',commit,2,lockKey,stateKey,token,serializeRoom(room),ROOM_TTL]))throw new RoomError('방 상태 동기화 중입니다.',423);
-  return result;
- }finally{try{await redis(config,['EVAL',release,1,lockKey,token]);}catch{}}
+  committed=true;return result;
+ }finally{if(!committed){try{await redis(config,['EVAL',release,1,lockKey,token]);}catch{}}}
 }
 function memory(body){
  const now=Date.now();
@@ -42,7 +43,10 @@ function memory(body){
 export async function roomRequest(body,{allowMemory=false}={}){
  if(!body||typeof body!=='object'||Array.isArray(body)||!['create','join','sync','start','ready','leave','health'].includes(body.op))throw new RoomError('잘못된 요청입니다.');
  const config=env(),configured=!!(config.url&&config.token);
- if(body.op==='health')return {online:configured||allowMemory,storage:configured?'redis':allowMemory?'memory':'unconfigured'};
+ if(body.op==='health'){
+  if(configured){try{const pong=await redis(config,['PING']);return {online:pong==='PONG',storage:'redis',maxPlayers:4,region:process.env.VERCEL_REGION||null};}catch{return {online:false,storage:'redis',maxPlayers:4,region:process.env.VERCEL_REGION||null};}}
+  return {online:allowMemory,storage:allowMemory?'memory':'unconfigured',maxPlayers:4,region:process.env.VERCEL_REGION||null};
+ }
  if(!configured&&!allowMemory)throw new RoomError('협동 서버의 공유 저장소가 아직 연결되지 않았습니다. 싱글플레이는 정상 이용할 수 있습니다.',503);
  if(body.op!=='create'&&body.op!=='join'&&(typeof body.token!=='string'||body.token.length!==48))throw new RoomError('잘못된 입장 인증입니다.',401);
  return configured?durable(config,body):memory(body);

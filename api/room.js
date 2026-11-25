@@ -1,6 +1,7 @@
 import {roomRequest} from '../server/room-service.js';
 export default async function handler(req,res){
  res.setHeader('Cache-Control','no-store');res.setHeader('Content-Type','application/json; charset=utf-8');
+ if(req.method==='GET'){try{const state=await roomRequest({op:'health'});res.status(state.online?200:503).json(state);}catch{res.status(503).json({online:false,maxPlayers:4});}return;}
  if(req.method!=='POST'){res.status(405).json({error:'POST 요청만 허용합니다.'});return;}
  try{
   const raw=typeof req.body==='string'?req.body:JSON.stringify(req.body??{});

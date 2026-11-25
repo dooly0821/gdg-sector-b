@@ -2,5 +2,8 @@
   "framework": null,
   "buildCommand": "",
   "installCommand": "",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "regions": [
+    "hnd1"
+  ]
 }
