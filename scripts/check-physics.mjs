@@ -55,7 +55,8 @@ function crossing(name,position,passed,{keys=w,landing,props=blocks}={}){
 }
 crossing('C-01 rail head-on',annex,s=>s.z>7.46,{keys:sprint,landing:0});
 crossing('rail at contact', {...annex,z:6.859},s=>s.z>7.46,{keys:sprint,landing:0});
-crossing('diagonal sprint',{...annex,z:6.4,yaw:Math.PI*1.25,vx:4.8,vz:4.8},s=>s.z>7.46&&s.x>-33,{keys:sprint,landing:0});
+// The diagonal trajectory lands on the existing .48 m dressing crate beyond the rail.
+crossing('diagonal sprint',{...annex,z:6.4,yaw:Math.PI*1.25,vx:4.8,vz:4.8},s=>s.z>7.46&&s.x>-33,{keys:sprint,landing:.48});
 crossing('warehouse upper rail',deck,s=>s.x<10.78,{keys:sprint,landing:0});
 crossing('warehouse ramp rail',ramp,s=>s.x<11.35,{keys:sprint,landing:0});
 crossing('ascending diagonal on ramp',{...ramp,yaw:Math.PI/4,vx:-3,vz:-3},s=>s.x<11.35&&s.z<11,{keys:sprint,landing:0});
