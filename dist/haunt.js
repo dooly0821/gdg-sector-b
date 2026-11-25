@@ -1,4 +1,5 @@
 import {updateClimber} from './climber.js';
+import {HUNT_PROFILE,clearObservation,observePlayer,pursueVisible,lostTrail,searchBearing,searchExpired,alreadyChecked} from './haunt-tactics.js';
 import {DRESSING_HIDE} from './dressing.js';
 import {parcelBlocks} from './mission.js';
 import {closedLocker,lockerDoorBlocks,lockerEntry} from './lockers.js';
@@ -107,7 +108,7 @@ function chooseTeamTarget(root,actor,nav,assigned,difficulty){
  const players=root.teamPlayers.filter(p=>!p.failed);
  const old=players.find(p=>p.id===actor.targetId);
  if(old&&(actor.climb||actor.lockerId&&closedLocker(old)?.id===actor.lockerId||['windup','charge'].includes(actor.state)||(actor.targetDelay??0)>0))return old;
- actor.targetDelay=.28+actor.kind*.035;
+ actor.targetDelay=.40+actor.kind*.045;
  let best=null,score=Infinity;
  for(const p of players){
   const d=Math.hypot(p.x-actor.x,p.z-actor.z);
@@ -115,7 +116,7 @@ function chooseTeamTarget(root,actor,nav,assigned,difficulty){
   const local=d<24?queryBlocks(nav,Math.min(p.x,actor.x)-1,Math.min(p.z,actor.z)-1,Math.max(p.x,actor.x)+1,Math.max(p.z,actor.z)+1):[];
   const sight=d<cast[actor.kind].range*difficulty.range&&!hiding&&line(local,actor,p);
   const noise=p.noise&&root.elapsed-p.noise.time<.55&&Math.hypot(p.noise.x-actor.x,p.noise.z-actor.z)<p.noise.radius*[1.12,1.55,.85,.95][actor.kind]*difficulty.hearing;
-  const value=d-(sight?7:0)-(noise?4:0)-(old===p?4:0)+(assigned.get(p.id)??0)*5+(hiding&&old!==p?16:0);
+  const value=d-(sight?8:0)-(noise?5:0)-(old===p?(actor.pursuit?8:4):0)+(assigned.get(p.id)??0)*6+(hiding&&old!==p?16:0);
   if(value<score){score=value;best=p;}
  }
  return best;
@@ -207,7 +208,7 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
   if(team)actor.targetDelay=Math.max(0,(actor.targetDelay??0)-dt);
   const s=team?chooseTeamTarget(root,actor,nav,assigned,difficulty):root;if(!s)return;
   const forward=team?s.teamView??rootForward:rootForward;
-  if(team){s.hauntSounds=root.hauntSounds??=[];s.hauntCooldown=root.hauntCooldown;if(actor.targetId!==s.id){actor.targetId=s.id;actor.sightDelay=0;actor.seenCache=false;actor.beam=0;if(!actor.climb){actor.pursuit=false;actor.lastKnown=null;actor.state='patrol';actor.navPath=null;actor.navJob=null;actor.navDelay=0;}}assigned.set(s.id,(assigned.get(s.id)??0)+1);}
+  if(team){s.hauntSounds=root.hauntSounds??=[];s.hauntCooldown=root.hauntCooldown;if(actor.targetId!==s.id){actor.targetId=s.id;clearObservation(actor);actor.lastHeardTime=null;actor.sightDelay=0;actor.seenCache=false;actor.beam=0;if(!actor.climb){actor.pursuit=false;actor.lastKnown=null;actor.state='patrol';actor.navPath=null;actor.navJob=null;actor.navDelay=0;}}assigned.set(s.id,(assigned.get(s.id)??0)+1);}
   if((actor.spawnGrace??0)>0){
    const old=actor.spawnGrace;actor.spawnGrace=Math.max(0,old-dt);
    actor.speed=0;actor.phase+=dt*.65;
@@ -215,7 +216,7 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
    return;
   }
   const previous=actor.state;
-  const i=actor.kind,type=cast[i],delta=[s.x-actor.x,s.z-actor.z],dist=Math.hypot(...delta);
+  const i=actor.kind,type=cast[i],profile=HUNT_PROFILE[i],body={r:sizes[i],y:type.float,h:bodyHeights[i]},delta=[s.x-actor.x,s.z-actor.z],dist=Math.hypot(...delta);
   const local=queryBlocks(nav,Math.min(actor.x,s.x)-2,Math.min(actor.z,s.z)-2,Math.max(actor.x,s.x)+2,Math.max(actor.z,s.z)+2);
   if(actor.state==='ceilingStalk'||actor.state==='wallDescent'){
    actor.phase+=dt*8;actor.timer=Math.max(0,actor.timer-dt);
@@ -237,11 +238,12 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
   if(climb?.handled){if(climb.hit){actor.speed=0;captured=type.name;s.handAction=null;s.pendingUse=null;s.vault=null;s.jumpBuffer=0;s.vx=s.vz=s.vy=0;s.failed=true;s.capturedBy=i;}return;}
   const safe=s.grounded&&REFUGES.some(([x,y,z,r])=>Math.abs(s.y-y)<.09&&Math.hypot(s.x-x,s.z-z)<r);
   const pursuit=actor.pursuit??false,torchOn=(s.flashAmount??0)>.25;
-  const detectRange=type.range*difficulty.range*(s.bodyHeight<1.2&&!torchOn?.67:1);
+  const detectRange=type.range*difficulty.range*1.04*(s.bodyHeight<1.2&&!torchOn?.67:1);
   const near=dist<5.5,range=pursuit?24+(difficulty.count-1)*2:Math.max(5.5,detectRange);
   actor.sightDelay=(actor.sightDelay??0)-dt;
   // Immediately test entry into the close zone or a newly switched-on light.
-  if(actor.sightDelay<=0||near!==actor.wasNear||torchOn!==actor.wasTorch){
+  const sampledSight=actor.sightDelay<=0||near!==actor.wasNear||torchOn!==actor.wasTorch;
+  if(sampledSight){
    actor.sightDelay=near?.035:.075+i*.009;
    actor.seenCache=dist<Math.max(range,torchOn?20:0)&&line(local,actor,s);
    actor.beam=lightSense(local,actor,s,forward);
@@ -250,7 +252,7 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
   const lit=!hiding&&!safe&&torchOn&&(actor.beam??0)>.25;
   const seen=!hiding&&!safe&&actor.seenCache&&(dist<range||torchOn&&dist<type.range*difficulty.range+4)||lit;
   const acquired=seen&&!pursuit;
-  const noise=s.noise,hearing=[1.12,1.55,.85,.95][i]*difficulty.hearing;
+  const noise=s.noise,hearing=[1.12,1.55,.85,.95][i]*difficulty.hearing*profile.hearing;
   const heard=!hiding&&noise&&s.elapsed-noise.time<.55&&Math.hypot(noise.x-actor.x,noise.z-actor.z,noise.y-eyeHeights[i])<noise.radius*hearing;
   if(!hiding&&actor.lockerId){
    const done=actor.lockerDone;
@@ -259,18 +261,19 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
    if(['lockerSearch','lockerWait','lockerLeave','lockerAway'].includes(actor.state)){actor.state=done?'patrol':'search';actor.pursuit=!done;actor.timer=4;actor.navDelay=0;actor.navPath=null;actor.navJob=null;}
   }
   if(seen){
-   actor.lastKnown=[s.x,s.z];actor.lost=0;actor.pursuit=true;actor.searchPoint=null;actor.inspect=null;actor.checked=[];actor.fakeDone=false;
+   if(sampledSight||!actor.observedPoint)observePlayer(actor,s);
+   actor.lastKnown=(actor.observedPoint??[s.x,s.z]).slice();actor.lost=0;actor.pursuit=true;actor.searchPoint=null;actor.inspect=null;actor.checked=[];actor.fakeDone=false;
    if(acquired||['fakeLeave','ambush','inspect','guard','patrol'].includes(actor.state)){
     actor.state='alert';actor.timer=0;actor.navDelay=0;actor.navDirect=false;actor.navPath=null;actor.navJob=null;actor.recoverPoint=null;
     actor.speed=Math.max(actor.speed??0,2.6);actor.aggression=Math.max(actor.aggression??0,.65);
     actor.reveal=1;
    }
   }
-  else {actor.lost=(actor.lost??0)+dt;if(heard){actor.lastKnown=[noise.x,noise.z];actor.searchPoint=null;}}
+  else {actor.lost=(actor.lost??0)+dt;if(heard&&noise.time!==actor.lastHeardTime){actor.lastHeardTime=noise.time;actor.lastKnown=[noise.x,noise.z];actor.lost=0;actor.searchPoint=null;clearObservation(actor);if(actor.pursuit)actor.inspect=null;}}
   // Do not give up just because one frame of sight was blocked.
   // Once acquired, continue to the last seen position and sweep the area.
-  if(actor.pursuit&&dist>difficulty.escape&&(actor.lost??0)>difficulty.memory){
-   actor.pursuit=false;actor.state='patrol';actor.lastKnown=null;actor.corner=null;actor.inspect=null;actor.fakeDone=false;
+  if(actor.pursuit&&!seen&&!hiding&&searchExpired(actor,difficulty,dist)){
+   actor.pursuit=false;actor.state='patrol';actor.lastKnown=null;actor.corner=null;actor.inspect=null;actor.fakeDone=false;actor.searchPoint=null;clearObservation(actor);actor.navDelay=0;
   }
   if(i===3&&s.horrorEvent?.type==='drop'&&s.elapsed-s.horrorEvent.time<.55&&dist<4){actor.state='disappear';return;}
   actor.lightReaction=approach(actor.lightReaction??0,lit?1:0,dt*9);
@@ -290,7 +293,7 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
     return direct??options[0]??actor.lockerAway??here;
    };
    if(actor.state==='lockerSearch'&&(Math.hypot(actor.x-entry[0],actor.z-entry[1])<.65||!actor.timer)){
-    actor.state='lockerWait';actor.timer=(torchOn?7:4.5)+rng()*2;actor.lockerPaceOrigin=[actor.x,actor.z];actor.navDelay=0;
+    actor.state='lockerWait';actor.timer=(torchOn?7:4.5)+rng()*2+[.4,.9,.25,.65][i];actor.lockerPaceOrigin=[actor.x,actor.z];actor.navDelay=0;
    }else if(actor.state==='lockerWait'&&!actor.timer){
     actor.lockerAway=chooseAway();actor.state='lockerLeave';actor.timer=12;actor.navDelay=0;actor.navJob=null;actor.navPath=null;actor.recoverPoint=null;
    }else if(actor.state==='lockerLeave'&&Math.hypot(actor.x-hiding.x,actor.z-hiding.z)>10){
@@ -330,13 +333,17 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
    }
   }else if(heard){actor.state='search';actor.timer=5;}
   else if(actor.state==='search'&&!actor.timer){actor.state='patrol';actor.lastKnown=null;}
+  // Follow one plausible continuation of the last observed motion, then sweep.
+  if(actor.state==='search'&&actor.lastKnown&&!seen&&!safe&&!hiding&&!actor.trailUsed&&Math.hypot(actor.x-actor.lastKnown[0],actor.z-actor.lastKnown[1])<1.3){
+   const trail=lostTrail(actor,nav,body);if(trail){actor.lastKnown=trail.slice();actor.searchPoint=null;actor.inspect=null;actor.navDelay=0;}
+  }
   // Inspect likely hiding entrances using only the last known position.
   if(actor.state==='search'&&actor.lastKnown&&!seen&&!safe){
    const nearLast=Math.hypot(actor.x-actor.lastKnown[0],actor.z-actor.lastKnown[1])<2.5;
    if(nearLast||actor.inspect){
     actor.checked??=[];
     if(!actor.inspect){
-     actor.inspect=[...HIDING_POINTS,...DRESSING_HIDE].filter(p=>!actor.checked.includes(p)&&Math.hypot(p[0]-actor.lastKnown[0],p[1]-actor.lastKnown[1])<7&&clear(blocks,p[0],p[1],sizes[i],type.float,bodyHeights[i])).sort((a,b)=>Math.hypot(a[0]-actor.x,a[1]-actor.z)-Math.hypot(b[0]-actor.x,b[1]-actor.z))[0]??null;
+     actor.inspect=[...HIDING_POINTS,...DRESSING_HIDE].filter(p=>!alreadyChecked(actor,p)&&Math.hypot(p[0]-actor.lastKnown[0],p[1]-actor.lastKnown[1])<7&&clear(blocks,p[0],p[1],sizes[i],type.float,bodyHeights[i])).sort((a,b)=>Math.hypot(a[0]-actor.x,a[1]-actor.z)-Math.hypot(b[0]-actor.x,b[1]-actor.z))[0]??null;
     }
     if(actor.inspect&&Math.hypot(actor.x-actor.inspect[0],actor.z-actor.inspect[1])<.85){actor.checked.push(actor.inspect);actor.state='inspect';actor.timer=.65+i*.13;}
     else if(!actor.inspect&&!actor.fakeDone&&(actor.lost??0)>2.1){
@@ -353,7 +360,7 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
     actor.searchDelay=1.4;
     const phase=(actor.scanPhase??0)+2.40;actor.scanPhase=phase;
     const center=actor.lastKnown;
-    for(let k=0;k<8;k++){const angle=phase+k*Math.PI/4,r=1.5+(k%3)*.85,x=center[0]+Math.sin(angle)*r,z=center[1]+Math.cos(angle)*r;
+    for(let k=0;k<8;k++){const angle=searchBearing(actor,phase)+k*Math.PI/4,r=1.5+(k%3)*.85,x=center[0]+Math.sin(angle)*r,z=center[1]+Math.cos(angle)*r;
      if(inMap(x,z)&&clear(blocks,x,z,sizes[i],type.float,bodyHeights[i])){actor.searchPoint=[x,z];break;}}
    }
   }
@@ -361,9 +368,9 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
   actor.aggression=approach(actor.aggression,chasing?1:actor.state==='windup'?.75:0,dt*5.5);
   if(actor.state==='patrol'&&Math.hypot(path[actor.pathIndex][0]-actor.x,path[actor.pathIndex][1]-actor.z)<.5)
    actor.pathIndex=(actor.pathIndex+actor.direction+path.length)%path.length;
-  const target=actor.state==='lockerSearch'?entry:actor.state==='lockerWait'?[(actor.lockerPaceOrigin?.[0]??actor.x)+Math.sin(actor.age*2.1)*.36,actor.lockerPaceOrigin?.[1]??actor.z]:['lockerLeave','lockerAway'].includes(actor.state)?(actor.lockerAway??[actor.x,actor.z]):actor.state==='guard'?(actor.guardPoint??[actor.x,actor.z]):actor.state==='fakeLeave'?(actor.fakeTarget??[actor.x,actor.z]):actor.state==='ambush'?[actor.x,actor.z]:actor.inspect&&(actor.state==='search'||actor.state==='inspect')?actor.inspect:(actor.state==='charge'||actor.state==='windup')?(actor.chargeTarget??actor.lastKnown??[s.x,s.z]):actor.state==='search'&&actor.lastKnown?(actor.searchPoint??actor.lastKnown):chasing?(seen?[s.x,s.z]:(actor.lastKnown??[s.x,s.z])):path[actor.pathIndex];
+  const target=actor.state==='lockerSearch'?entry:actor.state==='lockerWait'?[(actor.lockerPaceOrigin?.[0]??actor.x)+Math.sin(actor.age*2.1)*.36,actor.lockerPaceOrigin?.[1]??actor.z]:['lockerLeave','lockerAway'].includes(actor.state)?(actor.lockerAway??[actor.x,actor.z]):actor.state==='guard'?(actor.guardPoint??[actor.x,actor.z]):actor.state==='fakeLeave'?(actor.fakeTarget??[actor.x,actor.z]):actor.state==='ambush'?[actor.x,actor.z]:actor.inspect&&(actor.state==='search'||actor.state==='inspect')?actor.inspect:(actor.state==='charge'||actor.state==='windup')?(actor.chargeTarget??actor.lastKnown??[s.x,s.z]):actor.state==='search'&&actor.lastKnown?(actor.searchPoint??actor.lastKnown):chasing?(seen?pursueVisible(actor,s,nav,body,dt):(actor.lastKnown??path[actor.pathIndex])):path[actor.pathIndex];
   const retreat=actor.state==='retreat';
-  const body={r:sizes[i],y:type.float,h:bodyHeights[i]},still=actor.state==='inspect'||actor.state==='ambush';
+  const still=actor.state==='inspect'||actor.state==='ambush';
   if(actor.navState!==actor.state){actor.navState=actor.state;actor.navDelay=0;actor.navDirect=false;if(still||retreat){actor.navPath=null;actor.navJob=null;actor.recoverPoint=null;}}
   const seek=retreat?[actor.x-delta[0]/Math.max(.01,dist)*2,actor.z-delta[1]/Math.max(.01,dist)*2]:target;
   const resolved=!still&&recover(actor,nav,body,seek,dt);
@@ -376,7 +383,7 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
   const rage=lit&&(i===1||i===2)?1.14:1;
   // Different chase rhythms; the telegraphed charge is faster than sprinting.
   const pulse=i===0?.88+.22*Math.sin(actor.phase*.73):i===1?.91+.18*Math.sin(actor.phase*.46):i===2?.94+.10*Math.sin(actor.phase*.31):.87+.26*Math.pow(.5+.5*Math.sin(actor.phase*.69),3);
-  const goalSpeed=actor.state==='lockerWait'?.70:actor.state==='lockerSearch'?3.0:['lockerLeave','lockerAway'].includes(actor.state)?2.8:actor.state==='ambush'||actor.state==='inspect'?0:actor.state==='fakeLeave'?2.3:actor.state==='guard'?Math.hypot(actor.x-target[0],actor.z-target[1])>1.3?2.5:0:retreat?3.3:actor.state==='windup'?type.speed*.38:actor.state==='charge'?type.speed*1.32*pressure:actor.state==='recovery'?type.speed*.72:chasing?type.speed*pressure*pulse*rage*(actor.state==='search'?.88:1):actor.state==='search'?2.8:1.35;
+  const goalSpeed=actor.state==='lockerWait'?.70:actor.state==='lockerSearch'?3.0:['lockerLeave','lockerAway'].includes(actor.state)?2.8:actor.state==='ambush'||actor.state==='inspect'?0:actor.state==='fakeLeave'?2.3:actor.state==='guard'?Math.hypot(actor.x-target[0],actor.z-target[1])>1.3?2.5:0:retreat?3.3:actor.state==='windup'?type.speed*.38:actor.state==='charge'?type.speed*1.32*pressure:actor.state==='recovery'?type.speed*.72:chasing?type.speed*profile.speed*pressure*pulse*rage*(actor.state==='search'?.88*profile.search:1):actor.state==='search'?2.8:1.35;
   actor.speed=approach(actor.speed,aim?goalSpeed:0,dt*(actor.state==='charge'?18:chasing?[23,22,20,25][i]:7));
   const before=[actor.x,actor.z],distance=aim?Math.hypot(aim[0]-actor.x,aim[1]-actor.z):0;
   const stride=Math.min(actor.speed*dt,distance);
