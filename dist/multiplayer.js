@@ -1,16 +1,18 @@
 import {basis} from './world.js';
 import {nudgeCoopPosition} from './movement.js';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),finite=(v,d=0)=>Number.isFinite(v)?v:d,blend=(a,b,t)=>a+(b-a)*t;
+export function sampleTiming(snap,sent,received){const rtt=Math.max(0,received-sent);if(![snap.serverReceived,snap.serverSent,snap.serverTime].every(Number.isFinite))return {sample:received-Math.min(rtt*.5,500),rtt};const processing=clamp(snap.serverSent-snap.serverReceived,0,rtt),transit=(rtt-processing)*.5,age=clamp(snap.serverSent-snap.serverTime,0,1000);return {sample:received-clamp(transit+age,0,1200),rtt};}
+export function pollDelay({rtt=120,players=2,collided=false,contention=0,dirty=false,playing=true,random=Math.random()}){if(!playing)return 850+random*80;if(collided)return Math.min(160,25+15*contention)+random*35;const target=players>2?145:120;return dirty?Math.max(12,30-rtt)+random*5:clamp(target-rtt,16,90)+random*18;}
 export class CoopClient{
  constructor(onState,onError,input){this.onState=onState;this.onError=onError;this.input=input;this.room=null;this.token=null;this.snapshot=null;this.seq=0;this.queue=[];this.running=false;this.busy=false;this.peers=new Map();}
  async request(op,extra={}){
-  const sent=performance.now();
+  const sent=performance.now();this.lastRequestAt=sent;
   const res=await fetch('/api/room',{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify({op,room:this.room,token:this.token,...extra}),signal:AbortSignal.timeout(10000)});
   let data;try{data=await res.json();}catch{throw Error('협동 서버에 연결할 수 없습니다.');}
   if(!res.ok){const e=new Error(data.error||'서버 연결 오류');e.status=res.status;throw e;}
   const received=performance.now(),rtt=received-sent;
   this.rtt=this.rtt==null?rtt:blend(this.rtt,rtt,.2);
-  if(data.snapshot){data.snapshot.netReceived=received;data.snapshot.netSample=received-Math.min(rtt*.5,500);data.snapshot.netRtt=rtt;}
+  if(data.snapshot){const timing=sampleTiming(data.snapshot,sent,received);data.snapshot.netReceived=received;data.snapshot.netSample=timing.sample;data.snapshot.netRtt=rtt;}
   return data;
  }
  accept(data){
@@ -23,7 +25,7 @@ export class CoopClient{
  }
  async connect(op,room=null,nickname){
   if(this.running)return;
-  this.room=room;this.seq=0;this.queue=[];this.peers.clear();this.rtt=null;this.contention=0;
+  this.room=room;this.seq=0;this.queue=[];this.peers.clear();this.rtt=null;this.contention=0;this.dirty=false;
   this.accept(await this.request(op,{nickname}));this.running=true;this.poll();
  }
  async action(op){
@@ -32,7 +34,8 @@ export class CoopClient{
   if(this.busy){this.pendingAction=op;return;}
   this.busy=true;try{const data=await this.request(op);if(this.running)this.accept(data);}catch(e){if(e.status===423)this.pendingAction=op;else this.onError?.(e);}finally{this.busy=false;}
  }
- command(type){if(this.running&&this.snapshot?.phase==='playing'&&this.queue.length<64){this.queue.push({seq:++this.seq,type});if(!this.busy&&this.runPoll){clearTimeout(this.timer);this.timer=setTimeout(this.runPoll,0);}}}
+ inputChanged(){if(!this.running||this.snapshot?.phase!=='playing')return;this.dirty=true;if(!this.busy&&this.runPoll){clearTimeout(this.timer);this.timer=setTimeout(this.runPoll,Math.max(0,30-(performance.now()-(this.lastRequestAt??0))));}}
+ command(type){if(this.running&&this.snapshot?.phase==='playing'&&this.queue.length<64){this.queue.push({seq:++this.seq,type});this.inputChanged();}}
  poll(){
   if(!this.running)return;
   const run=async()=>{
@@ -42,7 +45,7 @@ export class CoopClient{
     this.busy=true;
     const pending=this.pendingAction;this.pendingAction=null;
     try{
-     const input=this.input?.()??{keys:[],yaw:0,pitch:0};
+     const input=this.input?.()??{keys:[],yaw:0,pitch:0};this.dirty=false;
      const data=await this.request(pending||'sync',pending?{}:{input,commands:this.queue.slice(0,16)});
      if(this.running){this.accept(data);this.failures=0;this.contention=Math.max(0,(this.contention??0)-1);}
     }catch(e){
@@ -52,8 +55,7 @@ export class CoopClient{
    }
    if(this.running){
     const playing=this.snapshot?.phase==='playing',players=this.snapshot?.players?.length??2;
-    const normal=clamp(35+finite(this.rtt,120)*.25+Math.max(0,players-2)*15,55,155);
-    const delay=collided?Math.min(220,45+20*this.contention)+Math.random()*65:playing?(this.queue.length?Math.min(45,normal):normal)+Math.random()*28:850+Math.random()*80;
+    const delay=pollDelay({playing,players,rtt:finite(this.rtt,120),collided,contention:this.contention??0,dirty:this.dirty||this.queue.length>0});
     this.timer=setTimeout(run,delay);
    }
   };this.runPoll=run;this.timer=setTimeout(run,70+Math.random()*70);
@@ -68,7 +70,7 @@ export function peerLayers(client,s,dt,group){
   if(Math.hypot(p.x-s.x,p.z-s.z)>35)continue;
   seen.add(p.id);let old=client.peers.get(p.id);
   if(!old||Math.hypot(old.x-p.x,old.z-p.z)>4){old={...p};client.peers.set(p.id,old);}
-  const alpha=1-Math.exp(-dt*12),age=clamp((performance.now()-finite(client.snapshot.netSample,performance.now()))/1000,0,.14),ahead=p.grounded!==false&&!p.vault?age:0;
+  const alpha=1-Math.exp(-dt*12),age=clamp((performance.now()-finite(client.snapshot.netSample,performance.now()))/1000,0,.24),ahead=p.grounded!==false&&!p.vault?age:0;
   for(const [k,v] of [['x','vx'],['z','vz']])old[k]+=(p[k]+finite(p[v])*ahead-old[k])*alpha;
   for(const k of ['y','bodyHeight'])old[k]+=(p[k]-old[k])*alpha;
   const targetSpeed=Math.hypot(finite(p.vx),finite(p.vz));
@@ -87,13 +89,13 @@ export function peerLayers(client,s,dt,group){
 }
 // Reconcile against the pose at the estimated server sample time.
 export function recordCoopPrediction(s,now){
- const h=s.netHistory??=[];h.push({t:now,x:s.x,y:s.y,z:s.z,cx:s.netAppliedX??0,cz:s.netAppliedZ??0});
+ const h=s.netHistory??=[];h.push({t:now,x:s.x,y:s.y,z:s.z,cx:s.netAppliedX??0,cz:s.netAppliedZ??0,grounded:!!s.grounded,vault:!!s.vault});
  while(h.length>180||h.length>1&&h[1].t<now-1800)h.shift();
 }
 function historyAt(s,time){
  const h=s.netHistory??[];if(!h.length)return null;
  if(time<=h[0].t)return time<h[0].t-120?null:h[0];
- for(let i=1;i<h.length;i++)if(h[i].t>=time){const a=h[i-1],b=h[i],u=clamp((time-a.t)/Math.max(1,b.t-a.t),0,1);return Object.fromEntries(['x','y','z','cx','cz'].map(k=>[k,blend(a[k],b[k],u)]));}
+ for(let i=1;i<h.length;i++)if(h[i].t>=time){const a=h[i-1],b=h[i],u=clamp((time-a.t)/Math.max(1,b.t-a.t),0,1);return {...Object.fromEntries(['x','y','z','cx','cz'].map(k=>[k,blend(a[k],b[k],u)])),grounded:(u<.5?a:b).grounded,vault:(u<.5?a:b).vault};}
  return h[h.length-1];
 }
 export function applyCoopSnapshot(s,snap,first=false){
@@ -103,11 +105,11 @@ export function applyCoopSnapshot(s,snap,first=false){
  const history=historyAt(s,sampleAt),age=clamp((now-sampleAt)/1000,0,.18);
  const dx=history?v.x-history.x-((s.netAppliedX??0)-history.cx):v.x+finite(v.vx)*age-s.x;
  const dz=history?v.z-history.z-((s.netAppliedZ??0)-history.cz):v.z+finite(v.vz)*age-s.z;
- const err=Math.hypot(dx,dz),vertical=Math.abs(s.y-v.y);
- const verticalConflict=s.grounded&&v.grounded&&vertical>.40;
- const mismatch=!!s.grounded!==!!v.grounded||!!s.vault!==!!v.vault;
+ const err=Math.hypot(dx,dz),vertical=Math.abs((history?.y??s.y)-v.y);
+ const verticalConflict=(history?.grounded??s.grounded)&&v.grounded&&s.grounded&&vertical>.55;
+ const mismatch=!!(history?.grounded??s.grounded)!==!!v.grounded||!!(history?.vault??s.vault)!==!!v.vault;
  s.netMismatchAt=mismatch?(s.netMismatchAt??now):null;
- const hard=first||hidden!==oldHidden||v.failed||err>3.25||verticalConflict||mismatch&&now-s.netMismatchAt>1000&&vertical>.45;
+ const hard=first||hidden!==oldHidden||v.failed||err>(history?4.25:3.25)||verticalConflict||mismatch&&now-s.netMismatchAt>1000&&vertical>.45;
  if(hard){
   for(const k of ['x','y','z','vx','vy','vz','grounded','bodyHeight','steps','vault','onRail'])s[k]=v[k]??(k==='vault'?null:s[k]);
   s.netHistory=[];s.netAppliedX=s.netAppliedZ=0;s.netCorrection=[0,0];s.netMismatchAt=null;

@@ -1,4 +1,5 @@
 import {randomBytes} from 'node:crypto';
+import {createSyncEngine} from './room-sync.js';
 import {normalizeNickname} from '../dist/nickname.js';
 import {PUBLIC_SERVERS,publicServer,publicStatus} from '../dist/public-servers.js';
 import {createRoom,operateRoom,snapshot,roomCode,RoomError,serializeRoom,ROOM_TTL} from './room-core.js';
@@ -13,6 +14,13 @@ const key=code=>'gdg:coop:v1:'+code;
 const release="if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('DEL',KEYS[1]) else return 0 end";
 const acquire="if not redis.call('SET',KEYS[1],ARGV[1],'NX','PX',ARGV[2]) then return {0} end; return {1,redis.call('GET',KEYS[2]) or ''}";
 const commit="if redis.call('GET',KEYS[1])~=ARGV[1] then return 0 end; redis.call('SET',KEYS[2],ARGV[2],'EX',ARGV[3]); redis.call('DEL',KEYS[1]); return 1";
+const cas="local current=redis.call('GET',KEYS[2]); if not current then return {3} end; if redis.call('EXISTS',KEYS[1])==1 then return {0,current} end; if current~=ARGV[1] then return {2,current} end; redis.call('SET',KEYS[2],ARGV[2],'EX',ARGV[3]); return {1}";
+const syncEngine=createSyncEngine({
+ read:({config,stateKey})=>redis(config,['GET',stateKey]),
+ compare:({config,stateKey,lockKey},previous,next)=>redis(config,['EVAL',cas,2,lockKey,stateKey,previous,next,ROOM_TTL]),
+ operate:operateRoom,serialize:serializeRoom,error:(m,s)=>new RoomError(m,s)
+});
+const cacheKey=(config,stateKey)=>config.url+'|'+stateKey;
 async function durable(config,body){
  let now=Date.now();
  if(body.op==='list'){
@@ -22,13 +30,14 @@ async function durable(config,body){
  if(body.op==='create'){
   for(let n=0;n<5;n++){
    const code=roomCode();if(publicServer(code))continue;const {room,player}=createRoom(code,now,body.nickname);
-   if(await redis(config,['SET',key(code),serializeRoom(room),'NX','EX',ROOM_TTL]))return {token:player.token,snapshot:snapshot(room,player)};
+   const raw=serializeRoom(room);if(await redis(config,['SET',key(code),raw,'NX','EX',ROOM_TTL])){syncEngine.remember(cacheKey(config,key(code)),raw);return {token:player.token,snapshot:snapshot(room,player)};}
   }throw new RoomError('방 생성에 실패했습니다.',503);
  }
  const code=String(body.room||'').toUpperCase();
  if(!/^[A-Z2-9]{6}$/.test(code))throw new RoomError('6자리 방 코드를 입력하세요.');
  if(body.op==='enter'&&!publicServer(code))throw new RoomError('공개 서버를 찾을 수 없습니다.',404);
  const stateKey=key(code),lockKey=stateKey+':lock',token=randomBytes(16).toString('hex');
+ if(body.op==='sync')return syncEngine.sync(cacheKey(config,stateKey),{config,stateKey,lockKey},body);
  const locked=await redis(config,['EVAL',acquire,2,lockKey,stateKey,token,8000]);
  if(!Array.isArray(locked)||Number(locked[0])!==1)throw new RoomError('방 상태 동기화 중입니다. 다시 시도하세요.',423);
  let committed=false;
@@ -42,8 +51,8 @@ async function durable(config,body){
    else result=operateRoom(room,{op:'join',nickname:body.nickname},now);
   }else{if(!room)throw new RoomError('방을 찾을 수 없습니다.',404);result=operateRoom(room,body,now);}
   room.shared.stateless=true;
-  if(!await redis(config,['EVAL',commit,2,lockKey,stateKey,token,serializeRoom(room),ROOM_TTL]))throw new RoomError('방 상태 동기화 중입니다.',423);
-  committed=true;return result;
+  const raw=serializeRoom(room);if(!await redis(config,['EVAL',commit,2,lockKey,stateKey,token,raw,ROOM_TTL]))throw new RoomError('방 상태 동기화 중입니다.',423);
+  committed=true;syncEngine.remember(cacheKey(config,stateKey),raw);return result;
  }finally{if(!committed){try{await redis(config,['EVAL',release,1,lockKey,token]);}catch{}}}
 }
 function memory(body){
@@ -70,7 +79,7 @@ export async function roomRequest(body,{allowMemory=false}={}){
  if(body.op==='enter'&&!normalizeNickname(body.nickname))throw new RoomError('닉네임을 2~12자로 입력하세요.');
  const config=env(),configured=!!(config.url&&config.token);
  if(body.op==='health'){
-  if(configured){try{const pong=await redis(config,['PING']);return {online:pong==='PONG',storage:'redis',maxPlayers:4,region:process.env.VERCEL_REGION||null};}catch{return {online:false,storage:'redis',maxPlayers:4,region:process.env.VERCEL_REGION||null};}}
+  if(configured){try{const pong=await redis(config,['PING']);return {online:pong==='PONG',storage:'redis',maxPlayers:4,netRevision:2,region:process.env.VERCEL_REGION||null};}catch{return {online:false,storage:'redis',maxPlayers:4,netRevision:2,region:process.env.VERCEL_REGION||null};}}
   return {online:allowMemory,storage:allowMemory?'memory':'unconfigured',maxPlayers:4,region:process.env.VERCEL_REGION||null};
  }
  if(!configured&&!allowMemory)throw new RoomError('협동 서버의 공유 저장소가 아직 연결되지 않았습니다. 싱글플레이는 정상 이용할 수 있습니다.',503);
