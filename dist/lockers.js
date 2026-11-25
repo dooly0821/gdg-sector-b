@@ -1,6 +1,7 @@
+import {DENSE_LOCKERS} from './density.js';
 import {World,basis,dot} from './world.js';
 import {traceBox} from './contact.js';
-export const LOCKERS=Object.freeze([[9,13],[-36,17],[10,39],[-37,40],[-39.5,65.5],[9,68]].map(([x,z],i)=>Object.freeze({x,z,id:i+1})));
+export const LOCKERS=Object.freeze([[9,13],[-36,17],[10,39],[-37,40],[-39.5,65.5],[9,68],...DENSE_LOCKERS].map(([x,z],i)=>Object.freeze({x,z,id:i+1})));
 const W=1.16,D=1.12,H=2.12,half=W/2,front=D/2,span=W-.09;
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const hinge=l=>[l.x-half+.045,l.z-front];

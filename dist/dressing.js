@@ -1,3 +1,4 @@
+import {DENSE_HIDE} from './density.js';
 // Curated, collision-checked set dressing. Coordinates in metres.
 export const DRESSING=[
  {zone:'B',stairs:[5.5,8],rack:[-7,-2],stack:[4.5,-3]},
@@ -14,7 +15,7 @@ export const CLIMB_ROUTES=DRESSING.map(({stairs:[x,z],zone})=>({
  nodes:[[x,0,z-3.28],...Array.from({length:6},(_,i)=>[x,STEP_H*(i+1),z-2.675+i*TREAD]),[x,DECK_Y,z+1.05],[x,DECK_Y,z+1.85]]
 }));
 // Low rack bays are physical cover, not immunity zones.
-export const DRESSING_HIDE=DRESSING.flatMap(({rack:[x,z],stairs:[a,b]})=>[[x,z-.90],[a,b+1.7]]);
+export const DRESSING_HIDE=[...DRESSING.flatMap(({rack:[x,z],stairs:[a,b]})=>[[x,z-.90],[a,b+1.7]]),...DENSE_HIDE];
 export function buildDressing(w){
  const metal=w.mat('dressing-frame','#505b5d','metal'),steel=w.mat('dressing-tread','#656660','metal'),dark=w.mat('dressing-shadow','#292d2c','metal'),amber=w.mat('dressing-edge','#b38e4c','paint'),wood=w.mat('dressing-pallet','#785e42','wood'),card=w.mat('dressing-cardboard','#968061','wood'),strap=w.mat('dressing-strap','#343c37','rubber'),bin=w.mat('dressing-bin','#535b54','metal'),red=w.mat('dressing-pump','#684239','paint');
  const solid=(x,y,z,a,h,d,m,kind)=>{w.box(x,y+h/2,z,a,h,d,m);w.block(x-a/2,z-d/2,x+a/2,z+d/2,y,y+h,kind);};

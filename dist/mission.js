@@ -1,3 +1,4 @@
+import {buildDenseDressing} from './density.js';
 import {buildDressing} from './dressing.js';
 import {traceBox} from './contact.js';
 import {buildLockers,lockerDoorBlocks,advanceLockers,closedLocker} from './lockers.js';
@@ -65,7 +66,7 @@ export function createScene(){
  w.box(x,1.72,z-1,3.46,.55,.1,black);w.sign(x,1.71,z-.94,3.32,.45,'DISPATCH   /   BAY 02','#b08837','#171b17');
  const parcel=new World(),empty=new World(),carry=new World();buildParcel(parcel,0,0,0,CONFIG.parcelWidth);buildHands(empty,false);buildHands(carry,true);
  const flashlight=new World();buildFlashlight(flashlight);
- buildDressing(w);
+ buildDressing(w);buildDenseDressing(w);
  sceneBlocks.add(w.blocks);
  return [w,parcel,empty,carry,flashlight];
 }
