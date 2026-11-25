@@ -79,9 +79,14 @@ export function surface(x,z,y){
  if(x>=11&&x<=14.9&&z>=-20&&z<=7.08&&y>=3.25)return 3.6;
  return 0;
 }
+const parcelBlockCache=new WeakMap();
 export function parcelBlocks(s){
- const [w,h,d]=parcelHalf;
- return parcelPositions(s).map(([x,y,z])=>[x-w,z-d,x+w,z+d,y,y+h,'climb']);
+ const [w,h,d]=parcelHalf,states=s.states;
+ const signature=states.join(',')+'|'+(s.deliveryOrder??[]).join(',')+'|'+Object.entries(s.parked??{}).map(([i,p])=>i+':'+p.join(',')).join(';');
+ const old=parcelBlockCache.get(states);
+ if(old?.signature===signature&&old.cargo===s.cargo)return old.blocks;
+ const blocks=parcelPositions(s).map(([x,y,z])=>[x-w,z-d,x+w,z+d,y,y+h,'climb']);
+ parcelBlockCache.set(states,{signature,cargo:s.cargo,blocks});return blocks;
 }
 export function step(s,keys,blocks,dt,jump=false){
  const dynamic=sceneBlocks.has(blocks)?parcelBlocks(s).filter(b=>b[0]<s.x+3&&b[2]>s.x-3&&b[1]<s.z+3&&b[3]>s.z-3):[];

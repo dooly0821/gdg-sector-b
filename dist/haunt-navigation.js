@@ -1,10 +1,10 @@
 // Spatial collision index and incremental, persistent A* for ground creatures.
 const CELL=.5,BUCKET=4,clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),key=(x,z)=>x+','+z;
 const bounds=(x,z)=>x>-42.5&&x<14.35&&z>-21.1&&z<77.5&&(x>=-15||z>-8.65);
-export function indexBlocks(blocks){
- const buckets=new Map();
+export function indexBlocks(blocks,base=null){
+ const buckets=new Map(base??[]),copied=new Set();
  for(const block of blocks)for(let x=Math.floor(block[0]/BUCKET);x<=Math.floor(block[2]/BUCKET);x++)for(let z=Math.floor(block[1]/BUCKET);z<=Math.floor(block[3]/BUCKET);z++){
-  const k=key(x,z);if(!buckets.has(k))buckets.set(k,[]);buckets.get(k).push(block);
+  const k=key(x,z);if(!buckets.has(k))buckets.set(k,[]);else if(base&&!copied.has(k))buckets.set(k,buckets.get(k).slice());copied.add(k);buckets.get(k).push(block);
  }
  return buckets;
 }

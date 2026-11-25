@@ -81,7 +81,7 @@ function lightSense(blocks,actor,s,forward){
  }
  return strength;
 }
-const mapCache=new WeakMap();
+const mapCache=new WeakMap(),staticNavCache=new WeakMap();
 const bodyHeights=[1.85,1.8,.95,1.95];
 const inMap=(x,z)=>x>-42.5&&x<14.35&&z>-21.1&&z<77.5&&(x>=-15||z>-8.65);
 const sizes=[.35,.34,.44,.32];
@@ -195,7 +195,9 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
  if(s.navStatic!==staticBlocks||s.navEvent!==s.horrorEvent||s.navCarried!==s.carried||s.navLockerRevision!==s.lockerRevision){
   s.navStatic=staticBlocks;s.navEvent=s.horrorEvent;s.navCarried=s.carried;
   s.navLockerRevision=s.lockerRevision;
-  s.navBlocks=staticBlocks.concat(s.states?parcelBlocks(s):[],lockerDoorBlocks(s));s.navIndex=indexBlocks(s.navBlocks);
+  const dynamic=(s.states?parcelBlocks(s):[]).concat(lockerDoorBlocks(s));
+  if(!staticNavCache.has(staticBlocks))staticNavCache.set(staticBlocks,indexBlocks(staticBlocks));
+  s.navBlocks=staticBlocks.concat(dynamic);s.navIndex=indexBlocks(dynamic,staticNavCache.get(staticBlocks));
  }
  blocks=s.navBlocks;const nav=s.navIndex;
  s.haunt??=[];
@@ -431,7 +433,7 @@ export const buildHauntRigs=buildCreatureRigs;
 function matrix(position,angles=[0,0,0],scale=1){
  return new Float32Array([...basis(...angles).flatMap(axis=>[...axis.map(v=>v*scale),0]),...position,1]);
 }
-export function hauntLayers(s){
+export function hauntLayers(s,hasSkin=null){
  return (s.haunt??[]).flatMap(a=>{
   const i=a.kind,type=cast[i],joints=CREATURE_JOINTS[i];
   if(Math.hypot(a.x-s.x,a.z-s.z)>35)return [];
@@ -493,6 +495,7 @@ export function hauntLayers(s){
   const root=matrix([a.x,surface+rise*(1-Math.min(1,surface))-.09*coil-(1-emergence)*.14+leaving*(float?.24:-.09),a.z],[0,a.yaw,roll]);
   const skinName=['ghost','boxhead','imp','wraith'][i];
   const skin={name:skinName,kind:i,root,angles,floor:!float&&Math.abs(roll)<.02&&emergence>.98&&leaving<.02&&!['climbUp','climbDown','climbTop','climbWindup'].includes(a.state)?surface:null};
+  if(hasSkin?.(skinName))return [{group:ACTOR_START+i*joints.length,matrix:root,opacity,skinName,skin,root:[a.x,surface+1,a.z],footprint:surface<.5?[a.x,a.z,i===2?.37:i===1?.45:.62,float?.16:.49]:null}];
   const boneMatrices=[];
   return joints.map(({pivot,parent},j)=>{
    const joint=multiply(matrix(pivot,angles[j]),matrix(pivot.map(v=>-v)));
