@@ -78,8 +78,8 @@ export function fpPlan(pose,dedicated=false){
    // At transfer, align the new box centre to the existing carried carton.
    // Then raise the dedicated model into the validated 78-degree camera framing.
    const progress=clamp((f.flash-.52)/.48),blend=smooth(progress),bob=f.bob??[0,0,0];
-   const from=[matrix[12]+.29*SIZE,matrix[13]+.065*SIZE,matrix[14]+.025*SIZE];
-   const to=[bob[0]*.65,-.265+bob[1]*.65,-.864+.365*SIZE-.05+bob[2]*.65];
+   const from=[matrix[12]+.45*SIZE,matrix[13]-.235*SIZE,matrix[14]-.185*SIZE];
+   const to=[bob[0]*.65,-.22+bob[1]*.65,-.647+bob[2]*.65];
    return {name:'boxflashlight',matrix:mat(from.map((v,i)=>mix(v,to[i],blend)),[0,0,0,1],SIZE),contact:false,progress};
   }
   if(f.flash>.001){
