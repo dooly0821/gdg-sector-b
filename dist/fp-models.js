@@ -46,7 +46,17 @@ async function upload(gl,model){
   const vao=gl.createVertexArray();gl.bindVertexArray(vao);
   const buffers=[];for(const [i,v,size] of [[0,p.positions,3],[1,p.normals,3],[2,p.uv,2]]){const b=gl.createBuffer();buffers.push(b);gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,v,gl.STATIC_DRAW);gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,size,gl.FLOAT,false,0,0);}
   const ib=gl.createBuffer();buffers.push(ib);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,p.indices,gl.STATIC_DRAW);gl.bindVertexArray(null);
-  return {vao,buffers,count:p.indices.length,type:p.indices instanceof Uint32Array?gl.UNSIGNED_INT:p.indices instanceof Uint8Array?gl.UNSIGNED_BYTE:gl.UNSIGNED_SHORT,material:materials[p.material]};
+  // The authored flashlight mesh contains two disconnected components.
+  // Extract only the right hand/tool for one-handed cargo transport.
+  let rightBuffer=null,rightCount=0;
+  if(model.nodes.some(n=>n.name==='GDG_FP_Flashlight_Skin_V2')){
+   const right=[];for(let i=0;i<p.indices.length;i+=3){
+    const a=p.indices[i],b=p.indices[i+1],c=p.indices[i+2];
+    if(p.positions[a*3]>0&&p.positions[b*3]>0&&p.positions[c*3]>0)right.push(a,b,c);
+   }
+   if(right.length){rightBuffer=gl.createBuffer();buffers.push(rightBuffer);gl.bindVertexArray(vao);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,rightBuffer);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new p.indices.constructor(right),gl.STATIC_DRAW);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);gl.bindVertexArray(null);rightCount=right.length;}
+  }
+  return {vao,buffers,ib,rightBuffer,rightCount,count:p.indices.length,type:p.indices instanceof Uint32Array?gl.UNSIGNED_INT:p.indices instanceof Uint8Array?gl.UNSIGNED_BYTE:gl.UNSIGNED_SHORT,material:materials[p.material]};
  }));
  return {...model,materials,meshes};
 }
@@ -57,12 +67,21 @@ const ROOT=mat([0,-.584+.135*SIZE,-.864+.365*SIZE],[0,0,0,1],SIZE);
 const shifted=(m,p)=>multiply(mat(p),m);
 export function fpPlan(pose){
  const f=pose.fp;if(!f)return null;
- // Exact contact and vault reach remain with the existing IK path until new
- // assets have finger articulation; simultaneous tool+parcel has no authored model.
- if(f.vault||f.holding&&f.flash>.001)return null;
+ // Preserve contact and vault IK; the simultaneous steady state composes
+ // the left cargo arm, parcel and the right-only flashlight mesh.
+ if(f.vault)return null;
  if(f.action&&!pose.assembly)return null;
  if(f.action&&pose.assembly){const l=pose.hands.find(h=>h.group===6);if(!l?.matrix)return null;return {name:'boxcarry',matrix:multiply(l.matrix,ROOT),contact:true};}
- if(f.holding){const l=pose.hands.find(h=>h.group===6);return {name:'boxcarry',matrix:shifted(ROOT,l?.offset??[0,0,0]),contact:false};}
+ if(f.holding){
+  const l=pose.hands.find(h=>h.group===6),matrix=shifted(ROOT,l?.offset??[0,0,0]);
+  if(f.flash>.001){
+   const lift=smooth((f.flash-.52)/.24),tool=f.flash>=.76;
+   const torchOffset=pose.hands.some(h=>h.group===7)?pose.torchOffset:f.bob;
+   const torchMatrix=shifted(ROOT,[(torchOffset?.[0]??0),(torchOffset?.[1]??0)-.18*(1-smooth((f.flash-.76)/.24)),torchOffset?.[2]??0]);
+   return {name:'boxcarry',matrix,contact:false,combined:true,lift,tool,torchMatrix};
+  }
+  return {name:'boxcarry',matrix,contact:false};
+ }
  if(f.flash>=.5){return {name:'flashlight',matrix:shifted(ROOT,[f.bob[0],f.bob[1]-.12*(1-smooth((f.flash-.5)/.5)),f.bob[2]]),contact:false};}
  return {name:'empty',matrix:shifted(ROOT,[f.bob[0],f.bob[1]-.05*smooth(f.flash/.5),f.bob[2]]),contact:false};
 }
@@ -77,15 +96,38 @@ export class FPModels{
  }
  draw(u,pose){
   const plan=fpPlan(pose);if(!plan)return false;const model=this.models.get(plan.name);if(!model)return false;
+  const torch=plan.combined?this.models.get('flashlight'):null;
+  if(plan.combined&&!torch?.meshes.some(mesh=>mesh.some(p=>p.rightCount>0)))return false;
   const gl=this.gl,f=pose.fp,t=f.t,speed=f.speed,walk=smooth(speed/.8),run=smooth((speed-4.5)/2.5);
   let nodes=nodePoses(model,null,0);
   if(plan.name==='empty')nodes=blendPoses(nodePoses(model,'Empty_Idle',t),blendPoses(nodePoses(model,'Empty_Walk',t),nodePoses(model,'Empty_Run',t),run),walk*.8);
   if(plan.name==='boxcarry'&&!plan.contact)nodes=blendPoses(nodePoses(model,'Carry_Idle',t),nodePoses(model,'Carry_Walk',t),walk*.65);
   // World contact is handled by the existing flight matrix, not duplicated clip motion.
   gl.uniform1i(u.fpActive,1);gl.uniform1i(u.skinActive,0);gl.uniform1i(u.worldObject,1);gl.uniform1f(u.flexAmount,0);gl.uniform1f(u.character,0);gl.uniform1f(u.clay,0);gl.uniform1f(u.actorOpacity,1);gl.uniform3f(u.offset,0,0,0);
-  const visit=(i,parent)=>{const n=model.nodes[i],p=nodes[i],m=multiply(parent,mat(p.translation,p.rotation));if(n.mesh!==undefined){gl.uniformMatrix4fv(u.objectMatrix,false,m);for(const b of model.meshes[n.mesh]){const a=b.material;gl.activeTexture(gl.TEXTURE3);gl.bindTexture(gl.TEXTURE_2D,a.base);gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,a.mr);gl.uniform2f(u.fpFactors,a.rough,a.metal);gl.bindVertexArray(b.vao);gl.vertexAttrib3f(3,0,0,0);gl.vertexAttrib3f(4,1,0,0);gl.vertexAttrib3f(5,0,1,0);gl.vertexAttrib3f(6,0,0,1);gl.vertexAttrib4f(7,1,1,1,0);gl.vertexAttrib4f(8,0,.2,1,2);gl.drawElements(gl.TRIANGLES,b.count,b.type,0);}}
-   for(const child of n.children??[])visit(child,m);};
-  for(const root of model.roots)visit(root,plan.matrix);
+  const visit=(asset,poses,i,parent,rightOnly=false)=>{
+   const n=asset.nodes[i],p=poses[i];
+   if(plan.combined&&asset===model&&n.name==='RightArm'&&plan.tool)return;
+   const tr=p.translation.slice();
+   // Lower the releasing hand before the flashlight emerges.
+   if(plan.combined&&asset===model&&n.name==='RightArm'){tr[0]+=.16*plan.lift;tr[1]-=.30*plan.lift;tr[2]+=.16*plan.lift;}
+   const m=multiply(parent,mat(tr,p.rotation));
+   if(n.mesh!==undefined){
+    gl.uniformMatrix4fv(u.objectMatrix,false,m);
+    for(const b of asset.meshes[n.mesh]){
+     if(rightOnly&&!b.rightCount)continue;
+     const a=b.material;
+     gl.activeTexture(gl.TEXTURE3);gl.bindTexture(gl.TEXTURE_2D,a.base);
+     gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,a.mr);
+     gl.uniform2f(u.fpFactors,a.rough,a.metal);gl.bindVertexArray(b.vao);
+     gl.vertexAttrib3f(3,0,0,0);gl.vertexAttrib3f(4,1,0,0);gl.vertexAttrib3f(5,0,1,0);gl.vertexAttrib3f(6,0,0,1);gl.vertexAttrib4f(7,1,1,1,0);gl.vertexAttrib4f(8,0,.2,1,2);
+     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,rightOnly?b.rightBuffer:b.ib);
+     gl.drawElements(gl.TRIANGLES,rightOnly?b.rightCount:b.count,b.type,0);
+    }
+   }
+   for(const child of n.children??[])visit(asset,poses,child,m,rightOnly);
+  };
+  for(const root of model.roots)visit(model,nodes,root,plan.matrix);
+  if(plan.combined&&plan.tool){const rest=nodePoses(torch,null,0);for(const root of torch.roots)visit(torch,rest,root,plan.torchMatrix,true);}
   gl.uniform1i(u.fpActive,0);gl.uniform1i(u.worldObject,0);gl.activeTexture(gl.TEXTURE0);return true;
  }
 }
