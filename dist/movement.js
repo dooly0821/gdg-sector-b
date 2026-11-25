@@ -63,7 +63,7 @@ function planRailMount(s,blocks,x,z,surface){
   const thinX=b[2]-b[0]<b[3]-b[1],px=thinX?(b[0]+b[2])/2:clamp(s.x+x*.18,b[0]+.025,b[2]-.025),
    pz=thinX?clamp(s.z+z*.18,b[1]+.025,b[3]-.025):(b[1]+b[3])/2;
   const dx=px-s.x,dz=pz-s.z,d=Math.hypot(dx,dz),landing=railTop(b,px,pz),rise=landing-s.y;
-  if(d<.035||d>.85||rise<.22||rise>1.22||d>.39&&(dx*x+dz*z)/d<.35)continue;
+  if(d<.035||d>.92||rise<.22||rise>1.22||d>.39&&(dx*x+dz*z)/d<.35)continue;
   candidates.push({px,pz,d,landing});
  }
  candidates.sort((a,b)=>a.d-b.d);
