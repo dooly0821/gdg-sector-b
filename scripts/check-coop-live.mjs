@@ -46,7 +46,12 @@ async function stage(n){
   return report;
  }finally{if(room)for(const c of own.reverse()){try{await retry({op:'leave',room,token:c.token})}catch(e){console.log('cleanup: '+e.message)}}}
 }
-const start=performance.now();const health=await fetch(URL,{signal:AbortSignal.timeout(6000)});const data=await health.json();console.log('GDG_HEALTH '+JSON.stringify({http:health.status,ms:Math.round(performance.now()-start),online:data.online,storage:data.storage,region:data.region,maxPlayers:data.maxPlayers}));
-if(!health.ok||!data.online)throw Error('health check failed');
+let health,data;
+for(let i=0;i<8;i++){
+ const start=performance.now();health=await fetch(URL,{signal:AbortSignal.timeout(6000)});data=await health.json();console.log('GDG_HEALTH '+JSON.stringify({http:health.status,ms:Math.round(performance.now()-start),online:data.online,storage:data.storage,region:data.region,maxPlayers:data.maxPlayers,netRevision:data.netRevision??1}));
+ if(health.ok&&data.online&&data.netRevision===2)break;
+ await wait(1500);
+}
+if(!health?.ok||!data?.online||data.netRevision!==2)throw Error('production revision 2 not yet visible');
 const reports=[];for(const n of [2,4]){reports.push(await stage(n));await wait(400);}
 console.log('GDG_SUMMARY '+JSON.stringify({reports,requests}));
