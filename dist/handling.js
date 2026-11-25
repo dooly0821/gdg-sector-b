@@ -271,5 +271,5 @@ export function choreography(s,eye,near,moving,sprinting,t,view=forward(s)){
   torchOffset[2]+=.06*brace;
   hands[torchIndex]=torchLayer(hands[torchIndex]);
  }
- return {hands,flight,assembly,flashlight:flash>(holding?.82:.65)?smooth((flash-(holding?.82:.65))/(holding?.18:.35)):0,torchOffset,torchLocal:torchAim,hidden};
+ return {hands,flight,assembly,fp:{holding,flash,action:!!a,vault:!!s.vault,t,speed:s.motionSpeed??Math.hypot(s.vx??0,s.vz??0),bob},flashlight:flash>(holding?.82:.65)?smooth((flash-(holding?.82:.65))/(holding?.18:.35)):0,torchOffset,torchLocal:torchAim,hidden};
 }
