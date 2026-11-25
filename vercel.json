@@ -1,6 +1,6 @@
 {
   "framework": null,
-  "buildCommand": "",
+  "buildCommand": "node scripts/check-coop.mjs && node scripts/check-coop-stability.mjs",
   "installCommand": "",
   "outputDirectory": "dist",
   "regions": [
