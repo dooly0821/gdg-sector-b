@@ -50,16 +50,27 @@ function plan(){
 }
 function coopInput(){const s=session??{};return {keys:mode==='game'&&!s.failed?[...keys]:[],yaw:s.yaw??0,pitch:s.pitch??0};}
 function stopServerList(){clearTimeout(coopListTimer);coopListGeneration++;coopListBusy=false;}
+function coopSlots(count,players=null,you=null,host=null){
+ const n=Math.max(0,Math.min(4,Number(count)||0));
+ return '<div class="coop-roster">'+Array.from({length:4},(_,i)=>{
+  const p=players?.[i],occupied=i<n;
+  const label=p?escapeNickname(p.name)+(p.id===you?' (나)':''):occupied?'접속 작업자 '+(i+1):'빈 자리';
+  const state=p?(p.failed?'사망':p.hidden?'은신':p.id===host?'방장':'대기 중'):occupied?'접속 중':'대기';
+  const tone=p?.failed?'red':p?.hidden?'muted':occupied?'green':'muted';
+  return '<div class="coop-person '+(occupied?'occupied':'empty')+' '+(p&&p.id===you?'me':'')+'"><span class="worker-mark" aria-hidden="true"></span><span class="worker-name">'+label+'</span><span class="coop-state '+tone+'">'+state+'</span></div>';
+ }).join('')+'</div>';
+}
 function drawServerList(servers){
  const node=$('#coop-servers');if(!node)return;
  visibleServers=servers; if(!servers.some(s=>s.id===selectedServer&&s.joinable))selectedServer=servers.find(s=>s.joinable)?.id??null;
  node.innerHTML=servers.map(s=>{
-  const label=s.phase==='empty'?'입장 가능':s.phase==='lobby'?(s.count>=4?'정원 초과':'대기 중'):s.phase==='loading'?'근무 준비 중':s.phase==='playing'?'게임 진행 중':'근무 종료 중';
   const id=PUBLIC_SERVERS.find(p=>p.id===s.id);if(!id)return '';
   const count=Math.max(0,Math.min(4,Number(s.count)||0));
-  return '<button class="public-server '+(selectedServer===id.id?'selected':'')+'" data-action="coop-select-'+id.id+'" aria-pressed="'+(selectedServer===id.id)+'" '+(s.joinable&&!coopBusy?'':'disabled')+'><span class="server-title">'+id.name+'<small>'+label+'</small></span><span class="server-count">'+count+' / 4<span class="server-slots">'+Array.from({length:4},(_,i)=>'<i class="'+(i<count?'occupied':'')+'"></i>').join('')+'</span></span></button>';
+  const full=count>=4, label=full?'가득 참':s.phase==='empty'?'입장 가능':s.phase==='lobby'?'대기 중':s.phase==='loading'?'근무 준비 중':s.phase==='playing'?'플레이 중':'근무 종료 중';
+  const tone=full?'red':s.joinable?'green':'amber', index=PUBLIC_SERVERS.indexOf(id)+1;
+  return '<button class="public-server '+(selectedServer===id.id?'selected':'')+'" data-action="coop-select-'+id.id+'" aria-pressed="'+(selectedServer===id.id)+'" '+(s.joinable&&!coopBusy?'':'disabled')+'><span class="server-thumb server-thumb-'+index+'" aria-hidden="true"></span><span class="server-title">'+id.name+'<small>공개 배송 · 공동 근무</small></span><span class="server-count">'+count+' / 4<span class="server-slots">'+Array.from({length:4},(_,i)=>'<i class="'+(i<count?'occupied':'')+'"></i>').join('')+'</span></span><span class="coop-state '+tone+'">'+label+'</span></button>';
  }).join('');
- const detail=$('#server-preview');if(detail){const s=servers.find(s=>s.id===selectedServer);detail.innerHTML=s?'<h3>현재 서버 정보</h3><p>'+escapeNickname(s.name)+'</p><strong class="server-big">'+s.count+' / 4</strong><p>참가하면 실제 팀원 닉네임을 확인할 수 있습니다.</p>':'<h3>현재 서버 정보</h3><p>입장 가능한 서버가 없습니다.</p>';}
+ const detail=$('#server-preview');if(detail){const s=servers.find(s=>s.id===selectedServer);detail.innerHTML=s?'<h3><span class="coop-heading-icon" aria-hidden="true">♟</span>현재 팀 정보</h3><div class="server-summary"><strong>'+escapeNickname(s.name)+'</strong><b>'+s.count+' / 4</b></div>'+coopSlots(s.count)+'<p class="coop-team-tip">⚠ 참가하면 실제 팀원의 닉네임을 확인할 수 있습니다.</p>':'<h3>현재 팀 정보</h3><p>입장 가능한 서버가 없습니다.</p>'+coopSlots(0);}
  for(const id of ['#server-join','#server-quick']){const b=$(id);if(b)b.disabled=!servers.some(s=>s.joinable)||coopBusy;}
 }
 async function refreshServers(){
@@ -76,10 +87,10 @@ function coopLobby(){
  stopServerList();
  const snap=coop?.snapshot,note='<p id="coop-notice" role="status"></p>';
  if(!snap){
-  panel('coop','<p>공개 서버 · 최대 4인. 초대 코드 없이 같은 서버를 선택하면 됩니다.</p><label class="coop-label nickname-label" for="coop-nickname">닉네임<input id="coop-nickname" autocomplete="nickname" maxlength="24" placeholder="닉네임 입력 (2~12자)" value="'+escapeNickname(coopNickname)+'"><small>한글·영문·숫자, 공백, _ 및 - 사용 가능</small></label><div class="server-grid"><section class="gdg-section"><h3>공개 서버 목록</h3><div id="coop-servers" class="public-server-list"><p>서버 목록 연결 중…</p></div>'+action('coop-refresh','새로고침')+'</section><section id="server-preview" class="gdg-section"><h3>현재 서버 정보</h3><p>서버 선택 대기 중</p></section></div>'+note+'<div class="panel-actions"><button id="server-quick" class="primary" data-action="coop-quick" disabled>빠른 참가</button><button id="server-join" class="secondary" data-action="coop-join-selected" disabled>서버 참가</button>'+action('back','뒤로')+'</div>','멀티플레이','GDG / ONLINE SHIFT');
+  panel('coop','<p class="coop-intro">닉네임을 입력하고 공개 서버에 참가하세요</p><label class="coop-label nickname-label" for="coop-nickname"><span class="nickname-title">닉네임</span><input id="coop-nickname" autocomplete="nickname" maxlength="24" placeholder="닉네임 입력 (2~12자)" value="'+escapeNickname(coopNickname)+'"><small>한글·영문·숫자, 공백, _ 및 - 사용 가능</small></label><div class="server-grid"><section class="gdg-section coop-server-section"><div class="coop-server-head"><h3><span class="coop-heading-icon" aria-hidden="true">▤</span>공개 서버 목록</h3>'+action('coop-refresh','↻ 새로고침')+'</div><div id="coop-servers" class="public-server-list"><p>서버 목록 연결 중…</p></div></section><section id="server-preview" class="gdg-section"><h3>현재 서버 정보</h3><p>서버 선택 대기 중</p></section></div>'+note+'<div class="panel-actions"><button id="server-quick" class="primary" data-action="coop-quick" disabled>빠른 참가</button><button id="server-join" class="secondary" data-action="coop-join-selected" disabled>서버 참가</button>'+action('back','뒤로')+'</div>','멀티플레이','GDG / ONLINE SHIFT');
   refreshServers();
  }else{
-  const isHost=snap.host===snap.you,roster=snap.players.map(p=>'<div class="row"><span>'+escapeNickname(p.name)+(p.id===snap.you?' · 나':'')+'</span><b>'+(p.id===snap.host?'방장':'입장')+'</b></div>').join('');
+  const isHost=snap.host===snap.you,roster='<section class="gdg-section coop-lobby-roster"><h3>현재 팀 정보</h3>'+coopSlots(snap.players.length,snap.players,snap.you,snap.host)+'</section>';
   panel('coop','<div class="coop-code">'+serverName(snap.room)+'</div><p>접속 작업자 '+snap.players.length+' / 4</p>'+roster+note+'<div class="panel-actions">'+(isHost?'<button class="primary" data-action="coop-start" '+(snap.players.length<2?'disabled':'')+'>협동 근무 시작</button>':'')+action('coop-leave','서버 목록으로')+'</div>','협동 대기실','GDG / ONLINE SHIFT');
  }
  if($('#coop-notice'))$('#coop-notice').textContent=coopError||(snap?'방장만 시작 가능 · 최소 2명':'공개 서버 상태를 확인합니다.');
@@ -125,6 +136,7 @@ function onCoopState(snap){
 function panel(name,body,title,eyebrow='GDG / 근무 안내'){
  pane=name;const modal=$('#modal'),nav=$('#paneNav');modal.dataset.pane=name;modal.dataset.context=mode==='menu'?'menu':'game';$('#eyebrow').textContent=eyebrow;$('#paneTitle').textContent=title;$('#paneBody').innerHTML=body;
  const menuNav=mode==='menu'&&['manual','settings','quit','coop'].includes(name),pauseNav=name==='pause';
+ modal.dataset.layout=menuNav?'menu':pauseNav?'pause':'single';
  nav.hidden=!(menuNav||pauseNav);
  if(!nav.hidden){
  const buttons=menuNav?[['solo-start','싱글 모드',''],['coop','멀티 모드',''],['manual','조작 방법','manual'],['settings','설정','settings'],['quit','종료','quit']]:[['resume','계속하기',''],['manual','조작 방법','manual'],['settings','설정','settings'],['map','구역 지도',''],['brief','메인 메뉴',''],['quit','게임 종료','quit']];
