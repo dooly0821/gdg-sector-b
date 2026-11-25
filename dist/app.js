@@ -1,3 +1,4 @@
+import {normalizeNickname,escapeNickname} from './nickname.js';
 import {PUBLIC_SERVERS,serverName} from './public-servers.js';
 import {CoopClient,peerLayers,applyCoopSnapshot,interpolateCoopHaunt} from './multiplayer.js';
 import {drawTraversalDebug} from './traversal-debug.js';
@@ -13,7 +14,8 @@ import {LOCKER_DOOR_GROUP,TEAM_WORKER_GROUP,workerLegLayers,rigs,beginHandling,a
 import {Renderer} from './renderer.js';
 const $=s=>document.querySelector(s),canvas=$('#world'),keys=new Set(),icon=i=>'<svg aria-hidden="true"><use href="#i-'+i+'"/></svg>';
 let coop=null,soloSession=null,coopStarting=false,coopEnding=false,coopEventSeq=0,coopError='',coopBusy=false;
-let coopListTimer=null,coopListGeneration=0,coopListBusy=false;
+let coopListTimer=null,coopListGeneration=0,coopListBusy=false,coopNickname='';
+try{coopNickname=localStorage.getItem('gdg.nickname')??'';}catch{}
 let mode='menu',pane='',session=null,renderer,worlds,setupPromise,raf,last=0,drag=false,grabbing=false,lookReady=0,radioUntil=0,jump=false,accumulator=0;
 const defaults={quality:'BALANCED',scale:1,sensitivity:1,motion:false,audio:true};
 let settings={...defaults};try{Object.assign(settings,JSON.parse(localStorage.getItem('gdg.settings')||'{}'));}catch{}
@@ -62,7 +64,7 @@ async function refreshServers(){
  try{
   const data=await new CoopClient().request('list');
   if(generation!==coopListGeneration||pane!=='coop'||coop)return;
-  drawServerList(data.servers??[]);if($('#coop-notice'))$('#coop-notice').textContent='서버를 선택해 바로 참가하세요. 최소 2명부터 시작합니다.';
+  drawServerList(data.servers??[]);if($('#coop-notice'))$('#coop-notice').textContent='닉네임을 입력하고 서버를 선택하세요. 최소 2명부터 시작합니다.';
  }catch(e){if(generation===coopListGeneration&&pane==='coop'&&!coop)coopMessage(e);}
  finally{if(generation===coopListGeneration){coopListBusy=false;if(pane==='coop'&&!coop&&!coopBusy)coopListTimer=setTimeout(refreshServers,5000);}}
 }
@@ -70,10 +72,10 @@ function coopLobby(){
  stopServerList();
  const snap=coop?.snapshot,note='<p id="coop-notice" role="status"></p>';
  if(!snap){
-  panel('coop','<p>공개 서버 · 최대 4인. 초대 코드 없이 같은 서버를 선택하면 됩니다.</p><div id="coop-servers" class="public-server-list"><p>서버 목록 연결 중…</p></div>'+note+'<div class="panel-actions">'+action('coop-refresh','새로고침')+'</div>','멀티플레이','GDG / ONLINE SHIFT');
+  panel('coop','<p>공개 서버 · 최대 4인. 초대 코드 없이 같은 서버를 선택하면 됩니다.</p><label class="coop-label nickname-label" for="coop-nickname">닉네임<input id="coop-nickname" autocomplete="nickname" maxlength="24" placeholder="닉네임 입력 (2~12자)" value="'+escapeNickname(coopNickname)+'"><small>한글·영문·숫자, 공백, _ 및 - 사용 가능</small></label><div id="coop-servers" class="public-server-list"><p>서버 목록 연결 중…</p></div>'+note+'<div class="panel-actions">'+action('coop-refresh','새로고침')+'</div>','멀티플레이','GDG / ONLINE SHIFT');
   refreshServers();
  }else{
-  const isHost=snap.host===snap.you,roster=snap.players.map(p=>'<div class="row"><span>'+p.name+(p.id===snap.you?' · 나':'')+'</span><b>'+(p.id===snap.host?'방장':'입장')+'</b></div>').join('');
+  const isHost=snap.host===snap.you,roster=snap.players.map(p=>'<div class="row"><span>'+escapeNickname(p.name)+(p.id===snap.you?' · 나':'')+'</span><b>'+(p.id===snap.host?'방장':'입장')+'</b></div>').join('');
   panel('coop','<div class="coop-code">'+serverName(snap.room)+'</div><p>접속 작업자 '+snap.players.length+' / 4</p>'+roster+note+'<div class="panel-actions">'+(isHost?'<button class="primary" data-action="coop-start" '+(snap.players.length<2?'disabled':'')+'>협동 근무 시작</button>':'')+action('coop-leave','서버 목록으로')+'</div>','협동 대기실','GDG / ONLINE SHIFT');
  }
  if($('#coop-notice'))$('#coop-notice').textContent=coopError||(snap?'방장만 시작 가능 · 최소 2명':'공개 서버 상태를 확인합니다.');
@@ -81,11 +83,14 @@ function coopLobby(){
 function coopMessage(e){coopError=e.message||String(e);if(pane==='coop'&&$('#coop-notice'))$('#coop-notice').textContent=coopError;else if(mode==='game')say(coopError,3);}
 async function coopConnect(id){
  if(coopBusy||coop?.running||!PUBLIC_SERVERS.some(s=>s.id===id))return;
+ const field=$('#coop-nickname'),nickname=normalizeNickname(field?.value??coopNickname);
+ if(!nickname){coopMessage(new Error('닉네임을 2~12자로 입력하세요.'));field?.focus();return;}
+ coopNickname=nickname;try{localStorage.setItem('gdg.nickname',nickname);}catch{}
  stopServerList();coopBusy=true;coopError='';
  for(const b of document.querySelectorAll('.public-server'))b.disabled=true;
  if($('#coop-notice'))$('#coop-notice').textContent=serverName(id)+'에 참가하는 중…';
  const client=new CoopClient(snap=>{if(coop===client)onCoopState(snap);},coopMessage,coopInput);coop=client;
- try{await client.connect('enter',id);if(coop!==client){client.leave();return;}if(pane==='coop')coopLobby();}
+ try{await client.connect('enter',id,nickname);if(coop!==client){client.leave();return;}if(pane==='coop')coopLobby();}
  catch(e){if(coop===client){coop=null;coopMessage(e);}}
  finally{coopBusy=false;if(pane==='coop'&&!coop)refreshServers();}
 }
@@ -102,7 +107,7 @@ function onCoopState(snap){
  }else if(coopStarting&&session)applyCoopSnapshot(session,snap);
  if(!coopStarting||!session)return;
  const me=snap.players.find(p=>p.id===snap.you),team=$('#coop-team');
- if(team){team.hidden=false;team.textContent='CO-OP '+serverName(snap.room)+' · 생존 '+snap.players.filter(p=>!p.failed).length+'/'+snap.players.length+' · 개체 '+snap.haunt.length+'/'+snap.difficulty.maxActive;}
+ if(team){team.hidden=false;team.textContent='CO-OP '+serverName(snap.room)+' · 생존 '+snap.players.filter(p=>!p.failed).length+'/'+snap.players.length+' · 개체 '+snap.haunt.length+'/'+snap.difficulty.maxActive+'\n'+snap.players.map(p=>p.name+(p.id===snap.you?' (나)':'')+(p.failed?' · 사망':p.hidden?' · 은신':' · 생존')).join('\n');}
  for(const event of snap.events??[]){if(event.seq<=coopEventSeq)continue;coopEventSeq=event.seq;
   if(event.type==='haunt'){(session.hauntSounds??=[]).push(event);}
   else if(event.type==='notice'&&(!event.player||event.player===snap.you))say(event.message,3);
@@ -133,7 +138,7 @@ function openPane(name){
  '<article class="creature-guide"><h4>함귀 <small>소음 추적형</small></h4><p>네 개체 중 소음 감도가 가장 높습니다. 가까이 있을 때 달리기와 상자 조작을 피하고 C로 천천히 이동하세요. 직접 비춘 빛에 더 빨라지므로 손전등을 끄고 구조물 뒤로 시야를 끊으세요. 한 번 숨었다고 안심하지 마세요.</p></article>'+
  '<article class="creature-guide"><h4>적재귀 <small>고속 돌진형</small></h4><p>기본 추격 속도가 가장 빠르고 공격 준비 거리도 깁니다. 정면에서 맞서거나 직선으로만 도망치지 말고 선반과 기둥을 돌아 거리를 벌리세요. 손전등은 오히려 자극합니다. 적재귀는 낮은 상자·작업 발판과 폐기물동·격리동의 ESCAPE DECK까지 느리게 따라 올라옵니다. 높은 곳은 시간을 버는 수단입니다. 올라오는 동안 반대편으로 내려가거나 철제 사물함에 숨으세요.</p></article>'+
  '<article class="creature-guide"><h4>표찰귀 <small>화물 반응형</small></h4><p>직접 비춘 손전등 빛으로 일시적으로 물러나게 할 수 있습니다. 표찰귀가 약 4m 이내에 있을 때 운반 중인 상자를 E로 정상적으로 내려놓으면 사라집니다. 배송 완료가 아닌 임시 적치이며, 내려놓을 공간이 필요합니다. 너무 가까워지기 전에 행동하세요. 격리동에서는 천장 이동 및 하강도 주의하세요.</p></article>'+
- '<h3>05 / 협동 근무</h3><p>메인 메뉴에서 멀티플레이를 선택해 공개 서버 01~03 중 원하는 서버에 참가합니다. 초대 코드는 필요하지 않습니다. 2명 이상 입장하면 방장이 시작할 수 있습니다. 2~4명이 같은 화물을 나눠 배송하며 한 명이 사망해도 생존 팀원이 임무를 계속할 수 있습니다. 인원이 늘면 동시에 활동하는 개체 수, 감지 범위, 소음 추적, 수색 지속 시간이 증가합니다. 협동 중 ESC는 개인 메뉴만 열며 서버 시간은 계속 흐릅니다.</p><h3>06 / 지도 및 이동 팁</h3><p>구역 지도의 파란 사각형은 낮은 은신처 입구, 금색 사각형은 철제 사물함, 초록 원은 지정 피신 지점입니다. ESC → 구역 지도로 확인할 수 있습니다. 마우스가 고정되지 않으면 왼쪽 버튼을 누른 채 드래그하거나 방향키로 시점을 돌리세요.</p></div>'+
+ '<h3>05 / 협동 근무</h3><p>메인 메뉴에서 멀티플레이를 선택하고 닉네임(2~12자)을 입력한 뒤 공개 서버 01~03 중 원하는 서버에 참가합니다. 초대 코드는 필요하지 않습니다. 2명 이상 입장하면 방장이 시작할 수 있습니다. 2~4명이 같은 화물을 나눠 배송하며 한 명이 사망해도 생존 팀원이 임무를 계속할 수 있습니다. 인원이 늘면 동시에 활동하는 개체 수, 감지 범위, 소음 추적, 수색 지속 시간이 증가합니다. 협동 중 ESC는 개인 메뉴만 열며 서버 시간은 계속 흐릅니다.</p><h3>06 / 지도 및 이동 팁</h3><p>구역 지도의 파란 사각형은 낮은 은신처 입구, 금색 사각형은 철제 사물함, 초록 원은 지정 피신 지점입니다. ESC → 구역 지도로 확인할 수 있습니다. 마우스가 고정되지 않으면 왼쪽 버튼을 누른 채 드래그하거나 방향키로 시점을 돌리세요.</p></div>'+
  '<div class="panel-actions">'+action('map','구역 지도')+'</div>'+links,'조작 방법 및 공략','WORK 모드 / 근무자 생존 매뉴얼');
  if(name==='map')panel(name,plan()+'<p>직원 입고대에서 중앙 통로를 따라 북쪽으로 가면 출고대가 나옵니다. 동쪽 계단은 상층 화물로 연결됩니다.</p>','구역 지도','SECTOR B / 시설 평면도');
  if(name==='settings')panel(name,'<small>그래픽 품질</small><div class="presets">'+['HIGH','BALANCED','PERFORMANCE'].map(q=>'<button class="preset '+(q===settings.quality?'active':'')+'" data-quality="'+q+'">'+q+'</button>').join('')+'</div><label class="row">렌더 해상도 <output id="scaleVal">'+Math.round(settings.scale*100)+'%</output><input id="scale" type="range" min=".55" max="1" step=".05" value="'+settings.scale+'"></label><label class="row">마우스 감도 <output id="sensVal">'+settings.sensitivity.toFixed(1)+'×</output><input id="sens" type="range" min=".4" max="1.8" step=".1" value="'+settings.sensitivity+'"></label><div class="row">걸을 때 시점 흔들림<button class="toggle '+(settings.motion?'on':'')+'" data-toggle="motion">'+(settings.motion?'ON':'OFF')+'</button></div><div class="row">창고 소리<button class="toggle '+(settings.audio?'on':'')+'" data-toggle="audio">'+(settings.audio?'ON':'OFF')+'</button></div>','설정','SECTOR B / 환경 설정');
@@ -344,6 +349,6 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
  if(b.dataset.toggle){const k=b.dataset.toggle;settings[k]=!settings[k];persist();audioOn();openPane('settings');}
  const a=b.dataset.action;if(a?.startsWith('coop-enter-')){coopConnect(a.slice(11));return;}if(a==='coop-refresh'){refreshServers();return;}if(a==='coop-start'){coop?.action('start');return;}if(a==='coop-leave'){const was=coopStarting;disconnectCoop();if(was)toMenu();else coopLobby();return;}if(a==='quit')clockOut();else if(a==='retry'){toMenu();$('#start').click();}else if(a==='reload')location.reload();else if(a==='resume'){if(!session?.failed)resume();}else if(a==='brief')toMenu();else if(a)openPane(a);
 });
-$('#modal').addEventListener('input',e=>{if(e.target.id==='scale'){settings.scale=Number(e.target.value);$('#scaleVal').textContent=Math.round(settings.scale*100)+'%';}else if(e.target.id==='sens'){settings.sensitivity=Number(e.target.value);$('#sensVal').textContent=settings.sensitivity.toFixed(1)+'×';}persist();});
+$('#modal').addEventListener('input',e=>{if(e.target.id==='coop-nickname'){coopNickname=e.target.value;return;}if(e.target.id==='scale'){settings.scale=Number(e.target.value);$('#scaleVal').textContent=Math.round(settings.scale*100)+'%';}else if(e.target.id==='sens'){settings.sensitivity=Number(e.target.value);$('#sensVal').textContent=settings.sensitivity.toFixed(1)+'×';}persist();});
 
 if(/^[A-Z2-9]{6}$/.test(new URLSearchParams(location.search).get('room')??''))openPane('coop');

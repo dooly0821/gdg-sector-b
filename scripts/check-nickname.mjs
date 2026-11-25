@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {normalizeNickname,escapeNickname} from '../dist/nickname.js';
+import {createRoom,operateRoom,snapshot} from '../server/room-core.js';
+assert.equal(normalizeNickname('  야간  작업자  '),'야간 작업자');
+assert.equal(normalizeNickname('Dooly_01'),'Dooly_01');
+for(const bad of ['', 'x','1234567890123','<script>','a\nB','😀😀',null])assert.equal(normalizeNickname(bad),null);
+assert.equal(escapeNickname('<x>'),'&lt;x&gt;');
+const now=100000,{room,player}=createRoom('GDGS22',now,'둘리');
+const joined=operateRoom(room,{op:'join',nickname:'Worker_2'},now+1);
+assert.deepEqual(joined.snapshot.players.map(p=>p.name),['둘리','Worker_2']);
+assert.throws(()=>operateRoom(room,{op:'join',nickname:'worker_2'},now+2),e=>e.status===409);
+assert.throws(()=>operateRoom(room,{op:'join',nickname:'<img>'},now+2),e=>e.status===400);
+operateRoom(room,{op:'join',nickname:'작업자3'},now+3);
+operateRoom(room,{op:'join',nickname:'작업자4'},now+4);
+assert.throws(()=>operateRoom(room,{op:'join',nickname:'작업자5'},now+5),e=>e.status===409);
+assert.equal(snapshot(room,player).players.length,4);
+console.log('PASS: nickname normalization, validation, duplicate rejection, 4-player capacity, shared display');

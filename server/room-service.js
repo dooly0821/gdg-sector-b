@@ -1,4 +1,5 @@
 import {randomBytes} from 'node:crypto';
+import {normalizeNickname} from '../dist/nickname.js';
 import {PUBLIC_SERVERS,publicServer,publicStatus} from '../dist/public-servers.js';
 import {createRoom,operateRoom,snapshot,roomCode,RoomError,serializeRoom,ROOM_TTL} from './room-core.js';
 const rooms=new Map(),MAX_ROOMS=100;
@@ -19,7 +20,7 @@ async function durable(config,body){
  }
  if(body.op==='create'){
   for(let n=0;n<5;n++){
-   const code=roomCode();if(publicServer(code))continue;const {room,player}=createRoom(code,now);
+   const code=roomCode();if(publicServer(code))continue;const {room,player}=createRoom(code,now,body.nickname);
    if(await redis(config,['SET',key(code),serializeRoom(room),'NX','EX',ROOM_TTL]))return {token:player.token,snapshot:snapshot(room,player)};
   }throw new RoomError('방 생성에 실패했습니다.',503);
  }
@@ -34,8 +35,8 @@ async function durable(config,body){
   if(body.op==='enter'){
    const status=publicStatus(code,room,now);
    if(!status.joinable)throw new RoomError(status.count>=4?'서버가 가득 찼습니다.':'이미 근무가 진행 중입니다.',409);
-   if(status.phase==='empty'){const created=createRoom(code,now);room=created.room;result={token:created.player.token,snapshot:snapshot(room,created.player)};}
-   else result=operateRoom(room,{op:'join'},now);
+   if(status.phase==='empty'){const created=createRoom(code,now,body.nickname);room=created.room;result={token:created.player.token,snapshot:snapshot(room,created.player)};}
+   else result=operateRoom(room,{op:'join',nickname:body.nickname},now);
   }else{if(!room)throw new RoomError('방을 찾을 수 없습니다.',404);result=operateRoom(room,body,now);}
   room.shared.stateless=true;
   if(!await redis(config,['EVAL',commit,2,lockKey,stateKey,token,serializeRoom(room),ROOM_TTL]))throw new RoomError('방 상태 동기화 중입니다.',423);
@@ -49,20 +50,21 @@ function memory(body){
  if(body.op==='create'){
   if(rooms.size>=MAX_ROOMS)throw new RoomError('현재 서버의 방 수가 가득 찼습니다.',503);
   let code;do{code=roomCode();}while(rooms.has(code)||publicServer(code));
-  const {room,player}=createRoom(code,now);rooms.set(code,room);return {token:player.token,snapshot:snapshot(room,player)};
+  const {room,player}=createRoom(code,now,body.nickname);rooms.set(code,room);return {token:player.token,snapshot:snapshot(room,player)};
  }
  const code=String(body.room||'').toUpperCase();
  if(body.op==='enter'){
   if(!publicServer(code))throw new RoomError('공개 서버를 찾을 수 없습니다.',404);
   const room=rooms.get(code),status=publicStatus(code,room,now);
   if(!status.joinable)throw new RoomError(status.count>=4?'서버가 가득 찼습니다.':'이미 근무가 진행 중입니다.',409);
-  if(status.phase==='empty'){const {room,player}=createRoom(code,now);rooms.set(code,room);return {token:player.token,snapshot:snapshot(room,player)};}
-  return operateRoom(room,{op:'join'},now);
+  if(status.phase==='empty'){const {room,player}=createRoom(code,now,body.nickname);rooms.set(code,room);return {token:player.token,snapshot:snapshot(room,player)};}
+  return operateRoom(room,{op:'join',nickname:body.nickname},now);
  }
  return operateRoom(rooms.get(code),body,now);
 }
 export async function roomRequest(body,{allowMemory=false}={}){
  if(!body||typeof body!=='object'||Array.isArray(body)||!['create','join','enter','list','sync','start','ready','leave','health'].includes(body.op))throw new RoomError('잘못된 요청입니다.');
+ if(body.op==='enter'&&!normalizeNickname(body.nickname))throw new RoomError('닉네임을 2~12자로 입력하세요.');
  const config=env(),configured=!!(config.url&&config.token);
  if(body.op==='health'){
   if(configured){try{const pong=await redis(config,['PING']);return {online:pong==='PONG',storage:'redis',maxPlayers:4,region:process.env.VERCEL_REGION||null};}catch{return {online:false,storage:'redis',maxPlayers:4,region:process.env.VERCEL_REGION||null};}}

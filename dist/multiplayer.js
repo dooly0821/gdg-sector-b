@@ -13,10 +13,10 @@ export class CoopClient{
   this.queue=this.queue.filter(q=>q.seq>data.snapshot.ack);
   this.onState?.(data.snapshot);
  }
- async connect(op,room=null){
+ async connect(op,room=null,nickname){
   if(this.running)return;
   this.room=room;this.seq=0;this.queue=[];this.peers.clear();
-  this.accept(await this.request(op));this.running=true;this.poll();
+  this.accept(await this.request(op,{nickname}));this.running=true;this.poll();
  }
  async action(op){
   if(!this.running)return;

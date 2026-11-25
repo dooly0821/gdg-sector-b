@@ -1,6 +1,7 @@
 // Authoritative room simulation. All clients share one cargo list, one ghost
 // director and one door state. Clients send controls, never claimed deliveries.
 import {randomBytes} from 'node:crypto';
+import {normalizeNickname} from '../dist/nickname.js';
 import {createScene,newShift,randomCargo,step,forward,handlingTarget,canUse,dropTarget,deliveryCount,MISSION_TOTAL,parcelBlocks} from '../dist/mission.js';
 import {beginHandling,advanceHandling,toggleFlashlight,updateViewmodel} from '../dist/handling.js';
 import {advanceLockers,lockerDoorBlocks,lockerTarget,useLocker,insideLocker,closedLocker,LOCKERS} from '../dist/lockers.js';
@@ -25,16 +26,19 @@ function attach(room,p){
 }
 function detach(p){for(const k of sharedKeys)delete p.state[k];delete p.state.hauntSounds;delete p.state.teamView;}
 function pushEvent(room,e){room.eventSeq++;room.events.push({...e,seq:room.eventSeq});if(room.events.length>28)room.events.shift();}
-function addPlayer(room,now){
+function addPlayer(room,now,nickname){
  const used=new Set(Object.values(room.players).map(p=>p.slot));const slot=[0,1,2,3].find(n=>!used.has(n));check(slot!==undefined,'최대 4명까지 입장할 수 있습니다.',409);
+ const name=nickname===undefined?'WORKER '+String(slot+1).padStart(2,'0'):normalizeNickname(nickname);
+ check(name,'닉네임은 한글, 영문, 숫자 등 2~12자로 입력하세요.');
+ check(!Object.values(room.players).some(p=>p.name.toLowerCase()===name.toLowerCase()),'같은 서버에 이미 사용 중인 닉네임입니다.',409);
  const id=rand(6),token=rand(24),state=newShift();
  const [x,z]=spawns[slot];Object.assign(state,{x,z,bodyHeight:1.7,carried:-1,id,elapsed:0});
- const p={id,token,slot,name:'WORKER '+String(slot+1).padStart(2,'0'),state,ready:false,lastSeen:now,input:{keys:[],yaw:state.yaw,pitch:state.pitch},commandSeq:0,jump:false};
+ const p={id,token,slot,name,state,ready:false,lastSeen:now,input:{keys:[],yaw:state.yaw,pitch:state.pitch},commandSeq:0,jump:false};
  detach(p);room.players[id]=p;if(!room.host)room.host=id;return p;
 }
-export function createRoom(code,now=Date.now()){
+export function createRoom(code,now=Date.now(),nickname){
  const room={code,phase:'lobby',host:null,players:{},shared:{cargo:randomCargo(Math.random),states:Array(MISSION_TOTAL).fill('AVAILABLE'),parked:{},deliveryOrder:[],lockers:{},lockerRevision:0,elapsed:0,haunt:[],hauntSounds:[],hauntDirector:{delay:9,bag:[]}},events:[],eventSeq:0,lastTick:now,updatedAt:now};
- const p=addPlayer(room,now);return {room,player:p};
+ const p=addPlayer(room,now,nickname);return {room,player:p};
 }
 const live=room=>Object.values(room.players).filter(p=>!p.state.failed);
 function dropOwned(room,p){
@@ -116,7 +120,7 @@ export function operateRoom(room,body,now=Date.now()){
  const op=body.op;
  if(op==='join'){
   prune(room,now);check(room.phase==='lobby','이미 근무가 시작되었습니다.',409);
-  const p=addPlayer(room,now);room.updatedAt=now;return {token:p.token,snapshot:snapshot(room,p)};
+  const p=addPlayer(room,now,body.nickname);room.updatedAt=now;return {token:p.token,snapshot:snapshot(room,p)};
  }
  const p=Object.values(room.players).find(p=>p.token===body.token);check(p,'방 연결이 만료되었습니다.',401);
  p.lastSeen=now;tickRoom(room,now);room.updatedAt=now;
