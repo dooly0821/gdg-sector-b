@@ -11,7 +11,6 @@ import {spectatorTarget,spectatorCamera,rescueLayers} from './spectator.js';
 import {remoteAt} from './net-smoothing.js';
 import {drawTraversalDebug} from './traversal-debug.js';
 import {equipmentClearance} from './contact.js';
-import {vaultPose} from './hand-motion.js';
 import {updateHaunt,hauntLayers,SPAWN_BALANCE} from './haunt.js';
 import {HIDING_POINTS,REFUGES} from './annex.js';
 import {DENSE_PROPS} from './density.js';
@@ -37,7 +36,7 @@ let sound,master,hum;
 function audioOn(){try{if(!sound){sound=new AudioContext();master=sound.createGain();master.gain.value=0;master.connect(sound.destination);hum=sound.createOscillator();hum.frequency.value=56;hum.type='sine';hum.connect(master);hum.start();}sound.resume().catch(()=>{});master.gain.setTargetAtTime(settings.audio&&mode==='game'?.026*(settings.volume??1):0,sound.currentTime,.4);}catch{}}
 function beep(hz,time=.12,type='sine',gain=.1){if(!sound||!settings.audio||settings.volume<=0)return;let o=sound.createOscillator(),g=sound.createGain(),now=sound.currentTime;o.type=type;o.frequency.setValueAtTime(hz,now);o.frequency.exponentialRampToValueAtTime(hz*.68,now+time);g.gain.setValueAtTime(Math.max(.0001,gain*(settings.volume??1)),now);g.gain.exponentialRampToValueAtTime(.0001,now+time);o.connect(g);g.connect(sound.destination);o.start();o.stop(now+time+.02);}
 function say(line,duration=5){$('#radio').innerHTML='<strong>관제실</strong>'+line;radioUntil=performance.now()+duration*1000;}
-const rows=[['W A S D','이동'],['MOUSE','시점 회전'],['SHIFT','달리기'],['C (누르고 유지)','앉기 / 은신'],['C + W A S D','앉은 채 이동 / 낮은 은신처 진입'],['W + SPACE','난간 위 올라서기 · 선반 · 상자 등반'],['SHIFT + W + SPACE','달리면서 난간 넘기'],['C + SPACE + A/D','공중 버니합 방향 전환'],['SPACE / WHEEL','점프 · 연속 점프 · 방향 입력 중 장애물 넘기'],['C + SPACE','달리기 중 앉기 점프 · 버니합'],['Q','손전등 들기 / 내리기'],['E','상자 들기 · 내려놓기 / 쓰러진 팀원 근처 2.5초 유지해 구조'],['M','전체 지도 확대 / 축소'],['ESC','일시 정지']];
+const rows=[['W A S D','이동'],['MOUSE','시점 회전'],['SHIFT','달리기'],['C (누르고 유지)','앉기 / 은신'],['C + W A S D','앉은 채 이동 / 낮은 은신처 진입'],['W + SPACE','난간 · 선반 · 상자 위 자유 점프'],['SHIFT + W + SPACE','달리면서 난간 점프'],['C + SPACE + A/D','공중 버니합 방향 전환'],['SPACE / WHEEL','자유 점프 · 연속 점프'],['C + SPACE','달리기 중 앉기 점프 · 버니합'],['Q','손전등 들기 / 내리기'],['E','상자 들기 · 내려놓기 / 쓰러진 팀원 근처 2.5초 유지해 구조'],['M','전체 지도 확대 / 축소'],['ESC','일시 정지']];
 const links='<a class="doc" href="characters.html" target="_blank" rel="noopener">캐릭터 검수실 ↗</a><div class="panel-actions"><a class="doc" href="unity-migration.html" target="_blank" rel="noopener">Unity 이식 가이드 ↗</a></div>';
 function action(name,label,primary=false){return '<button class="'+(primary?'primary':'secondary')+'" data-action="'+name+'">'+label+'</button>';}
 const emptyMapBlocks=[];
@@ -165,7 +164,7 @@ function openPane(name){
  '<h3>03 / 은신 방법</h3><article class="creature-guide"><h4>철제 사물함 <small>LOCKER / 12곳</small></h4><p>상자를 내려놓고 사물함 정면에서 E를 눌러 문을 엽니다. 너무 가까우면 뒤로 물러나 다시 E를 누르세요. 문이 완전히 열리면 W로 내부 중앙까지 들어간 뒤 E로 문을 닫습니다.</p><p>문이 닫히면 자동으로 문 쪽을 바라봅니다. 실제 가로 통풍구 사이로 귀신을 관찰할 수 있으며 마우스로 시점을 움직일 수 있습니다. Q로 손전등을 끄고 기다리세요. 귀신은 문 앞을 약 4.5~6.5초 조사하고 다른 통로로 떠납니다. 소등하지 않으면 더 오래 머물 수 있습니다. 충분히 멀어진 것을 확인하고 E로 문을 열어 W로 나가세요. 너무 빨리 열면 다시 추격당할 수 있습니다.</p></article><p><b>C를 누른 채 W A S D로 이동</b>하여 빈 선반 아래, 상자 뒤 또는 SERVICE / LOW CLEARANCE 표시가 붙은 낮은 은신처 안으로 들어가세요. C를 놓으면 머리 위 공간이 충분할 때 일어납니다. 낮은 은신처는 별도의 상호작용 키 없이 들어갑니다.</p>'+
  '<p>구조물이 귀신과 나 사이의 시야를 가리게 하고, Q로 손전등을 끄세요. 움직임을 멈추면 발소리를 줄일 수 있습니다. 달리기, 점프 착지, 상자 집기·내려놓기는 소음을 발생시킵니다. 앉아 있다고 무적이 되는 것은 아닙니다.</p>'+
  '<h3>03 / 추격 및 피신</h3><p>귀신은 마지막으로 본 위치와 소리를 기억합니다. 은신처 입구를 확인하고 떠나는 척 다시 돌아올 수도 있습니다. 발소리가 멀어졌다고 바로 뛰어나오지 마세요. 추격을 끊으려면 시야를 차단한 채 거리를 충분히 벌리거나 지정된 높은 피신 지점으로 이동하세요.</p>'+
- '<p>각 구역의 SERVICE PLATFORM은 실제 계단을 W로 걸어 올라갑니다. 아래쪽 공간이나 LOW ACCESS 선반은 C로 들어가 숨을 수 있습니다. 일반 적재물은 W + SPACE로 넘어가세요. 상층 피신 지점도 적재귀에게는 안전하지 않을 수 있습니다.</p><p>상자를 내려놓고 발판을 향해 W + SPACE로 연속 등반하세요. B-12 상층 선반과 C-02 폐기물 처리동, D-04 격리실험동의 ESCAPE DECK은 지정 피신 지점입니다. 해당 발판 중앙에 착지하면 일반 지상 추격을 끊을 수 있지만, 적재귀는 C-02와 D-04 발판의 계단을 따라 올라올 수 있습니다. 모든 높은 물체가 안전한 것은 아닙니다.</p>'+
+ '<p>각 구역의 SERVICE PLATFORM은 실제 계단을 W로 걸어 올라갑니다. 아래쪽 공간이나 LOW ACCESS 선반은 C로 들어가 숨을 수 있습니다. 일반 적재물은 W + SPACE로 넘어가세요. 상층 피신 지점도 적재귀에게는 안전하지 않을 수 있습니다.</p><p>발판을 향해 W + SPACE로 직접 점프하세요. 자동 넘기 모션 없이 공중에서도 이동 방향을 제어할 수 있습니다. B-12 상층 선반과 C-02 폐기물 처리동, D-04 격리실험동의 ESCAPE DECK은 지정 피신 지점입니다. 해당 발판 중앙에 착지하면 일반 지상 추격을 끊을 수 있지만, 적재귀는 C-02와 D-04 발판의 계단을 따라 올라올 수 있습니다. 모든 높은 물체가 안전한 것은 아닙니다.</p>'+
  '<p>새 귀신은 '+SPAWN_BALANCE.minDistance+'~'+SPAWN_BALANCE.maxDistance+'m 거리의 가려진 위치에서 등장하며 '+SPAWN_BALANCE.grace+'초 동안 추격과 공격을 시작하지 않습니다. 관제실 경고와 방향성 위협음을 듣고 도주 경로를 확보하세요. 기존 귀신에게 붙잡히면 즉시 근무 실패입니다.</p>'+
  '<h3>04 / 개체별 생존 공략</h3>'+
  '<article class="creature-guide"><h4>녹령 <small>빛 회피형</small></h4><p>평상시 시야를 끊고 조용히 이동하세요. 발견되면 Q로 손전등을 켜 몸을 직접 비추면 물러납니다. 빛을 떼면 다시 추격하므로 그 사이 우회로 또는 높은 피신 지점으로 이동하세요. 빛만 켜 놓는 것은 방어가 아닙니다.</p></article>'+
@@ -368,11 +367,10 @@ function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/10
  const l=lockerTarget(s,worlds[0].blocks),hiddenLocker=closedLocker(s);
  const useTarget=handlingTarget(s,interactionBlocks),available=!hiddenLocker&&canUse(s,useTarget,interactionBlocks);
  const target=s.carried<0&&available?useTarget:nextTarget(s);
- const {reach,brace}=vaultPose(s.vault);
  const eyeHeight=(s.bodyHeight??1.70)-.12;
  s.viewHeight=eyeHeight<(s.viewHeight??eyeHeight)?eyeHeight:(s.viewHeight??eyeHeight)+(eyeHeight-(s.viewHeight??eyeHeight))*(1-Math.exp(-dt*19));
- const eye=[s.x,s.y+s.viewHeight+bob-.040*brace-(s.landKick??0)*.8,s.z];
- const view=brace?forward({...s,pitch:s.pitch-.070*reach}):facing;
+ const eye=[s.x,s.y+s.viewHeight+bob-(s.landKick??0)*.8,s.z];
+ const view=facing;
  const visualTime=coopStarting?(s.coopVisualClock??s.elapsed):s.elapsed;
  const pose=choreography(s,eye,available,moving,keys.has('ShiftLeft')||keys.has('ShiftRight'),visualTime,view);
  pose.actors=[...hauntLayers(s,name=>renderer?.skins?.has(name)),...lockerLayers(s,LOCKER_DOOR_GROUP),...(hiddenLocker?[]:workerLegLayers(s)),...peerLayers(coop,s,dt,TEAM_WORKER_GROUP)];pose.rescueActors=coopStarting?rescueLayers(coop?.snapshot?.players,coop?.snapshot?.you,TEAM_WORKER_GROUP):[];pose.clock=visualTime;const lighting=eventLighting(s);pose.gridPower=lighting.power;

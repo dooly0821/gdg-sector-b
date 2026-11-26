@@ -2,7 +2,7 @@ import {cargoGlowCode} from './cargo-glow.js';
 import {dropTarget} from './mission.js';
 import {buildLockerDoor} from './lockers.js';
 import {buildLegs,buildWorker} from './worker.js';
-import {relaxedFingerAmounts,vaultPose} from './hand-motion.js';
+import {relaxedFingerAmounts} from './hand-motion.js';
 import {ACTOR_START,CREATURE_GROUP_COUNT,buildHauntRigs} from './haunt.js';
 import {basis,cameraView,multiply,unit,cross,dot} from './world.js';
 import {TORCH_LOCAL,SOCKETS,FINGER_FLEX} from './viewmodel.js';
@@ -37,7 +37,7 @@ export function workerLegLayers(s){
   const leg=multiply(translate(hip),multiply(transform([swing,0,0],[0,0,0],1),translate(hip.map(v=>-v))));
   const lift=.63*(1-Math.cos(swing));
   leg[13]-=lift;
-  const skin={name:'player',root,lowerOnly:true,floor:s.grounded&&!s.vault?s.y:null,state:{speed:Math.hypot(s.vx,s.vz),steps:s.steps,bodyHeight:s.bodyHeight??1.7,carried:s.carried??-1,vault:!!s.vault}};
+  const skin={name:'player',root,lowerOnly:true,floor:s.grounded&&!s.vault?s.y:null,state:{speed:Math.hypot(s.vx,s.vz),steps:s.steps,bodyHeight:s.bodyHeight??1.7,carried:s.carried??-1,vault:false}};
   return {group:ACTOR_START+CREATURE_GROUP_COUNT+2+i,matrix:multiply(root,leg),skinName:'player',skin:i===0?skin:null};
  });
 }
@@ -95,7 +95,7 @@ function settle(position,velocity,goals,omega,dt){
  }
 }
 export function updateViewmodel(s,dt){
- const target=s.flashlight&&!s.handAction&&!s.vault?.high?1:0;
+ const target=s.flashlight&&!s.handAction?1:0;
  const flashA=s.flashAmount??0;
  const equip=s.carried>=0?HAND_TIMING.cargoEquip:HAND_TIMING.equip,stow=s.carried>=0?HAND_TIMING.cargoStow:HAND_TIMING.stow;
  s.flashAmount=target>flashA?Math.min(target,flashA+dt/equip):Math.max(target,flashA-dt/stow);
@@ -165,7 +165,7 @@ function sleeveLayers(layer,i){
 }
 export function choreography(s,eye,near,moving,sprinting,t,view=forward(s)){
  const a=s.handAction,phase=a?Math.min(1,a.time/a.duration):0;
- const holding=s.carried>=0,{reach:plant,brace}=vaultPose(s.vault);
+ const holding=s.carried>=0,plant=0,brace=0;
  const stride=Math.min(1.45,(s.motionSpeed??(moving?(sprinting?7:4.5):0))/4.5)*(s.grounded?1:.28);
  const wave=Math.sin(s.steps*4.9),breath=Math.sin(t*1.45)*.003;
  const bob=[wave*.006*stride+(s.swayX??0)*.65,breath+Math.sin(s.steps*9.8+.6)*.0048*stride+(s.swayY??0)*.6+(s.airOffset??0)-(s.landKick??0),Math.cos(s.steps*4.9+.4)*.005*stride];
@@ -182,15 +182,6 @@ export function choreography(s,eye,near,moving,sprinting,t,view=forward(s)){
   const rotated=point(rotation,wrist);
   // Rotate the entire hand/sleeve assembly around the wrist. The cuff never separates.
   layer.matrix=multiply(translate(wrist.map((v,j)=>v-rotated[j]+layer.offset[j])),rotation);
-  if(s.vault?.grip&&!holding&&(!i||!s.flashlight)){
-   const cam=cameraView(eye,view),target=point(cam,s.vault.grip);
-   // Move the palm pad to the edge during support. Blend out beyond reach.
-   const palm=point(layer.matrix,FINGER_FLEX[name].pivot);
-   const delta=target.map((v,k)=>v-palm[k]+[side*.055,.032,.015][k]);
-   const phase=s.vault.time/s.vault.duration;
-   const contact=smooth(phase/.12)*(1-smooth((phase-.48)/.26))*(1-smooth((Math.hypot(...delta)-.38)/.60));
-   for(let k=0;k<3;k++)layer.matrix[12+k]+=delta[k]*contact;
-  }
   layer.offset=[0,0,0];
   const open=a?Math.sin(Math.PI*phase):reach;
   layer.flex={...FINGER_FLEX[name],fingerAmounts:relaxedFingerAmounts(t,s.steps*3.8,i),
@@ -273,5 +264,5 @@ export function choreography(s,eye,near,moving,sprinting,t,view=forward(s)){
   hands[torchIndex]=torchLayer(hands[torchIndex]);
  }
  const cargoGlow=cargoGlowCode(s.cargo?.[a?.index??s.carried]?.special);
- return {hands,flight,assembly,cargoGlow,fp:{holding,flash,action:!!a,vault:!!s.vault,t,speed:s.motionSpeed??Math.hypot(s.vx??0,s.vz??0),bob},flashlight:flash>(holding?.82:.65)?smooth((flash-(holding?.82:.65))/(holding?.18:.35)):0,torchOffset,torchLocal:torchAim,hidden};
+ return {hands,flight,assembly,cargoGlow,fp:{holding,flash,action:!!a,vault:false,t,speed:s.motionSpeed??Math.hypot(s.vx??0,s.vz??0),bob},flashlight:flash>(holding?.82:.65)?smooth((flash-(holding?.82:.65))/(holding?.18:.35)):0,torchOffset,torchLocal:torchAim,hidden};
 }
