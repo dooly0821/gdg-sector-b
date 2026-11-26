@@ -39,7 +39,7 @@ export function searchBearing(a,phase){
 }
 export function searchExpired(a,difficulty,dist){
  const lost=a.lost??0;
- return lost>HUNT_PROFILE[a.kind].memory+Math.max(0,difficulty.count-1)*1.5||
+ return lost>HUNT_PROFILE[a.kind].memory+Math.max(0,difficulty.count-1)*1.5+(difficulty.memoryBonus??0)||
   dist>difficulty.escape&&lost>difficulty.memory;
 }
 export function alreadyChecked(a,p){return (a.checked??[]).some(q=>Array.isArray(q)&&Math.hypot(q[0]-p[0],q[1]-p[1])<.25);}

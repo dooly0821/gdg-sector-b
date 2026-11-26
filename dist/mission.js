@@ -1,3 +1,5 @@
+import {COOP_POOLS,COOP_COUNTS} from './coop-cargo.js';
+import {normalizeDifficulty,DIFFICULTIES} from './difficulty.js';
 import {buildDenseDressing} from './density.js';
 import {markRunLanes} from './layout.js';
 import {markSpecialCargo,createShiftEvents,beginSpecial,cargoSignal} from './shift-events.js';
@@ -39,8 +41,12 @@ function shuffle(items,rng){
  for(let i=selected.length-1;i>0;i--){const j=Math.min(i,Math.floor(rng()*(i+1)));[selected[i],selected[j]]=[selected[j],selected[i]];}
  return selected;
 }
-export function randomCargo(rng=Math.random){
- return markSpecialCargo(shuffle(cargoPools.flatMap((pool,i)=>shuffle(pool,rng).slice(0,[4,4,4,4,3,3,4,4][i])),rng).map((p,i)=>({id:'B-'+String(i+1).padStart(2,'0'),area:p.area,pos:p.pos.slice()})),rng);
+export function randomCargo(rng=Math.random,total=MISSION_TOTAL,level='normal'){
+ const counts=COOP_COUNTS[total],selected=counts?COOP_POOLS.flatMap((pool,i)=>shuffle(pool,rng).slice(0,counts[i])):cargoPools.flatMap((pool,i)=>shuffle(pool,rng).slice(0,[4,4,4,4,3,3,4,4][i]));
+ // Keep elevated tasks in co-op, with the previously supported climb points.
+ if(counts){selected[0]=PARCELS[3];selected[counts[0]]={area:'Annex rack',pos:[-24.5,2.355,7]};}
+ const profile=DIFFICULTIES[normalizeDifficulty(level)];
+ return markSpecialCargo(shuffle(selected,rng).map((p,i)=>({id:'B-'+String(i+1).padStart(2,'0'),area:p.area,pos:p.pos.slice()})),rng,Math.round(selected.length*profile.special/4)*4);
 }
 export const shiftParcel=(s,i)=>s?.cargo?.[i]??PARCELS[i];
 const sceneBlocks=new WeakSet();
@@ -72,7 +78,7 @@ export function createScene(){
  sceneBlocks.add(w.blocks);
  return [w,parcel,empty,carry,flashlight];
 }
-export function newShift(rng){return {cargo:typeof rng==='function'?randomCargo(rng):null,cargoDeadlines:{},shiftEvents:typeof rng==='function'?createShiftEvents(rng):null,x:1.7,y:0,z:15,yaw:.24,pitch:-.04,vy:0,vx:0,vz:0,flashlight:false,flashAmount:0,grounded:true,states:Array(typeof rng==='function'?MISSION_TOTAL:PARCELS.length).fill('AVAILABLE'),carried:-1,elapsed:0,steps:0};}
+export function newShift(rng,level='normal'){const difficultyLevel=normalizeDifficulty(level);return {difficultyLevel,startCount:1,cargo:typeof rng==='function'?randomCargo(rng,MISSION_TOTAL,difficultyLevel):null,cargoDeadlines:{},shiftEvents:typeof rng==='function'?createShiftEvents(rng,difficultyLevel):null,x:1.7,y:0,z:15,yaw:.24,pitch:-.04,vy:0,vx:0,vz:0,flashlight:false,flashAmount:0,grounded:true,states:Array(typeof rng==='function'?MISSION_TOTAL:PARCELS.length).fill('AVAILABLE'),carried:-1,elapsed:0,steps:0};}
 export const deliveryCount=s=>s.states.filter(k=>k==='DELIVERED').length;
 export const forward=s=>[-Math.sin(s.yaw)*Math.cos(s.pitch),Math.sin(s.pitch),-Math.cos(s.yaw)*Math.cos(s.pitch)];
 export function surface(x,z,y){
@@ -175,7 +181,7 @@ function pickupContact(s,target,blocks,locked=false){
  const nearest=[Math.max(x-w,Math.min(x+w,eye[0])),Math.max(y,Math.min(y+h,eye[1])),Math.max(z-d,Math.min(z+d,eye[2]))];
  if(Math.hypot(...vsub(nearest,eye))>limit)return null;
  const nearby=blocks.filter(b=>b[2]>=eye[0]-2.2&&b[0]<=eye[0]+2.2&&b[3]>=eye[2]-2.2&&b[1]<=eye[2]+2.2);
- const others=s.states.flatMap((state,i)=>i===target.index?[]:state==='AVAILABLE'?[cargoBox(parcelPos(s,i))]:state==='DELIVERED'?[cargoBox(baySlot((s.deliveryOrder??s.states.flatMap((v,j)=>v==='DELIVERED'?[j]:[])).indexOf(i)))]:[]);
+ const others=parcelPositions(s,target.index).map(cargoBox).filter(b=>b[2]>=eye[0]-2.2&&b[0]<=eye[0]+2.2&&b[3]>=eye[2]-2.2&&b[1]<=eye[2]+2.2);
  const end=eye.map((v,i)=>v+f[i]*limit),t=traceBox(eye,end,box);
  const direct=t<=1?eye.map((v,i)=>v+(end[i]-v)*t):null;
  // Real visible surfaces: center, front/back, edges and upper/lower faces.
@@ -226,5 +232,7 @@ export function interact(s,target,blocks,locked=false){
 export function baySlot(n){return [DOCK[0]+((n%3)-1)*.65,DOCK[1]+Math.floor(n/6)*.484,DOCK[2]+(Math.floor((n%6)/3)-.5)*.60];}
 export function parcelPositions(s,hidden=-1){
  const order=s.deliveryOrder??s.states.flatMap((v,i)=>v==='DELIVERED'?[i]:[]);
- return s.states.flatMap((p,i)=>i===hidden?[]:s.states[i]==='AVAILABLE'?[parcelPos(s,i)]:s.states[i]==='DELIVERED'?[baySlot(order.indexOf(i))]:[]);
+ const offset=s.states.length>30?Math.max(0,Math.floor((order.length-1)/24)*24):0;
+ const slots=new Map(order.slice(offset).map((i,n)=>[i,n]));
+ return s.states.flatMap((p,i)=>i===hidden?[]:p==='AVAILABLE'?[parcelPos(s,i)]:p==='DELIVERED'&&slots.has(i)?[baySlot(slots.get(i))]:[]);
 }

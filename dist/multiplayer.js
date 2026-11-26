@@ -32,11 +32,11 @@ export class CoopClient{
   this.room=room;this.seq=0;this.queue=[];this.peers.clear();this.remoteTracks.clear();this.rtt=null;this.contention=0;this.dirty=false;
   this.accept(await this.request(op,{nickname}));this.running=true;this.poll();
  }
- async action(op){
+ async action(op,extra={}){
   if(!this.running)return;
   // Serialize start/ready with an in-flight sync rather than racing server state.
-  if(this.busy){this.pendingAction=op;return;}
-  this.busy=true;try{const data=await this.request(op);if(this.running)this.accept(data);}catch(e){if(e.status===423)this.pendingAction=op;else this.onError?.(e);}finally{this.busy=false;}
+  if(this.busy){this.pendingAction={op,extra};return;}
+  this.busy=true;try{const data=await this.request(op,extra);if(this.running)this.accept(data);}catch(e){if(e.status===423)this.pendingAction={op,extra};else this.onError?.(e);}finally{this.busy=false;}
  }
  inputChanged(){if(!this.running||this.snapshot?.phase!=='playing')return;this.dirty=true;if(!this.busy&&this.runPoll){clearTimeout(this.timer);this.timer=setTimeout(this.runPoll,Math.max(0,30-(performance.now()-(this.lastRequestAt??0))));}}
  command(type){if(this.running&&this.snapshot?.phase==='playing'&&this.queue.length<64){this.queue.push({seq:++this.seq,type});this.inputChanged();}}
@@ -50,7 +50,7 @@ export class CoopClient{
     const pending=this.pendingAction;this.pendingAction=null;
     try{
      const input=this.input?.()??{keys:[],yaw:0,pitch:0};this.dirty=false;
-     const data=await this.request(pending||'sync',pending?{}:{input,commands:this.queue.slice(0,16)});
+     const data=await this.request(pending?.op||'sync',pending?pending.extra:{input,commands:this.queue.slice(0,16)});
      if(this.running){this.accept(data);this.failures=0;this.contention=Math.max(0,(this.contention??0)-1);}
     }catch(e){
      if(this.running&&e.status!==423){this.failures=(this.failures??0)+1;if(this.failures>=3||e.status===401||e.status===404)this.onError?.(e);if(e.status===401||e.status===404){this.running=false;return;}}
@@ -123,6 +123,7 @@ export function applyCoopSnapshot(s,snap,first=false){
  s.netGrounded=!!v.grounded&&!v.vault;s.netOnRail=!!v.onRail;
  if(first){s.yaw=v.yaw;s.pitch=v.pitch;s.coopVisualClock=snap.elapsed??0;}else if(hidden&&!oldHidden){s.yaw=0;s.pitch=0;}
  for(const k of ['cargo','states','parked','deliveryOrder','lockers','lockerRevision','elapsed','cargoDeadlines','shiftEvents'])s[k]=snap[k];
+ s.difficultyLevel=snap.difficulty?.level??'normal';s.startCount=snap.startCount??1;
  const prevAction=s.handAction;
  for(const k of ['carried','flashlight','handAction','failed','capturedBy','noise','horrorEvent','cargoSignalAt'])s[k]=v[k]??(k==='carried'?-1:k==='flashlight'||k==='failed'?false:null);
  if(s.handAction&&prevAction&&s.handAction.index===prevAction.index&&s.handAction.placing===prevAction.placing)

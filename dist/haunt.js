@@ -1,3 +1,4 @@
+import {DIFFICULTIES,effectiveDifficulty,missionTotal} from './difficulty.js';
 import {updateClimber} from './climber.js';
 import {HUNT_PROFILE,clearObservation,observePlayer,pursueVisible,lostTrail,searchBearing,searchExpired,alreadyChecked} from './haunt-tactics.js';
 import {DRESSING_HIDE} from './dressing.js';
@@ -100,9 +101,9 @@ function spawnCue(s,a,initial=false){
  cues.push({x:a.x,z:a.z,kind:a.kind,accent:true,spawnWarning:true,initial});
  if(cues.length>4)cues.shift();
 }
-export function teamDifficulty(count=1){
- const n=clamp(Math.trunc(count)||1,1,4),extra=n-1;
- return {count:n,maxActive:Math.min(4,n+1),interval:Math.max(8,12-2*extra),range:1+.075*extra,speed:1+.035*extra,hearing:1+.10*extra,memory:3.2+.7*extra,escape:23+2*extra,budget:24+8*extra};
+export function teamDifficulty(count=1,selected='normal',startCount=count){
+ const n=clamp(Math.trunc(count)||1,1,4),extra=n-1,level=effectiveDifficulty(selected,startCount),p=DIFFICULTIES[level];
+ return {level,count:n,maxActive:Math.min(4,n+1+(level==='hell'?1:0)),interval:Math.max(5,Math.max(8,12-2*extra)*p.interval),range:(1+.075*extra)*p.range,speed:(1+.035*extra)*p.speed,hearing:(1+.10*extra)*p.hearing,memory:Math.max(1.5,3.2+.7*extra+p.memory*.35),memoryBonus:p.memory,escape:23+2*extra+p.memory,budget:24+8*extra};
 }
 function chooseTeamTarget(root,actor,nav,assigned,difficulty){
  const players=root.teamPlayers.filter(p=>!p.failed);
@@ -122,8 +123,8 @@ function chooseTeamTarget(root,actor,nav,assigned,difficulty){
  return best;
 }
 function updateSpawns(s,blocks,forward,dt,rng){
- const director=s.hauntDirector??={delay:SPAWN_BALANCE.firstMin+rng()*4,bag:[]};
- const team=s.teamPlayers?.filter(p=>!p.failed),players=team??[s],difficulty=teamDifficulty(players.length);
+ const team=s.teamPlayers?.filter(p=>!p.failed),players=team??[s],difficulty=teamDifficulty(players.length,s.difficultyLevel,s.startCount??1);
+ const director=s.hauntDirector??={delay:Math.max(5,(SPAWN_BALANCE.firstMin+rng()*4)*DIFFICULTIES[difficulty.level].interval),bag:[]};
  if(!players.length)return;
  for(const actor of s.haunt)actor.age+=dt;
  for(const actor of s.haunt){
@@ -167,7 +168,7 @@ function updateSpawns(s,blocks,forward,dt,rng){
   }
  }
  spawnCue(s,s.haunt.at(-1),true);
- director.delay=difficulty.interval+Math.max(2,5-(difficulty.count-1))+rng()*7-Math.min(4,(s.states?.filter(k=>k==='DELIVERED').length??0)*.13);
+ director.delay=difficulty.interval+Math.max(2,5-(difficulty.count-1))+rng()*7-Math.min(4,(s.states?.filter(k=>k==='DELIVERED').length??0)*3.9/missionTotal(s));
 }
 // Sample the rendered wrist joints and torso through the active window.
 function attackContact(actor,s,blocks){
@@ -187,7 +188,7 @@ function attackContact(actor,s,blocks){
  });
 }
 export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
- const s=root,team=Array.isArray(s.teamPlayers),difficulty=teamDifficulty(team?s.teamPlayers.filter(p=>!p.failed).length:1),assigned=new Map();
+ const s=root,team=Array.isArray(s.teamPlayers),difficulty=teamDifficulty(team?s.teamPlayers.filter(p=>!p.failed).length:1,s.difficultyLevel,s.startCount??1),assigned=new Map();
  if(!mapCache.has(blocks))mapCache.set(blocks,blocks.concat(worldBounds));
  const staticBlocks=mapCache.get(blocks);
  // Cargo geometry changes only on pickup, drop or delivery. Keep the same
@@ -381,11 +382,11 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
   const heading=aim??[actor.x,actor.z];
   const desired=actor.state==='lockerWait'?Math.atan2(s.x-actor.x,s.z-actor.z)+Math.sin(actor.age*2.5)*.23:actor.state==='inspect'||actor.state==='ambush'?actor.yaw+Math.sin(actor.age*2.4)*.09:aim?Math.atan2(heading[0]-actor.x,heading[1]-actor.z):actor.yaw;
   actor.yaw+=clamp(Math.atan2(Math.sin(desired-actor.yaw),Math.cos(desired-actor.yaw)),-dt*(chasing?12:7),dt*(chasing?12:7));
-  const pressure=(1+Math.min(1,(s.states?.filter(k=>k==='DELIVERED').length??0)/30)*.19)*difficulty.speed;
+  const pressure=(1+Math.min(1,(s.states?.filter(k=>k==='DELIVERED').length??0)/missionTotal(s))*.19)*difficulty.speed;
   const rage=lit&&(i===1||i===2)?1.14:1;
   // Different chase rhythms; the telegraphed charge is faster than sprinting.
   const pulse=i===0?.88+.22*Math.sin(actor.phase*.73):i===1?.91+.18*Math.sin(actor.phase*.46):i===2?.94+.10*Math.sin(actor.phase*.31):.87+.26*Math.pow(.5+.5*Math.sin(actor.phase*.69),3);
-  const goalSpeed=actor.state==='lockerWait'?.70:actor.state==='lockerSearch'?3.0:['lockerLeave','lockerAway'].includes(actor.state)?2.8:actor.state==='ambush'||actor.state==='inspect'?0:actor.state==='fakeLeave'?2.3:actor.state==='guard'?Math.hypot(actor.x-target[0],actor.z-target[1])>1.3?2.5:0:retreat?3.3:actor.state==='windup'?type.speed*.38:actor.state==='charge'?type.speed*1.32*pressure:actor.state==='recovery'?type.speed*.72:chasing?type.speed*profile.speed*pressure*pulse*rage*(actor.state==='search'?.88*profile.search:1):actor.state==='search'?2.8:1.35;
+  const goalSpeed=actor.state==='lockerWait'?.70:actor.state==='lockerSearch'?3.0:['lockerLeave','lockerAway'].includes(actor.state)?2.8:actor.state==='ambush'||actor.state==='inspect'?0:actor.state==='fakeLeave'?2.3:actor.state==='guard'?Math.hypot(actor.x-target[0],actor.z-target[1])>1.3?2.5:0:retreat?3.3:actor.state==='windup'?type.speed*.38:actor.state==='charge'?Math.min(11.05,type.speed*1.32*pressure):actor.state==='recovery'?type.speed*.72:chasing?Math.min(10.9,type.speed*profile.speed*pressure*pulse*rage*(actor.state==='search'?.88*profile.search:1)):actor.state==='search'?2.8:1.35;
   actor.speed=approach(actor.speed,aim?goalSpeed:0,dt*(actor.state==='charge'?18:chasing?[23,22,20,25][i]:7));
   const before=[actor.x,actor.z],distance=aim?Math.hypot(aim[0]-actor.x,aim[1]-actor.z):0;
   const stride=Math.min(actor.speed*dt,distance);

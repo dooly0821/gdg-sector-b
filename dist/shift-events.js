@@ -1,13 +1,14 @@
+import {DIFFICULTIES,normalizeDifficulty,difficultyProfile} from './difficulty.js';
 // Shared shift rules. Room authority runs these once for every team.
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export const SPECIAL=Object.freeze({noisy:{label:'소음 화물',period:2.5,radius:9},heavy:{label:'중량 화물'},urgent:{label:'긴급 화물',deadline:70,period:3,radius:8},cursed:{label:'격리 화물',period:4,radius:11}});
-export function markSpecialCargo(cargo,rng=Math.random){
+export function markSpecialCargo(cargo,rng=Math.random,count=8){
  const order=cargo.map((_,i)=>i);
  for(let i=order.length-1;i>0;i--){const j=Math.min(i,Math.floor(rng()*(i+1)));[order[i],order[j]]=[order[j],order[i]];}
- const types=['noisy','heavy','urgent','cursed','noisy','heavy','urgent','cursed'];
+ const types=Array.from({length:Math.min(cargo.length,Math.max(0,count))},(_,i)=>['noisy','heavy','urgent','cursed'][i%4]);
  return cargo.map((p,i)=>{const n=order.indexOf(i);return n<types.length?{...p,special:types[n]}:p;});
 }
-export function createShiftEvents(rng=Math.random){return {nextAt:38+rng()*24,serial:0,active:null};}
+export function createShiftEvents(rng=Math.random,level='normal'){return {nextAt:(38+rng()*24)*DIFFICULTIES[normalizeDifficulty(level)].event,serial:0,active:null};}
 export function beginSpecial(s,index){
  if(s.cargo?.[index]?.special==='urgent'){const deadlines=s.cargoDeadlines??={};if(!Number.isFinite(deadlines[index]))deadlines[index]=s.elapsed+SPECIAL.urgent.deadline;}
  s.nextCargoSignal=s.elapsed+.75;s.signalCargo=index;s.cargoSignalAt=null;
@@ -25,10 +26,10 @@ export function cargoSignal(s){
 export function tickShiftEvents(s,rng=Math.random){
  const d=s.shiftEvents;if(!d)return null;
  const t=s.elapsed??0;
- if(d.active&&t>=d.active.until){const old=d.active;d.active=null;d.nextAt=t+48+rng()*42;return {type:'anomaly',kind:old.kind,phase:'end',message:old.kind==='blackout'?'전력 복구 · 정상 조명 복귀':'이상 신호가 사라졌습니다.'};}
+ if(d.active&&t>=d.active.until){const old=d.active;d.active=null;d.nextAt=t+(48+rng()*42)*difficultyProfile(s).event;return {type:'anomaly',kind:old.kind,phase:'end',message:old.kind==='blackout'?'전력 복구 · 정상 조명 복귀':'이상 신호가 사라졌습니다.'};}
  if(d.active||t<d.nextAt)return null;
  const n=s.states?.filter(v=>v==='DELIVERED').length??0;
- if(!n&&t<70)return null;
+ if(!n&&t<70*difficultyProfile(s).event)return null;
  const kind=d.serial===0?'blackout':rng()<.66?'blackout':'interference';
  const duration=kind==='blackout'?10+rng()*6:7+rng()*4;
  d.active={kind,start:t,until:t+duration,id:++d.serial,seed:rng()*100};

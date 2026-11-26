@@ -75,7 +75,7 @@ function memory(body){
  return operateRoom(rooms.get(code),body,now);
 }
 export async function roomRequest(body,{allowMemory=false}={}){
- if(!body||typeof body!=='object'||Array.isArray(body)||!['create','join','enter','list','sync','start','ready','leave','health'].includes(body.op))throw new RoomError('잘못된 요청입니다.');
+ if(!body||typeof body!=='object'||Array.isArray(body)||!['create','join','enter','list','sync','start','ready','difficulty','leave','health'].includes(body.op))throw new RoomError('잘못된 요청입니다.');
  if(body.op==='enter'&&!normalizeNickname(body.nickname))throw new RoomError('닉네임을 2~12자로 입력하세요.');
  const config=env(),configured=!!(config.url&&config.token);
  if(body.op==='health'){

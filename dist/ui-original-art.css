@@ -165,3 +165,8 @@
 #play.blackout-map .hud-minimap strong{background:#9dd8c3;color:#172e27}
 #play.blackout-map .hud-minimap small:before{content:'비상 지도 · ';color:#b2eddb}
 @media(max-height:560px){#play:not(.map-expanded):not(.blackout-map) .hud-minimap{display:none}}
+
+/* Shift difficulty chooser, using the original industrial HUD palette. */
+.difficulty-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}
+.difficulty-choice{display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-height:70px;padding:12px;text-align:left;background:#1c252b;color:#e6e4d8;border:1px solid #66706e;border-radius:2px;font:inherit}
+.difficulty-choice b{font-size:15px;letter-spacing:.04em}.difficulty-choice small{font-size:11px!important;line-height:1.45;color:#c0c3ba!important;letter-spacing:0!important}.difficulty-choice.selected{border-color:#e9b54c;background:#393529;color:#ffd068}.difficulty-choice[data-action$="-hell"].selected{border-color:#c04c4b;color:#ffc4b1;background:#43292b}.difficulty-choice:disabled{opacity:.65;cursor:default}.difficulty-choice.selected:disabled{opacity:1}
