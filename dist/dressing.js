@@ -1,3 +1,4 @@
+import {expandedLayout,EXTENSION_STAIRS} from './map-layout.js';
 import {DENSE_HIDE} from './density.js';
 // Curated, collision-checked set dressing. Coordinates in metres.
 export const DRESSING=[
@@ -14,6 +15,7 @@ export const CLIMB_ROUTES=DRESSING.map(({stairs:[x,z],zone})=>({
  zone,x,z,top:DECK_Y,deck:[x-1.2,z+.35,x+1.2,z+2.65],
  nodes:[[x,0,z-3.28],...Array.from({length:6},(_,i)=>[x,STEP_H*(i+1),z-2.675+i*TREAD]),[x,DECK_Y,z+1.05],[x,DECK_Y,z+1.85]]
 }));
+const EXTRA_CLIMB_ROUTES=EXTENSION_STAIRS.map(([x,z],i)=>({zone:'E-'+i,x,z,top:DECK_Y,deck:[x-1.2,z+.35,x+1.2,z+2.65],nodes:[[x,0,z-3.28],...Array.from({length:6},(_,i)=>[x,STEP_H*(i+1),z-2.675+i*TREAD]),[x,DECK_Y,z+1.05],[x,DECK_Y,z+1.85]]}));
 // Low rack bays are physical cover, not immunity zones.
 export const DRESSING_HIDE=[...DRESSING.flatMap(({rack:[x,z],stairs:[a,b]})=>[[x,z-.90],[a,b+1.7]]),...DENSE_HIDE];
 export function buildDressing(w){
@@ -46,7 +48,7 @@ export function buildDressing(w){
 }
 export function routeForPlayer(s){
  if(s.y<.55||s.vault||!s.grounded)return null;
- return CLIMB_ROUTES.find(r=>Math.abs(s.x-r.x)<1.22&&s.z>r.z-2.7&&s.z<r.z+2.5&&s.y<=r.top+.25)??null;
+ return (expandedLayout(s)?[...CLIMB_ROUTES,...EXTRA_CLIMB_ROUTES]:CLIMB_ROUTES).find(r=>Math.abs(s.x-r.x)<1.22&&s.z>r.z-2.7&&s.z<r.z+2.5&&s.y<=r.top+.25)??null;
 }
 export function onRouteSupport(route,x,y,z){
  if(Math.abs(x-route.x)>1.13)return false;

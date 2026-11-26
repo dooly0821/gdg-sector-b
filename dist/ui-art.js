@@ -1,5 +1,5 @@
 import {updateShiftNotices} from './shift-ui.js';
-export const sectorName=s=>!s?'B 메인 창고':s.z>=54?(s.x< -15?'C-02 폐기물 처리동':'D-04 격리실험동'):s.z>=22?(s.x< -15?'D-03 반품동':'D-02 이송동'):s.x< -15?'C-01 분류동':'B 메인 창고';
+export const sectorName=s=>!s?'B 메인 창고':s.z>=78?(s.x< -15?'E-01 대형 화물동':'E-02 야간 예비창고'):s.z>=54?(s.x< -15?'C-02 폐기물 처리동':'D-04 격리실험동'):s.z>=22?(s.x< -15?'D-03 반품동':'D-02 이송동'):s.x< -15?'C-01 분류동':'B 메인 창고';
 export const clock=t=>{const n=Math.max(0,Math.floor(t||0));return [Math.floor(n/3600),Math.floor(n/60)%60,n%60].map(v=>String(v).padStart(2,'0')).join(':');};
 export function telemetry(s,hidden=false){
  const radius=s.noise&&s.elapsed-s.noise.time<.55?Math.max(0,s.noise.radius||0):0;

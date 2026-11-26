@@ -204,10 +204,11 @@ export class Renderer{
   }
   return this.buffers[shape];
  }
- async prepare(worlds,progress=()=>{}){
+ async prepare(worlds,progress=()=>{},extraWorld=null){
   const gl=this.gl,slots=new Map();const paths=['plain',...Array.from({length:6},(_,i)=>'carton'+i),...Array.from({length:6},(_,i)=>'cartontop'+i),'concrete','paint','metal','wood','rubber','cloth','skin','cardboard'];
   for(const k of paths)slots.set(k,{index:slots.size,url:k==='plain'?null:'assets/mat-'+k+'.webp'});
-  for(const world of worlds)for(const part of world.parts){const m=part.m;if(!m)throw Error('A material is missing');const key=m.type==='image'?m.url:m.type==='sign'?m.name:m.type;if(!slots.has(key)&&(m.type==='sign'||m.type==='image'))slots.set(key,{index:slots.size,url:m.url,sign:m.type==='sign'?m:null});}
+  for(const world of extraWorld?[...worlds,extraWorld]:worlds)for(const part of world.parts){const m=part.m;if(!m)throw Error('A material is missing');const key=m.type==='image'?m.url:m.type==='sign'?m.name:m.type;if(!slots.has(key)&&(m.type==='sign'||m.type==='image'))slots.set(key,{index:slots.size,url:m.url,sign:m.type==='sign'?m:null});}
+  this.materialSlots=slots;
   const dim=512;this.atlas=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D_ARRAY,this.atlas);gl.texStorage3D(gl.TEXTURE_2D_ARRAY,10,gl.RGBA8,dim,dim,slots.size);
   const tmp=document.createElement('canvas');tmp.width=tmp.height=dim;const g=tmp.getContext('2d');
   let decoded=0;
@@ -247,8 +248,9 @@ export class Renderer{
    for(const [i,size,off] of [[0,3,0],[1,3,12],[2,2,24]]){gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,size,gl.FLOAT,false,32,off);}
    let inst=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,inst);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(b.values),gl.STATIC_DRAW);
    for(const [i,size,off] of [[3,3,0],[4,3,3],[5,3,6],[6,3,9],[7,4,12],[8,4,16]]){gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,size,gl.FLOAT,false,80,4*off);gl.vertexAttribDivisor(i,1);}
-   let center=b.min.map((v,i)=>(v+b.max[i])*.5);return {vao,verts,indexType,shape:b.shape,count:b.values.length/20,staticShadow:b.staticShadow,translucent:b.translucent,center,radius:Math.hypot(...b.max.map((v,i)=>v-center[i]))};});
+   let center=b.min.map((v,i)=>(v+b.max[i])*.5);return {vao,inst,verts,indexType,shape:b.shape,count:b.values.length/20,staticShadow:b.staticShadow,translucent:b.translucent,center,radius:Math.hypot(...b.max.map((v,i)=>v-center[i]))};});
  }
+ setWorld(world){const gl=this.gl;for(const b of this.groups[0]){gl.deleteVertexArray(b.vao);gl.deleteBuffer(b.inst);}this.groups[0]=this.batch(world,this.materialSlots,true);this.lights=world.lights;this.setQuality(this.quality??'BALANCED');}
  setQuality(name){
   const gl=this.gl;this.quality=name;const sizes={HIGH:2048,BALANCED:1024,PERFORMANCE:512};this.size=sizes[name];
   if(this.depth)gl.deleteTexture(this.depth);if(this.fb)gl.deleteFramebuffer(this.fb);this.depth=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,this.depth);gl.texImage2D(gl.TEXTURE_2D,0,gl.DEPTH_COMPONENT24,this.size,this.size,0,gl.DEPTH_COMPONENT,gl.UNSIGNED_INT,null);for(const k of [gl.TEXTURE_MAG_FILTER,gl.TEXTURE_MIN_FILTER])gl.texParameteri(gl.TEXTURE_2D,k,gl.NEAREST);for(const k of [gl.TEXTURE_WRAP_S,gl.TEXTURE_WRAP_T])gl.texParameteri(gl.TEXTURE_2D,k,gl.CLAMP_TO_EDGE);

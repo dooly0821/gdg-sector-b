@@ -1,8 +1,8 @@
 // Spatial collision index and incremental, persistent A* for ground creatures.
 const CELL=.5,BUCKET=4,clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),key=(x,z)=>x+','+z;
-const bounds=(x,z)=>x>-42.5&&x<14.35&&z>-21.1&&z<77.5&&(x>=-15||z>-8.65);
+const bounds=(x,z,nav)=>x>-42.5&&x<14.35&&z>-21.1&&z<(nav?.expanded?101.5:77.5)&&(x>=-15||z>-8.65);
 export function indexBlocks(blocks,base=null){
- const buckets=new Map(base??[]),copied=new Set();
+ const buckets=new Map(base??[]),copied=new Set();buckets.expanded=!!base?.expanded||blocks.some(b=>b[6]==='extension-boundary');
  for(const block of blocks)for(let x=Math.floor(block[0]/BUCKET);x<=Math.floor(block[2]/BUCKET);x++)for(let z=Math.floor(block[1]/BUCKET);z<=Math.floor(block[3]/BUCKET);z++){
   const k=key(x,z);if(!buckets.has(k))buckets.set(k,[]);else if(base&&!copied.has(k))buckets.set(k,buckets.get(k).slice());copied.add(k);buckets.get(k).push(block);
  }
@@ -21,7 +21,7 @@ function overlap(nav,x,z,r,y,h){
  }
  return depth;
 }
-export function freeAt(nav,x,z,body,margin=0){return bounds(x,z)&&overlap(nav,x,z,body.r+margin,body.y,body.h)<1e-6;}
+export function freeAt(nav,x,z,body,margin=0){return bounds(x,z,nav)&&overlap(nav,x,z,body.r+margin,body.y,body.h)<1e-6;}
 export function segmentFree(nav,a,b,body,margin=.015){
  const d=Math.hypot(b[0]-a[0],b[1]-a[1]),n=Math.max(1,Math.ceil(d/.22));
  for(let i=1;i<=n;i++)if(!freeAt(nav,a[0]+(b[0]-a[0])*i/n,a[1]+(b[1]-a[1])*i/n,body,margin))return false;
@@ -101,7 +101,7 @@ export function recover(actor,nav,body,target,dt){
  if(depth>1e-6){
   let best=null,score=depth;for(let k=0;k<24;k++){
    const a=k*Math.PI/12,p=[here[0]+Math.sin(a)*Math.min(.09,dt*3),here[1]+Math.cos(a)*Math.min(.09,dt*3)];
-   if(!bounds(...p))continue;const d=overlap(nav,...p,body.r,body.y,body.h);
+   if(!bounds(p[0],p[1],nav))continue;const d=overlap(nav,...p,body.r,body.y,body.h);
    if(d<score-1e-7){best=p;score=d;}
   }
   if(best){actor.x=best[0];actor.z=best[1];actor.navDelay=0;return true;}
