@@ -1,3 +1,4 @@
+import {mapMarkup,mapMarkers} from './facility-map.js';
 import {tickShiftEvents,eventLighting,specialLabel} from './shift-events.js';
 import {sectorName,clock,telemetry,progressBar,decorateManual,updateHud} from './ui-art.js';
 import {normalizeNickname,escapeNickname} from './nickname.js';
@@ -29,28 +30,12 @@ let sound,master,hum;
 function audioOn(){try{if(!sound){sound=new AudioContext();master=sound.createGain();master.gain.value=0;master.connect(sound.destination);hum=sound.createOscillator();hum.frequency.value=56;hum.type='sine';hum.connect(master);hum.start();}sound.resume().catch(()=>{});master.gain.setTargetAtTime(settings.audio&&mode==='game'?.026*(settings.volume??1):0,sound.currentTime,.4);}catch{}}
 function beep(hz,time=.12,type='sine',gain=.1){if(!sound||!settings.audio||settings.volume<=0)return;let o=sound.createOscillator(),g=sound.createGain(),now=sound.currentTime;o.type=type;o.frequency.setValueAtTime(hz,now);o.frequency.exponentialRampToValueAtTime(hz*.68,now+time);g.gain.setValueAtTime(Math.max(.0001,gain*(settings.volume??1)),now);g.gain.exponentialRampToValueAtTime(.0001,now+time);o.connect(g);g.connect(sound.destination);o.start();o.stop(now+time+.02);}
 function say(line,duration=5){$('#radio').innerHTML='<strong>관제실</strong>'+line;radioUntil=performance.now()+duration*1000;}
-const rows=[['W A S D','이동'],['MOUSE','시점 회전'],['SHIFT','달리기'],['C (누르고 유지)','앉기 / 은신'],['C + W A S D','앉은 채 이동 / 낮은 은신처 진입'],['W + SPACE','난간 위 올라서기 · 선반 · 상자 등반'],['SHIFT + W + SPACE','달리면서 난간 넘기'],['C + SPACE + A/D','공중 버니합 방향 전환'],['SPACE / WHEEL','점프 · 연속 점프 · 방향 입력 중 장애물 넘기'],['C + SPACE','달리기 중 앉기 점프 · 버니합'],['Q','손전등 들기 / 내리기'],['E','상자 들기 · 다시 눌러 내려놓기'],['ESC','일시 정지']];
+const rows=[['W A S D','이동'],['MOUSE','시점 회전'],['SHIFT','달리기'],['C (누르고 유지)','앉기 / 은신'],['C + W A S D','앉은 채 이동 / 낮은 은신처 진입'],['W + SPACE','난간 위 올라서기 · 선반 · 상자 등반'],['SHIFT + W + SPACE','달리면서 난간 넘기'],['C + SPACE + A/D','공중 버니합 방향 전환'],['SPACE / WHEEL','점프 · 연속 점프 · 방향 입력 중 장애물 넘기'],['C + SPACE','달리기 중 앉기 점프 · 버니합'],['Q','손전등 들기 / 내리기'],['E','상자 들기 · 다시 눌러 내려놓기'],['M','전체 지도 확대 / 축소'],['ESC','일시 정지']];
 const links='<a class="doc" href="characters.html" target="_blank" rel="noopener">캐릭터 검수실 ↗</a><div class="panel-actions"><a class="doc" href="unity-migration.html" target="_blank" rel="noopener">Unity 이식 가이드 ↗</a></div>';
 function action(name,label,primary=false){return '<button class="'+(primary?'primary':'secondary')+'" data-action="'+name+'">'+label+'</button>';}
-function plan(){
- const X=x=>8+(x+43)*5,Y=z=>8+(z+22)*5;
- const rect=(x,z,w,d,fill)=>'<rect x="'+X(x)+'" y="'+Y(z)+'" width="'+w*5+'" height="'+d*5+'" fill="'+fill+'" stroke="#77746a" stroke-width=".6"/>';
- const label=(x,z,name)=>'<text x="'+X(x)+'" y="'+Y(z)+'" font-size="8" fill="#d4c7a7">'+name+'</text>';
- let shapes=rect(-43,-9,28,30,'#303031')+rect(-15,-22,30,44,'#232820')+rect(-43,21,28,33,'#322729')+rect(-15,22,30,32,'#303331')+rect(-43,54,28,24,'#352d26')+rect(-15,54,30,24,'#42292d');
- for(const r of [[-4.8,-16,4,9],[-4.8,-3.48,4,7.48],[-13,-16,3,9.45],[-13,-3.48,3,12.48],[3,-17,4,3],[-27,6.3,4,1.4],[-40,27.2,5,1.6],[-37.3,43.2,4.6,1.6],[-25.3,28.2,4.6,1.6],[-25.3,46.2,4.6,1.6],[-11.3,27.2,4.6,1.6],[-11.3,43.2,4.6,1.6],[2.7,28.2,4.6,1.6],[2.7,45.2,4.6,1.6]])shapes+=rect(...r,'#55594f');
- shapes+=rect(-15.7,12,1.4,4,'#bd9852')+rect(-3,21.6,6,1,'#bd9852')+rect(-33,20.6,6,1,'#bd9852')+rect(-15.5,34,1,6,'#bd9852')+rect(-33,53.6,6,1,'#bd9852')+rect(-3,53.6,6,1,'#bd9852')+rect(-15.5,63,1,6,'#bd9852');
- for(const [x,z] of [[-37,65],[-22,74],[-7,65],[8,74]])shapes+=rect(x-1.35,z-1,2.7,2,'#55594f');
- for(const [x,z] of [[-32,68],[-2,68]])shapes+=rect(x-1.5,z-1.5,3,3,'#71988b');
- shapes+=label(-40,-5,'C-01 분류동')+label(-13,-18,'B 메인 창고')+label(-40,24,'D-03 반품동')+label(-13,24,'D-02 이송동')+label(-40,56,'C-02 폐기물 처리동')+label(-13,56,'D-04 격리실험동');
- for(const {stairs:[x,z],rack:[rx,rz],stack:[sx,sz]} of DRESSING){shapes+=rect(x-1.2,z-2.95,2.4,5.6,'#887757')+rect(rx-1.71,rz-.86,3.42,1.72,'#55594f')+rect(sx-1.2,sz-1,2.5,2.4,'#55594f');}
- for(const p of DENSE_PROPS)if(p.kind!=='locker')shapes+=rect(p.x-p.w/2,p.z-p.d/2,p.w,p.d,p.kind==='rack'?'#657074':p.kind==='low'||p.kind==='bin'?'#a08a64':'#6d6357');
- for(const {x,z} of LOCKERS)shapes+='<rect x="'+(X(x)-2.8)+'" y="'+(Y(z)-2.8)+'" width="5.6" height="5.6" fill="#d6b77d" stroke="#fff1cf" stroke-width=".6"/>';
- for(const [x,z] of [...HIDING_POINTS,...DRESSING_HIDE])shapes+='<rect x="'+(X(x)-2.3)+'" y="'+(Y(z)-2.3)+'" width="4.6" height="4.6" fill="#a9c6e0"/>';
- for(const [x,y,z] of REFUGES)shapes+='<circle cx="'+X(x)+'" cy="'+Y(z)+'" r="3.1" fill="#79cda6" stroke="#c5ebd8" stroke-width=".6"/>';
- const peers=(coop?.snapshot?.players??[]).filter(p=>p.id!==coop.snapshot.you&&!p.failed).map(p=>'<circle cx="'+X(p.x)+'" cy="'+Y(p.z)+'" r="3" fill="#b9a6e8"/>').join('');
- const lines=(session?.cargo??PARCELS).map((p,i)=>{if(session&&session.states[i]!=='AVAILABLE')return '';const pos=session?.parked?.[i]??p.pos;return '<circle cx="'+X(pos[0])+'" cy="'+Y(pos[2])+'" r="2" fill="#f3bd51"/>';}).join('');
- return '<svg class="map-drawing" viewBox="0 0 306 516" aria-label="GDG 시설 평면도">'+shapes+lines+peers+'<rect x="'+(X(DOCK[0])-4)+'" y="'+(Y(DOCK[2])-2)+'" width="8" height="4" fill="#9bc8cf"/><circle cx="'+X(session?.x??1.7)+'" cy="'+Y(session?.z??15)+'" r="3" fill="#f1f1e2"/></svg><div class="map-key"><span>● 화물</span><span style="color:#9bc8cf">■ 출고대</span><span>● 작업자</span><span style="color:#b9a6e8">● 팀원</span><span style="color:#a9c6e0">■ 은신처 입구</span><span style="color:#d6b77d">■ 철제 사물함</span><span style="color:#79cda6">● 높은 피신 지점</span></div>';
-}
+const emptyMapBlocks=[];
+function plan(){return mapMarkup(worlds?.[0]?.blocks??emptyMapBlocks,session,coop?.snapshot?.players??[],coop?.snapshot?.you);}
+function mapMarkersNow(){return mapMarkers(session,coop?.snapshot?.players??[],coop?.snapshot?.you);}
 function coopInput(){const s=session??{};return {keys:mode==='game'&&!s.failed?[...keys]:[],yaw:s.yaw??0,pitch:s.pitch??0};}
 function stopServerList(){clearTimeout(coopListTimer);coopListGeneration++;coopListBusy=false;}
 function coopSlots(count,players=null,you=null,host=null){
@@ -122,7 +107,7 @@ function onCoopState(snap){
  if(snap.phase==='lobby'){if(mode==='menu'&&pane==='coop')coopLobby();return;}
  if(!coopStarting&&mode==='menu'&&['loading','playing'].includes(snap.phase)){
   coopStarting=true;coopEnding=false;coopEventSeq=0;soloSession=session;session=newShift();applyCoopSnapshot(session,snap,true);$('#modal').hidden=true;$('#start').click();
- }else if(coopStarting&&session){applyCoopSnapshot(session,snap);if(pane==='map'&&$('#live-map'))$('#live-map').innerHTML=plan();}
+ }else if(coopStarting&&session){applyCoopSnapshot(session,snap);if(pane==='map'&&$('#live-map')){const markers=$('#live-map .gdg-map-markers');if(markers)markers.innerHTML=mapMarkersNow();else $('#live-map').innerHTML=plan();}}
  if(!coopStarting||!session)return;
  const me=snap.players.find(p=>p.id===snap.you),team=$('#coop-team');
  if(team){team.hidden=false;team.textContent='CO-OP '+serverName(snap.room)+' · 생존 '+snap.players.filter(p=>!p.failed).length+'/'+snap.players.length+' · 개체 '+snap.haunt.length+'/'+snap.difficulty.maxActive+'\n'+snap.players.map(p=>p.name+(p.id===snap.you?' (나)':'')+(p.failed?' · 사망':p.hidden?' · 은신':' · 생존')).join('\n');}
@@ -351,11 +336,12 @@ function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/10
  if(s.showTraversal||document.querySelector('#traversal-debug'))drawTraversalDebug(s,worlds[0].blocks,renderer,pose,eye,view);
  const mark=$('#waypoint'),p=$('#prompt'),brackets=$('#target-brackets');
  let msg=s.climbHint>s.elapsed?'높은 선반에 오르려면 E로 상자를 내려놓으세요.':'';brackets.hidden=true;mark.hidden=true;
+ const blackout=s.shiftEvents?.active?.kind==='blackout';
  if(target&&!s.handAction){
   const distance=Math.hypot(s.x-target.pos[0],s.y-target.pos[1],s.z-target.pos[2]);const pt=target.pos.slice();pt[1]+=target.dock?1.05:.83;
   const clip=renderer.project(pt),label=target.dock?'출고 02':target.id;
-  if(clip&&Math.abs(clip[0])<.92&&Math.abs(clip[1])<.84){mark.hidden=false;mark.style.left=(clip[0]+1)*50+'%';mark.style.top=(1-clip[1])*50+'%';mark.textContent='◆ '+label+' · '+Math.round(distance)+' m';}
-  else msg=label+' / '+areaNames[target.area]+' · '+Math.round(distance)+' m';
+  if(!blackout&&clip&&Math.abs(clip[0])<.92&&Math.abs(clip[1])<.84){mark.hidden=false;mark.style.left=(clip[0]+1)*50+'%';mark.style.top=(1-clip[1])*50+'%';mark.textContent='◆ '+label+' · '+Math.round(distance)+' m';}
+  else msg=blackout?'정전 · 전체 지도(M)에서 목표 확인':label+' / '+areaNames[target.area]+' · '+Math.round(distance)+' m';
   if(available){
    msg='<kbd>E</kbd> '+(useTarget.dock?'배송하기':useTarget.drop?'상자 내려놓기':'상자 들기');
    const box=targetCorners(useTarget.pos,useTarget.dock);
@@ -371,7 +357,7 @@ function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/10
  textIfChanged($('#taskLine'),(target?(target.dock?shiftParcel(s,s.carried).id+' → 02번 출고대':target.id+' · '+(areaNames[target.area]??'')):'전체 배송 완료')+(special?' · '+special:''));
  const directions=['N','NE','E','SE','S','SW','W','NW'];const bearing=((Math.round(-s.yaw*180/Math.PI)%360)+360)%360;
  textIfChanged($('#heading'),directions[Math.round(bearing/45)%8]+'  '+String(bearing).padStart(3,'0')+'°');
- if(!coopStarting||now-(s.lastCoopHud??-1000)>=80){s.lastCoopHud=now;updateHud(s,!!hiddenLocker,deliveryCount(s),MISSION_TOTAL,plan,now,settings.hints);}
+ if(!coopStarting||now-(s.lastCoopHud??-1000)>=80){s.lastCoopHud=now;updateHud(s,!!hiddenLocker,deliveryCount(s),MISSION_TOTAL,plan,now,settings.hints,mapMarkersNow,worlds?.[0]?.blocks);}
  if(coopStarting){s.netFrameMs=(s.netFrameMs??frameMs)*.94+frameMs*.06;if(now-(s.lastNetInfo??-1000)>600){s.lastNetInfo=now;const team=$('#coop-team');if(team)team.title='FPS '+Math.round(1000/Math.max(1,s.netFrameMs))+' · 서버 응답 '+Math.round(coop?.rtt??0)+' ms';}}
  if(now>radioUntil)textIfChanged($('#radio'),'');if(now>receiptUntil)$('#receipt').hidden=true;
  if(!coopStarting&&finishAt!==null&&s.elapsed>=finishAt){finishAt=null;complete();return;}
@@ -381,6 +367,7 @@ document.addEventListener('keydown',e=>{
  if(e.code==='Enter'&&!$('#modal').hidden&&pane==='coop'&&!coop&&document.activeElement?.id==='coop-nickname'){e.preventDefault();if(selectedServer)coopConnect(selectedServer);return;}
  if(e.code==='Escape'){if(mode==='game'){pauseShift();}else if(!$('#modal').hidden){closePane();}return;}
  if(mode!=='game')return;if(['Space','KeyW','KeyA','KeyS','KeyD','KeyE','KeyQ','KeyC','ShiftLeft','ShiftRight','ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();
+ if(e.code==='KeyM'){e.preventDefault();if(!e.repeat){session.mapExpanded=!session.mapExpanded;$('#play').classList.toggle('map-expanded',session.mapExpanded);}return;}
  if(e.code==='F3'){e.preventDefault();if(!e.repeat)session.showTraversal=!session.showTraversal;return;}
  if(e.code==='KeyQ'&&!e.repeat){if(coopStarting&&coop){coop.command('torch');return;}if(session.handAction){session.restoreTorch=!session.restoreTorch;return;}if(toggleFlashlight(session)){session.pendingUse=false;session.restoreTorch=false;beep(180,.055,'triangle',.025);}else say('상자를 집거나 내려놓는 동안에는 장비 전환을 할 수 없습니다.',2);return;}if(e.code==='KeyE'&&!e.repeat){use();return;}if(e.code==='Space'&&!e.repeat){jump=true;if(coopStarting&&coop)coop.command('jump');}const changed=!keys.has(e.code);keys.add(e.code);if(changed&&coopStarting&&coop&&['KeyW','KeyA','KeyS','KeyD','KeyC','ShiftLeft','ShiftRight','Space'].includes(e.code))coop.inputChanged();
 });document.addEventListener('keyup',e=>{const changed=keys.delete(e.code);if(changed&&coopStarting&&coop)coop.inputChanged();});

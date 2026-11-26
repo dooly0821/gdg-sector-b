@@ -26,22 +26,22 @@ export function buildArchitecture(w) {
   const block=(...v)=>w.block(...v);
   const pi=Math.PI;
   function column(x,z){
-    box(x,4.36,z,.20,8.72,.33,m.iron);
-    for(const offset of [-.18,.18]) box(x,4.36,z+offset,.40,8.72,.048,m.steel);
+    box(x,6.36,z,.20,12.72,.33,m.iron);
+    for(const offset of [-.18,.18]) box(x,6.36,z+offset,.40,12.72,.048,m.steel);
     box(x,.11,z,.62,.22,.60,m.plate);
     for(const dx of [-.22,.22]) for(const dz of [-.19,.19]) post(x+dx,.22,z+dz,.06,.038,m.bolt);
-    box(x,7.98,z,.42,.82,.42,m.plate);
-    if(Math.abs(x)>14) block(x-.24,z-.23,x+.24,z+.23,0,8.72);
+    box(x,11.98,z,.42,.82,.42,m.plate);
+    if(Math.abs(x)>14) block(x-.24,z-.23,x+.24,z+.23,0,12.72);
   }
   function truss(z) {
-    const ridge=x=>8.3+1.43*(1-Math.abs(x)/14.7);
-    beam([-14.72,7.63,z],[14.72,7.63,z],.13,.16,m.iron);
+    const ridge=x=>12.3+1.43*(1-Math.abs(x)/14.7);
+    beam([-14.72,11.63,z],[14.72,11.63,z],.13,.16,m.iron);
     for (const [a,b] of [[-14.76,0],[0,14.76]]) beam([a,ridge(a),z],[b,ridge(b),z],.19,.21,m.steel);
     for (let i=0;i<12;i++){
       const a=-14.7+i*2.45,b=a+2.45;
-      beam([a,7.68,z],[a,ridge(a),z],.078,.09,m.steel);
-      beam(i%2?[a,ridge(a)-.06,z]:[a,7.68,z],i%2?[b,7.68,z]:[b,ridge(b)-.06,z],.078,.09,m.iron);
-      box(a,7.70,z,.21,.22,.19,m.plate);
+      beam([a,11.68,z],[a,ridge(a),z],.078,.09,m.steel);
+      beam(i%2?[a,ridge(a)-.06,z]:[a,11.68,z],i%2?[b,11.68,z]:[b,ridge(b)-.06,z],.078,.09,m.iron);
+      box(a,11.70,z,.21,.22,.19,m.plate);
     }
   }
   function sideWindow(x,z,length) {
@@ -110,12 +110,12 @@ export function buildArchitecture(w) {
   for(const x of [-15,15]){
     if(x<0){
       for(const [lo,hi] of [[-22,12],[16,22]]){
-        box(x,4.3,(lo+hi)/2,.28,8.6,hi-lo,m.wall);
+        box(x,6.3,(lo+hi)/2,.28,12.6,hi-lo,m.wall);
         box(x+.16,.46,(lo+hi)/2,.09,.92,hi-lo,m.wallDark);
       }
-      box(x,6.1,14,.28,5,4,m.wall);
+      box(x,8.1,14,.28,9,4,m.wall);
     }else{
-      box(x,4.3,0,.28,8.6,44.0,m.wall);
+      box(x,6.3,0,.28,12.6,44.0,m.wall);
       box(x-.16,.46,0,.09,.92,43.87,m.wallDark);
     }
     for(let n=0;n<8;n++) {
@@ -131,26 +131,32 @@ export function buildArchitecture(w) {
     const s=Math.sign(z);
     if(z===22){
       for(const x of [-9,9]){
-        box(x,4.3,z,12,8.6,.27,m.wall);
+        box(x,6.3,z,12,12.6,.27,m.wall);
         box(x,.43,z-s*.152,11.9,.86,.07,m.wallDark);
       }
-      box(0,6.1,z,6,5,.27,m.wall);
+      box(0,8.1,z,6,9,.27,m.wall);
       w.sign(0,3.9,z-.17,3.6,.35,'D-02 / TRANSFER HALL','#402d29','#ecd2a0',pi);
     }else{
-      box(0,4.3,z,30,8.6,.27,m.wall);
+      box(0,6.3,z,30,12.6,.27,m.wall);
       box(0,.43,z-s*.152,29.9,.86,.07,m.wallDark);
     }
     box(0,5.48,z-s*.18,29.8,.08,.085,m.trim);
     for (const x of [-11.25,-3.75,3.75,11.25])endWindow(z-s*.20,x,6.39);
     for (const x of [-14.56,-7.5,0,7.5,14.56]){
       if(z===22&&x===0)continue;
-      box(x,4.22,z-s*.23,.20,8.44,.24,m.steel);
-      box(x,4.22,z-s*.39,.31,8.44,.043,m.plate);
+      box(x,6.22,z-s*.23,.20,12.44,.24,m.steel);
+      box(x,6.22,z-s*.39,.31,12.44,.043,m.plate);
     }
+  }
+  for(const x of [-15,15])for(let n=0;n<8;n++){
+    const z=-19.25+n*5.5,face=x-Math.sign(x)*.18;
+    box(face,10.65,z,.09,1.55,4.65,m.iron);
+    for(let i=0;i<6;i++)box(face-Math.sign(x)*.06,10.65,z+(i-2.5)*.75,.025,1.29,.68,i%3?m.darkGlass:m.blueGlass);
+    box(face,9.83,z,.15,.10,4.75,m.steel);
   }
   loadingDoor(-7,'01');loadingDoor(4.6,'02');
   // Blue roof glazing sits between opaque roof sheets. Flush secondary ribs form the pane frame.
-  const slope=1.43/14.7, roofHeight=x=>8.58+(14.7-Math.abs(x))*slope;
+  const slope=1.43/14.7, roofHeight=x=>12.58+(14.7-Math.abs(x))*slope;
   for(let n=0;n<8;n++){
     const z=-19.25+n*5.5;
     for (const side of [-1,1]){

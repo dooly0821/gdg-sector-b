@@ -1,18 +1,22 @@
 import {DENSE_LOCKERS} from './density.js';
 import {World,basis,dot} from './world.js';
 import {traceBox} from './contact.js';
-export const LOCKERS=Object.freeze([[9,13],[-36,17],[10,39],[-37,40],[-39.5,65.5],[9,68],...DENSE_LOCKERS].map(([x,z],i)=>Object.freeze({x,z,id:i+1})));
+export const LOCKERS=Object.freeze([[-12.6,-17.1],[-40.7,.4],[-9,42.2],[-38.3,53],[-38,63.1],[13.5,58.9],...DENSE_LOCKERS].map(([x,z],i)=>Object.freeze({x,z,id:i+1})));
 const W=1.16,D=1.12,H=2.12,half=W/2,front=D/2,span=W-.09;
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const hinge=l=>[l.x-half+.045,l.z-front];
 export function buildLockers(w){
- const shell=w.mat('locker-shell','#4a5152','metal'),dark=w.mat('locker-inner','#282e30','metal'),trim=w.mat('locker-edge','#696c66','metal');
+ const shell=w.mat('locker-shell','#46534e','metal'),dark=w.mat('locker-inner','#282e30','metal'),trim=w.mat('locker-edge','#80958a','metal'),mark=w.mat('locker-safe-mark','#87bea5','paint',.20);
  for(const {x,z,id} of LOCKERS){
   const solid=(x,y,z,a,b,c,m)=>{w.box(x,y,z,a,b,c,m);w.block(x-a/2,z-c/2,x+a/2,z+c/2,y-b/2,y+b/2,'locker-shell');};
   w.box(x,.018,z,W,.036,D,dark);solid(x,H-.045,z,W,.09,D,shell);
   solid(x,H/2,z+front-.035,W,H,.07,dark);
   for(const k of [-1,1]){solid(x+k*(half-.035),H/2,z,.07,H,D,shell);w.box(x+k*(half-.035),H/2,z-front-.015,.07,H,.065,trim);}
   w.sign(x,H-.12,z-front-.031,.72,.12,'GDG / LOCKER '+String(id).padStart(2,'0'),'#303638','#c8c4aa',Math.PI);
+  // Recognisable industrial personnel locker; low-key luminous marker.
+  w.box(x,H+.07,z-front+.025,W,.14,.14,trim);
+  w.sign(x,H+.07,z-front-.054,1.10,.12,'HIDE / '+String(id).padStart(2,'0'),'#243e35','#b9e7d2',Math.PI);
+  for(const k of [-1,1]){w.box(x+k*.54,1.02,z-front-.04,.055,1.94,.018,mark);w.box(x+k*.62,.012,z-.87,.08,.012,.63,mark);}
   w.shadow(x,z,W+.12,D+.12);
  }
 }

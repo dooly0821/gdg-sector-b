@@ -154,3 +154,14 @@
 #modal[data-pane=coop] .coop-lobby-roster{margin:8px 0}
 @media(max-width:850px){#modal[data-layout=menu],#modal[data-layout=pause]{grid-template-columns:minmax(85px,21%) minmax(0,1fr);gap:7px;padding:7px}#modal[data-pane=coop] .server-grid{grid-template-columns:1fr}#modal[data-pane=coop] .server-thumb{max-width:70px}#modal[data-pane=coop] .public-server{grid-template-columns:60px minmax(0,1fr) auto auto}#modal[data-pane=coop] .server-grid>.gdg-section{padding:8px}}
 @media(max-width:500px){#modal[data-layout=menu],#modal[data-layout=pause]{grid-template-columns:minmax(62px,20%) minmax(0,1fr)}#modal[data-pane=coop] .public-server{grid-template-columns:30px minmax(0,1fr) auto;gap:3px}#modal[data-pane=coop] .public-server>.coop-state{grid-column:2/-1;justify-self:start}#modal[data-pane=coop] .nickname-label{grid-template-columns:1fr}#modal[data-pane=coop] .nickname-label small{grid-column:1}}
+
+/* Fixed north-up full facility map; expand without pausing movement. */
+#play .hud-minimap{width:clamp(145px,15vw,245px);pointer-events:none;bottom:clamp(20px,5vh,55px)}
+#play #hud-minimap-content .map-drawing{width:100%;height:clamp(160px,30vh,310px);aspect-ratio:auto;display:block}
+#play #hud-minimap-content .map-key{font-size:9px;gap:3px 8px;padding:3px 2px}
+#play.map-expanded:not(.locker-ui) .hud-minimap{display:block!important;width:clamp(220px,29vw,440px);z-index:4}
+#play.map-expanded #hud-minimap-content .map-drawing{height:clamp(220px,63vh,680px)}
+#play.blackout-map:not(.locker-ui) .hud-minimap{display:block!important;outline:1px solid #95d2bd;box-shadow:0 0 14px #88cbb62b}
+#play.blackout-map .hud-minimap strong{background:#9dd8c3;color:#172e27}
+#play.blackout-map .hud-minimap small:before{content:'비상 지도 · ';color:#b2eddb}
+@media(max-height:560px){#play:not(.map-expanded):not(.blackout-map) .hud-minimap{display:none}}

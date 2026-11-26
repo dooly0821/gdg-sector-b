@@ -162,8 +162,8 @@ function updateSpawns(s,blocks,forward,dt,rng){
  // A confined ceiling route in the deep lab. No arbitrary wall penetration.
  if(!team&&kind===3&&x>=13&&z>=56&&z<=75&&rng()<.72){
   const a=s.haunt.at(-1);
-  if(Math.hypot(s.x-13.85,s.z-z)>=SPAWN_BALANCE.minDistance&&Math.hypot(s.x-13.85,s.z-z)<=SPAWN_BALANCE.maxDistance&&clear(blocks,13.85,z,.75,0,7.7)&&hiddenSpawn(s,13.85,z,kind,queryBlocks(s.navIndex,Math.min(13.85,s.x)-1,Math.min(z,s.z)-1,Math.max(13.85,s.x)+1,Math.max(z,s.z)+1),7.55)){
-   a.x=13.85;a.state='ceilingStalk';a.surfaceY=7.55;a.surfaceRoll=Math.PI;a.surfaceDir=direction;a.timer=6.5;
+  if(Math.hypot(s.x-13.85,s.z-z)>=SPAWN_BALANCE.minDistance&&Math.hypot(s.x-13.85,s.z-z)<=SPAWN_BALANCE.maxDistance&&clear(blocks,13.85,z,.75,0,10.7)&&hiddenSpawn(s,13.85,z,kind,queryBlocks(s.navIndex,Math.min(13.85,s.x)-1,Math.min(z,s.z)-1,Math.max(13.85,s.x)+1,Math.max(z,s.z)+1),10.55)){
+   a.x=13.85;a.state='ceilingStalk';a.surfaceY=10.55;a.surfaceRoll=Math.PI;a.surfaceDir=direction;a.timer=6.5;
   }
  }
  spawnCue(s,s.haunt.at(-1),true);
@@ -225,12 +225,12 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
    const canSee=dist<10&&visible(local,[actor.x,5.6,actor.z],[s.x,s.y+1,s.z]);
    if(actor.state==='ceilingStalk'){
     const next=actor.z+(canSee?Math.sign(s.z-actor.z):actor.surfaceDir)*dt*2.8;
-    if(next>56&&next<76&&clear(blocks,actor.x,next,.75,0,7.7))actor.z=next;else actor.surfaceDir*=-1;
+    if(next>56&&next<76&&clear(blocks,actor.x,next,.75,0,10.7))actor.z=next;else actor.surfaceDir*=-1;
     actor.yaw=actor.surfaceDir>0?0:Math.PI;actor.speed=2.8;
     if(canSee||!actor.timer){actor.state='wallDescent';actor.timer=1.4;(s.hauntSounds??=[]).push({x:actor.x,z:actor.z,kind:i,accent:true});}
    }else{
     const t=1-actor.timer/1.4;
-    actor.surfaceY=7.55*(1-t);actor.surfaceRoll=Math.PI*(1-clamp((t-.08)/.70,0,1));actor.speed=1.8;
+    actor.surfaceY=10.55*(1-t);actor.surfaceRoll=Math.PI*(1-clamp((t-.08)/.70,0,1));actor.speed=1.8;
     if(!actor.timer){actor.surfaceY=0;actor.surfaceRoll=0;actor.state='patrol';actor.pursuit=false;actor.speed=0;actor.age=Math.max(actor.age,.65);}
    }
    return;

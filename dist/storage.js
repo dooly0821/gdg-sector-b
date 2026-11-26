@@ -119,7 +119,7 @@ export function buildStorage(w) {
     box(x, 0.32, z + outward * 0.102, 0.166, 0.068, 0.005, innerSteel);
   }
 
-  function rack(x0, x1, z0, z1, bayCount, id, height = 5.62) {
+  function rack(x0, x1, z0, z1, bayCount, id, height = 9.05) {
     const xMid = (x0 + x1) / 2;
     const halfWidth = (x1 - x0) / 2;
     const bayLen = (z1 - z0) / bayCount;
@@ -188,6 +188,20 @@ export function buildStorage(w) {
       // One location card per accessible bay at typical picker eye height.
       if (j === bayCount - 1 || j === 0) {
         w.sign(x1 + 0.077, 1.799, z + bayLen * 0.31, 0.36, 0.135, id, '#dbca9d', '#322b27', Math.PI / 2);
+      }
+    }
+    for(const y of [7.02,8.72]){
+      w.block(x0-.06,z0-.05,x1+.06,z1+.05,y-.16,y,'shelf');
+      for(let j=0;j<bayCount;j++){
+        const z=z0+(j+.5)*bayLen;
+        for(const x of [x0,xMid,x1])box(x,y-.08,z,.12,.16,bayLen-.07,orange);
+        for(const f of [-.36,-.12,.12,.36])box(xMid,y-.035,z+f*bayLen,x1-x0-.04,.06,.10,innerSteel);
+        for(const lane of [0,1]){
+          if((j+lane+(y>8?1:0))%3===0)continue;
+          const x=x0+halfWidth*(lane+.5),a=halfWidth-.23,d=bayLen*.70;
+          box(x,y+.075,z,a,.15,d,wood[0]);w.block(x-a/2,z-d/2,x+a/2,z+d/2,y,y+.15,'climb');
+          box(x,y+.53,z,a*.92,.76,d*.9,carton[(j+lane)%carton.length]);w.block(x-a*.46,z-d*.45,x+a*.46,z+d*.45,y+.15,y+.91,'climb');
+        }
       }
     }
     w.sign(x1 - 0.32, 1.79, z1 + 0.10, 0.43, 0.155, id, '#e8d8b8', '#2e2a26');

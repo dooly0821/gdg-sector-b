@@ -16,13 +16,17 @@ export function decorateManual(body){
  }
  root.append(grid);
 }
-let lastMap=-Infinity;
-export function updateHud(s,hidden,count,total,plan,now,hints=true){
+let lastMap=-Infinity,lastMapWorld=null;
+export function updateHud(s,hidden,count,total,plan,now,hints=true,markers=null,mapWorld=null){
  const $=id=>document.getElementById(id),t=telemetry(s,hidden),play=$('play');
  play.classList.toggle('locker-ui',hidden);play.classList.toggle('threat-ui',t.alert);play.classList.toggle('hints-off',!hints);
  $('hud-sector').textContent=sectorName(s);$('hud-noise-fill').style.width=Math.round(t.noise*100)+'%';$('hud-noise-label').textContent=t.noiseLabel;
  $('hud-danger').textContent=t.danger;$('hud-progress').style.width=Math.round(count/total*100)+'%';$('hud-clock').textContent=clock(s.elapsed);
  $('hud-movement').textContent=hidden?'사물함 내부':s.onRail&&s.grounded?'난간 균형':(s.bodyHeight??1.7)<1.2?'앉기':!s.grounded?'공중':Math.hypot(s.vx||0,s.vz||0)>4.5?'달리기':'이동 가능';
  $('hud-locker').hidden=!hidden;
- if(now-lastMap>400||now<lastMap){lastMap=now;const host=$('hud-minimap-content');if(host&&!hidden&&hints){host.innerHTML=plan();const svg=host.querySelector('svg');if(svg){const x=8+(s.x+43)*5,z=8+(s.z+22)*5;svg.setAttribute('viewBox',[x-45,z-45,90,90].join(' '));svg.setAttribute('aria-label','현재 위치 주변 지도');}host.querySelector('.map-key')?.remove();}}
+ const blackout=s.shiftEvents?.active?.kind==='blackout';play.classList.toggle('blackout-map',blackout);play.classList.toggle('map-expanded',!!s.mapExpanded);
+ if(now-lastMap>80||now<lastMap||lastMapWorld!==mapWorld){lastMap=now;const host=$('hud-minimap-content');if(host&&!hidden&&(hints||blackout||s.mapExpanded)){
+  if(lastMapWorld!==mapWorld||!host.querySelector('.gdg-map-markers')){host.innerHTML=plan();lastMapWorld=mapWorld;}
+  const layer=host.querySelector('.gdg-map-markers');if(layer&&markers){const next=markers();if(layer.__last!==next){layer.innerHTML=next;layer.__last=next;}}
+ }}
 }
