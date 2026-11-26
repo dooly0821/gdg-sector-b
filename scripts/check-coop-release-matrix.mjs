@@ -41,3 +41,17 @@ assert(!retryableAction({status:409}));assert(retryableAction({status:423}));
 const delayed={x:10,y:0,z:0,vx:7,vz:0,grounded:true,bodyHeight:1.7,steps:0,elapsed:0};
 recordCoopPrediction(delayed,1000);applyCoopSnapshot(delayed,{self:{...delayed,x:1},players:[{id:'a'}],you:'a',netSample:1000,netReceived:1500,netRtt:900,simLagMs:250,haunt:[]});assert.deepEqual(delayed.netCorrection,[0,0]);
 console.log('PASS live recovery: contended leave retries, terminal lifecycle failures, stale soft-correction suppression');
+
+// A long running disagreement must not cause a snap just as a worker stops.
+const drift={x:10,y:0,z:0,vx:7,vz:0,grounded:true,bodyHeight:1.7,steps:0,elapsed:0};
+const incoming=(t)=>({self:{...drift,x:0,vx:drift.vx},players:[{id:'a'}],you:'a',netSample:t,netReceived:t+90,netRtt:180,simLagMs:12,haunt:[]});
+for(let i=0;i<8;i++){recordCoopPrediction(drift,1000+i*300);applyCoopSnapshot(drift,incoming(1000+i*300));}
+drift.vx=0;recordCoopPrediction(drift,3500);applyCoopSnapshot(drift,incoming(3500));assert.equal(drift.x,10);assert.equal(drift.netHardCorrections??0,0);
+// Clear floor: progressively close the distance, even after the old snap deadline.
+for(let i=0;i<360;i++){const t=3600+i*1000/60;if(i%12===0){recordCoopPrediction(drift,t);applyCoopSnapshot(drift,incoming(t));}advanceCoopPrediction(drift,[],[],1/60,t);}
+assert(drift.x<.3&&drift.x>=0);assert.equal(drift.netHardCorrections??0,0);
+// Preserve authoritative recovery when truly blocked behind incompatible geometry.
+const blocked={...drift,x:8,vx:0,netHistory:[],netAppliedX:0,netAppliedZ:0,netDivergenceSince:1000,netBlockedSince:1000};recordCoopPrediction(blocked,4100);applyCoopSnapshot(blocked,{self:{...blocked,x:0},players:[{id:'a'}],you:'a',netSample:4100,netReceived:4200,netRtt:200,simLagMs:8,haunt:[]});assert.equal(blocked.x,0);assert.equal(blocked.netHardCorrections,1);
+console.log('PASS stationary recovery: no pre-armed snap, gradual collision-safe convergence, blocked fallback');
+
+const {readFileSync}=await import('node:fs');assert.match(readFileSync(new URL('../dist/style.css',import.meta.url),'utf8'),/#reticle\{[^}]*pointer-events:none/);console.log('PASS reticle does not intercept mouse capture');
