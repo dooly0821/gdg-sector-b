@@ -1,6 +1,6 @@
 import {nearbyBlocks} from './contact.js';
 // Original, Source-inspired movement controller. All units are metres/seconds.
-export const PHYSICS=Object.freeze({hz:120,walk:4.5,sprint:7,groundAccel:11,friction:7,stopSpeed:1.7,airAccel:22,airWish:2.65,hopTurn:3.35,bhopCap:13.4,gravity:18,jump:Math.sqrt(2*18*1.2),jumpHeight:1.2,crouchJumpHeight:1.0,hopHeightBonus:.35,radius:.255,height:1.70,stepHeight:.25,groundSnap:.16,jumpBuffer:.18,skin:.001});
+export const PHYSICS=Object.freeze({hz:120,walk:4.5,sprint:7,groundAccel:11,friction:7,stopSpeed:1.7,airAccel:22,airWish:2.65,hopTurn:3.35,bhopCap:13.4,gravity:18,jump:Math.sqrt(2*18*1.2),jumpHeight:1.2,crouchJumpHeight:1.0,hopHeightBonus:.35,slideExit:.24,slideTurn:2.2,radius:.255,height:1.70,stepHeight:.25,groundSnap:.16,jumpBuffer:.18,skin:.001});
 const P=PHYSICS,clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const bounds=[[-16,-23,-14.79,12,-10,20],[-16,16,-14.79,23,-10,20],[14.55,-23,16,23,-10,20],[-16,-23,16,-21.4,-10,20],[-16,21.4,-3,22.15,-10,20],[3,21.4,16,22.15,-10,20],[11,-20,14.9,7,3.12,3.6]];
 function contact(x,z,b,r){const [a,c,d,e]=b;const qx=clamp(x,a,d),qz=clamp(z,c,e),dx=x-qx,dz=z-qz,len=Math.hypot(dx,dz);if(len>=r)return null;if(len>1e-8)return [dx/len,dz/len,r-len];const sides=[[x-a,-1,0],[d-x,1,0],[z-c,0,-1],[e-z,0,1]].sort((a,b)=>a[0]-b[0]);return [sides[0][1],sides[0][2],r+sides[0][0]];}
@@ -52,17 +52,19 @@ function solve(s,blocks,dx,dz,surface){
 function accelerate(s,x,z,wish,accel,dt){const add=wish-(s.vx*x+s.vz*z);if(add<=0)return;const amt=Math.min(add,accel*wish*dt);s.vx+=x*amt;s.vz+=z*amt;}
 // Only momentum above ordinary sprint speed contributes to jump height.
 export function jumpHeightFor(speed,duck=false){return (duck?P.crouchJumpHeight:P.jumpHeight)+P.hopHeightBonus*clamp((speed-P.sprint)/(P.bhopCap-P.sprint),0,1);}
-function steerHop(s,x,z,dt){
+function steerHop(s,x,z,dt,turn=P.hopTurn){
  const speed=Math.hypot(s.vx,s.vz);if(speed<2.5)return;
  const current=Math.atan2(s.vx,s.vz),goal=Math.atan2(x,z),angle=Math.atan2(Math.sin(goal-current),Math.cos(goal-current));
- const next=current+clamp(angle,-P.hopTurn*dt,P.hopTurn*dt);
+ const next=current+clamp(angle,-turn*dt,turn*dt);
  s.vx=Math.sin(next)*speed;s.vz=Math.cos(next)*speed;
 }
 export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
  if(dt<=0)return;s.vx??=0;s.vz??=0;s.jumpBuffer??=0;
  const crouch=keys.has('KeyC'),pressed=keys.has('KeyV')&&!s.wasSlideKey||s.slideRequested;s.wasSlideKey=keys.has('KeyV');s.slideRequested=false;
- s.slideCooldown=Math.max(0,(s.slideCooldown??0)-dt);s.slideTime=Math.max(0,(s.slideTime??0)-dt);
- if(pressed&&s.grounded&&!s.slideCooldown&&Math.hypot(s.vx,s.vz)>=P.sprint*.78){s.slideTime=.8;s.slideCooldown=1.5;}
+ const wasSliding=(s.slideTime??0)>0;
+ s.slideCooldown=Math.max(0,(s.slideCooldown??0)-dt);s.slideTime=Math.max(0,(s.slideTime??0)-dt);s.slideExit=Math.max(0,(s.slideExit??0)-dt);
+ if(wasSliding&&!s.slideTime)s.slideExit=P.slideExit;
+ if(pressed&&s.grounded&&!s.slideCooldown&&Math.hypot(s.vx,s.vz)>=P.sprint*.78){s.slideTime=.8;s.slideCooldown=1.5;s.slideExit=0;}
  const duck=crouch||s.slideTime>0,hopHeld=crouch&&keys.has('Space');
  // Retire legacy scripted vaults; all jumps are controlled by gravity and input.
  s.vault=null;s.ledgeIntent=0;
@@ -79,7 +81,7 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
  if(s.grounded&&s.jumpBuffer>0){
   // Compensate the semi-implicit gravity step equally at 60 and 120 Hz.
   s.vy=Math.sqrt(2*P.gravity*jumpHeightFor(preSpeed,duck))+P.gravity*dt*.5;s.grounded=false;s.onRail=false;s.jumpBuffer=0;s.hopBoosted=false;
-  s.slideTime=0;
+  s.slideTime=0;s.slideExit=0;
  }
  // One small momentum gain per airborne hop, never a per-frame speed exploit.
  // Crouch-jumping at running speed rewards a forward or strafe input.
@@ -89,9 +91,22 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
  }
  if(s.grounded){
   const speed=Math.hypot(s.vx,s.vz),sliding=s.slideTime>0&&speed>P.walk;
-  const friction=sliding?1.05:P.friction,next=Math.max(0,speed-Math.max(speed,P.stopSpeed)*friction*dt);
-  if(speed>0){s.vx*=next/speed;s.vz*=next/speed;}
-  if(mag)accelerate(s,x,z,wish,sliding?3:P.groundAccel,dt);
+  const alignment=mag&&speed>.01?(s.vx*x+s.vz*z)/speed:0;
+  if(sliding){
+   // Forward input preserves the actual entry momentum. No velocity floor,
+   // per-tick boost or position override: collision losses remain losses.
+   const friction=alignment>.15?0:alignment<-.35?4.0:.12;
+   const next=Math.max(0,speed-Math.max(speed,P.stopSpeed)*friction*dt);
+   s.vx*=next/speed;s.vz*=next/speed;
+   if(mag&&alignment>-.35)steerHop(s,x,z,dt,P.slideTurn);
+  }else{
+   const exit=!crouch&&s.slideExit>0&&alignment>.15&&speed>P.walk;
+   const blend=exit?1-s.slideExit/P.slideExit:1;
+   const friction=exit?P.friction*blend:P.friction,next=Math.max(0,speed-Math.max(speed,P.stopSpeed)*friction*dt);
+   if(speed>0){s.vx*=next/speed;s.vz*=next/speed;}
+   const exitWish=exit?(sprint?P.sprint:P.walk)*(heavy?.85:1):wish;
+   if(mag)accelerate(s,x,z,exitWish,P.groundAccel,dt);
+  }
  }else if(mag){if(duck)steerHop(s,x,z,dt);accelerate(s,x,z,P.airWish,P.airAccel,dt);}
  const speed=Math.hypot(s.vx,s.vz);if(speed>P.bhopCap){s.vx*=P.bhopCap/speed;s.vz*=P.bhopCap/speed;}
  const ox=s.x,oz=s.z,wasGrounded=s.grounded;

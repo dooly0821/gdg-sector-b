@@ -146,7 +146,7 @@ export function applyCoopSnapshot(s,snap,first=false){
   s.handAction={...s.handAction,time:Math.max(s.handAction.time,prevAction.time)};
  if(first)s.flashAmount=v.flashAmount??0;
  s.signalCooldownUntil=v.signalCooldownUntil??0;s.signalPulseUntil=v.signalPulseUntil??0;
- if(hard){s.slideTime=v.slideTime??0;s.slideCooldown=v.slideCooldown??0;s.slideRequested=false;}
+ if(hard){s.slideTime=v.slideTime??0;s.slideCooldown=v.slideCooldown??0;s.slideExit=v.slideExit??0;s.slideRequested=false;}
  s.skipLockerAdvance=true;s.coopPrediction=true;s.coopHidden=hidden;s.id=snap.you;
  s.haunt=(snap.haunt??[]).map(a=>{
   const old=s.haunt?.find(p=>p.kind===a.kind),elapsed=snap.elapsed??0;
@@ -162,7 +162,7 @@ export function advanceCoopPrediction(s,blocks,dynamic,dt,now){
   const maxRate=s.grounded?(speed<.5?2.8:1.45):.70,limit=Math.min(1-Math.exp(-dt*6),len>0?maxRate*dt/len:0),x=s.x,z=s.z;
   let cx=dx*limit,cz=dz*limit;
   // While sprinting, bound the backwards component so a normal correction cannot reverse motion.
-  if(speed>.5){const ux=s.vx/speed,uz=s.vz/speed,back=cx*ux+cz*uz,floor=-Math.min(maxRate,speed*.08)*dt;if(back<floor){cx+=(floor-back)*ux;cz+=(floor-back)*uz;}}
+  if(speed>.5){const ux=s.vx/speed,uz=s.vz/speed,back=cx*ux+cz*uz,floor=-Math.min(maxRate,speed*(s.slideTime>0?.025:.08))*dt;if(back<floor){cx+=(floor-back)*ux;cz+=(floor-back)*uz;}}
   nudgeCoopPosition(s,blocks,cx,cz,dynamic);
   const mx=s.x-x,mz=s.z-z;s.netAppliedX=(s.netAppliedX??0)+mx;s.netAppliedZ=(s.netAppliedZ??0)+mz;
   s.netCorrection=[dx-mx,dz-mz];
