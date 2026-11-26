@@ -122,10 +122,10 @@ export function buildAnnex(w,expanded=false){
   w.box(x+1.32,2.86,-8.46,.10,.055,.025,filament);
  }
  for(let z=-7.5;z<4;z+=.6)w.box(-31.15,.018,z,.48,.022,.10,amber,0,-.65);
- buildSouthExtension(w);
+ buildSouthExtension(w,expanded);
 }
 
-function buildSouthExtension(w){
+function buildSouthExtension(w,expanded=false){
  const steel=w.mat('extension-steel','#46505a','metal'),floor=w.mat('extension-floor','#68645f','concrete',0,1.4),
  wall=w.mat('extension-wall','#3f4850','concrete'),trim=w.mat('extension-trim','#a16c3a','paint'),
  wood=w.mat('extension-crate','#987653','wood'),dark=w.mat('extension-roof','#303942','metal'),
