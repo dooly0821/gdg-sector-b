@@ -1,4 +1,4 @@
-import {powerTarget,toggleZone,emitSignal,signalReady,zonePowers,zonePower} from './facility-actions.js';
+import {powerTarget,toggleZone,emitSignal,signalReady,zonePowers,zonePower,pruneSignals} from './facility-actions.js';
 import {expandedLayout} from './map-layout.js';
 import {cargoGuide,anomalyGuide,resultMarkup,teamGoals,mapLegendArt} from './shift-ui.js';
 import {DIFFICULTIES,normalizeDifficulty,difficultyLabel,missionTotal,cargoQuota} from './difficulty.js';
@@ -37,7 +37,7 @@ function persist(){document.documentElement.style.setProperty('--world-brightnes
 persist();
 let sound,master,hum;
 function audioOn(){try{if(!sound){sound=new AudioContext();master=sound.createGain();master.gain.value=0;master.connect(sound.destination);hum=sound.createOscillator();hum.frequency.value=56;hum.type='sine';hum.connect(master);hum.start();}sound.resume().catch(()=>{});master.gain.setTargetAtTime(settings.audio&&mode==='game'?.026*(settings.volume??1):0,sound.currentTime,.4);}catch{}}
-function beep(hz,time=.12,type='sine',gain=.1){if(!sound||!settings.audio||settings.volume<=0)return;let o=sound.createOscillator(),g=sound.createGain(),now=sound.currentTime;o.type=type;o.frequency.setValueAtTime(hz,now);o.frequency.exponentialRampToValueAtTime(hz*.68,now+time);g.gain.setValueAtTime(Math.max(.0001,gain*(settings.volume??1)),now);g.gain.exponentialRampToValueAtTime(.0001,now+time);o.connect(g);g.connect(sound.destination);o.start();o.stop(now+time+.02);}
+function beep(hz,time=.12,type='sine',gain=.1){if(!sound||!settings.audio||settings.volume<=0)return;let o=sound.createOscillator(),g=sound.createGain(),now=sound.currentTime;o.type=type;o.frequency.setValueAtTime(hz,now);o.frequency.exponentialRampToValueAtTime(hz*.68,now+time);g.gain.setValueAtTime(Math.max(.0001,gain*(settings.volume??1)),now);g.gain.exponentialRampToValueAtTime(.0001,now+time);o.connect(g);g.connect(sound.destination);o.onended=()=>{o.disconnect();g.disconnect();};o.start();o.stop(now+time+.02);}
 function say(line,duration=5){$('#radio').innerHTML='<strong>관제실</strong>'+line;radioUntil=performance.now()+duration*1000;}
 const rows=[['W A S D','이동'],['MOUSE','시점 회전'],['SHIFT','달리기'],['C (누르고 유지)','앉기 / 은신'],['V','달리기 중 슬라이딩 · 1.5초 재사용 대기'],['F','손전등 유인 신호 · 12초 재사용 대기'],['C + W A S D','앉은 채 이동 / 낮은 은신처 진입'],['W + SPACE','난간 · 선반 · 상자 위 자유 점프'],['SHIFT + W + SPACE','달리면서 난간 점프'],['C + SPACE + A/D','공중 버니합 방향 전환'],['SPACE / WHEEL','기본 점프 (약 1.2m) · 연속 점프'],['C + SPACE','앉기 점프 (약 1m) · 버니합 가속 시 최대 1.35m'],['Q','손전등 들기 / 내리기'],['E','상자 들기 · 내려놓기 / 쓰러진 팀원 근처 2.5초 유지해 구조'],['M','전체 지도 확대 / 축소'],['ESC','일시 정지']];
 const links='<a class="doc" href="characters.html" target="_blank" rel="noopener">캐릭터 검수실 ↗</a><div class="panel-actions"><a class="doc" href="unity-migration.html" target="_blank" rel="noopener">Unity 이식 가이드 ↗</a></div>';
@@ -121,9 +121,12 @@ function teamResult(snap){
  const won=snap.phase==='complete',done=snap.states.filter(x=>x==='DELIVERED').length;
  panel('coopresult',resultMarkup(snap,won,snap.players.filter(p=>!p.failed).length)+'<div class="panel-actions">'+action('coop-leave','메인으로',true)+'</div>',won?'팀 근무 완료':'팀 근무 실패','GDG / COOPERATIVE RESULT');
 }
+function returnCoopLobby(){
+ clearSpectator();cancelAnimationFrame(raf);mode='menu';releaseGameInput();if(document.pointerLockElement===canvas)document.exitPointerLock();session=soloSession;soloSession=null;coopStarting=false;coopEnding=false;coopEventSeq=0;finishAt=null;$('#loading').hidden=true;$('#play').hidden=true;$('#briefing').hidden=false;$('#coop-team').hidden=true;coopError='팀원 이탈로 근무 준비가 취소되었습니다. 다시 시작하세요.';coopLobby();
+}
 function onCoopState(snap){
  const wasDown=!!session?.failed;
- if(snap.phase==='lobby'){if(mode==='menu'&&pane==='coop'){const key=JSON.stringify([snap.host,snap.you,snap.players.map(p=>[p.id,p.name,p.ready,p.failed]),snap.quota,snap.difficulty?.level,coop?.chosenDifficulty]);if(coop.lobbyKey!==key){coop.lobbyKey=key;coopLobby();}}return;}
+ if(snap.phase==='lobby'){if(coopStarting){if(mode!=='loading')returnCoopLobby();return;}if(mode==='menu'&&pane==='coop'){const key=JSON.stringify([snap.host,snap.you,snap.players.map(p=>[p.id,p.name,p.ready,p.failed]),snap.quota,snap.difficulty?.level,coop?.chosenDifficulty]);if(coop.lobbyKey!==key){coop.lobbyKey=key;coopLobby();}}return;}
  if(!coopStarting&&mode==='menu'&&['loading','playing'].includes(snap.phase)){
   coopStarting=true;coopEnding=false;coopEventSeq=0;soloSession=session;session=newShift();applyCoopSnapshot(session,snap,true);$('#modal').hidden=true;$('#start').click();
  }else if(coopStarting&&session){const old=posePoint(session),wasHidden=session.coopHidden;applyCoopSnapshot(session,snap);if(wasDown!==!!session.failed||wasHidden!==session.coopHidden||Math.hypot(...posePoint(session).map((v,i)=>v-old[i]))>.45)session.renderPrevious=null;if(pane==='map'&&$('#live-map')){const markers=$('#live-map .gdg-map-markers');if(markers)markers.innerHTML=mapMarkersNow();else $('#live-map').innerHTML=plan();textIfChanged($('#facility-progress'),'배송 '+deliveryCount(session)+' / '+missionTotal(session)+' · '+sectorName(session));}}
@@ -237,7 +240,7 @@ function spectateFrame(now,dt){
  const {eye,view}=spectateCamera;interpolateCoopHaunt({...s,x:observed.x,z:observed.z},dt,now);
  s.coopVisualClock=(s.coopVisualClock??s.elapsed)+dt;
  const lighting=eventLighting(s),actors=peerLayers(coop,observed,dt,TEAM_WORKER_GROUP,p.id);
- const pose={hands:[],actors:[...hauntLayers(s,name=>renderer?.skins?.has(name)),...lockerLayers(s,LOCKER_DOOR_GROUP),...actors],rescueActors:rescueLayers(snap.players,snap.you,TEAM_WORKER_GROUP),spectating:true,clock:s.coopVisualClock,gridPower:lighting.power,zonePowers:zonePowers(s),localPower:zonePower(s,observed.x,observed.z),flashlight:0,lowCostShadow:true};
+ const pose={hands:[],actors:[...hauntLayers(s,name=>renderer?.skins?.has(name)),...lockerLayers(s,LOCKER_DOOR_GROUP),...actors],rescueActors:rescueLayers(snap.players,snap.you,TEAM_WORKER_GROUP),spectating:true,clock:s.coopVisualClock,gridPower:lighting.power,zonePowers:zonePowers(s),localPower:zonePower(s,observed.x,observed.z),flashlight:0,lowCostShadow:true,adaptiveLite:(s.adaptiveScale??1)<=.70};
  renderer.render(eye,view,parcelPositions(s,-1,Boolean(renderer.gl)),pose,settings.scale*Math.min(.85,s.adaptiveScale??1));
  updateRescueMarkers(s,eye);textIfChanged($('#spectator-name'),p.name+(p.hidden?' · 은신 중':''));textIfChanged($('#delivered'),deliveryCount(s)+' / '+missionTotal(s));textIfChanged($('#taskLine'),'팀원 구조 대기 · 3인칭 관전');textIfChanged($('#hud-sector'),sectorName(observed));
  if(now-(s.lastCoopHud??-1000)>=150){s.lastCoopHud=now;updateHud({...s,...observed,failed:false},false,deliveryCount(s),missionTotal(s),plan,now,settings.hints,mapMarkersNow,worlds[0].blocks);}
@@ -278,6 +281,7 @@ $('#start').onclick=async()=>{
   if(!coopStarting&&(!session||session.failed||deliveryCount(session)===missionTotal(session))){session=newShift(Math.random,settings.difficulty);finishAt=null;receiptUntil=0;}
   if(coopStarting&&coop?.snapshot){applyCoopSnapshot(session,coop.snapshot,true);finishAt=null;receiptUntil=0;}
   await load();
+  if(coopStarting&&coop?.snapshot?.phase==='lobby'){returnCoopLobby();return;}
   reportProgress(.96,'첫 화면 준비 중');$('#play').hidden=false;
   const eye=[session.x,session.y+CONFIG.eye,session.z],facing=forward(session);
   const pose=choreography(session,eye,false,false,false,session.elapsed);
@@ -292,7 +296,7 @@ $('#start').onclick=async()=>{
   pose.actors=[...hauntLayers(session),...lockerLayers(session,LOCKER_DOOR_GROUP)];
   renderer.render(eye,facing,parcelPositions(session,pose.hidden,Boolean(renderer.gl)),pose,settings.scale);
   reportProgress(1,'출근 준비 완료');await painted();
-  $('#loading').hidden=true;if(coopStarting&&coop){await coop.action('ready');}resume();say(coopStarting?'팀원 준비 확인 중 · 공동 배송 근무':'GDG 표식이 있는 상자를 가까운 출고대로 운반하세요.',4);
+  $('#loading').hidden=true;if(coopStarting&&coop){if(coop.snapshot?.phase==='lobby'){returnCoopLobby();return;}await coop.action('ready');if(coop.snapshot?.phase==='lobby'){returnCoopLobby();return;}}resume();say(coopStarting?'팀원 준비 확인 중 · 공동 배송 근무':'GDG 표식이 있는 상자를 가까운 출고대로 운반하세요.',4);
  }catch(error){
   setupPromise=null;renderer=null;renderLayout=null;toMenu();
   panel('error','<p id="errorText"></p><div class="panel-actions">'+action('retry','다시 시도',true)+'</div>','구역 진입 실패');
@@ -316,7 +320,7 @@ function use(target=null,locked=false){
  if(!locked&&!session.handAction&&!session.pendingUse){const l=lockerTarget(session,staticBlocks);if(l&&session.carried<0){const result=useLocker(session,l);if(result==='opening'||result==='closing'){beep(112,.19,'triangle',.08);if(result==='closing')session.lockerLook={yaw:session.yaw,pitch:session.pitch,t:0};}else if(result==='step-back')say('문이 열릴 공간이 필요합니다. 한 걸음 물러서서 E를 누르세요.',2.5);else if(result==='enter-first')say('문이 열린 상태입니다. 내부 중앙으로 들어가 E를 누르세요.',2.5);return;}}
  target??=handlingTarget(session,blocks);
  if(session.handAction||session.pendingUse||!canUse(session,target,blocks,locked))return;
- if(session.flashlight||session.flashAmount>0){session.restoreTorch=session.flashlight||session.restoreTorch;session.flashlight=false;if(session.flashAmount>0){session.pendingUse=target;return;}}
+ // Match the server: lock the valid interaction immediately instead of waiting for torch stow.
  if(beginHandling(session,target,blocks,locked))beep(235,.07,'sine',.035);
 }
 function onHandling(result,now,id){
@@ -355,7 +359,7 @@ function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/10
  const moving=s.steps>was+.002;const bob=settings.motion&&moving&&s.grounded?Math.sin(s.steps*5.5)*.014:0;
  const active=s.handAction;
  if(active&&!coopStarting){const result=advanceHandling(s,interactionBlocks,dt);if(result)onHandling(result,now,active.target.id);}
- if(!coopStarting){const event=tickShiftEvents(s);if(event){beep(event.phase==='start'?58:180,.35,'triangle',.12);say(event.message,4);}}
+ if(!coopStarting){pruneSignals(s);const event=tickShiftEvents(s);if(event){beep(event.phase==='start'?58:180,.35,'triangle',.12);say(event.message,4);}}
  const signal=s.cargoSignalAt;if(Number.isFinite(signal)&&signal!==s.lastRenderedSignal&&s.carried>=0){s.lastRenderedSignal=signal;beep(s.cargo?.[s.carried]?.special==='cursed'?47:142,.25,'triangle',.07);}
  const facing=forward(s);
  let threat=null;if(coopStarting){interpolateCoopHaunt(s,dt,now);}else{const hauntSteps=Math.max(1,Math.ceil(dt*60));for(let k=0;k<hauntSteps&&!threat;k++)threat=updateHaunt(s,worlds[0].blocks,facing,dt/hauntSteps);}
@@ -391,9 +395,9 @@ function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/10
  // Hysteresis: lower render resolution only after sustained slow frames.
  const frameMs=Math.min(150,rawDt*1000);s.frameAverage=(s.frameAverage??16.7)*.90+frameMs*.10;
  if(s.frameAverage>24){s.slowFrames=(s.slowFrames??0)+1;s.fastFrames=0;}else if(s.frameAverage<17.6){s.fastFrames=(s.fastFrames??0)+1;s.slowFrames=0;}else{s.slowFrames=0;s.fastFrames=0;}
- if((s.slowFrames??0)>=(coopStarting?10:10)&&now-(s.lastScaleChange??-2000)>1200){s.adaptiveScale=Math.max(coopStarting?.50:.65,(s.adaptiveScale??1)-.10);s.slowFrames=0;s.lastScaleChange=now;}
+ if((s.slowFrames??0)>=(s.frameAverage>45?4:10)&&now-(s.lastScaleChange??-2000)>(s.frameAverage>45?650:1200)){s.adaptiveScale=Math.max(coopStarting?.50:.65,(s.adaptiveScale??1)-(s.frameAverage>45?.15:.10));s.slowFrames=0;s.lastScaleChange=now;}
  if((s.fastFrames??0)>=240&&now-(s.lastScaleChange??-1000)>2500){s.adaptiveScale=Math.min(1,(s.adaptiveScale??1)+.05);s.fastFrames=0;s.lastScaleChange=now;}
- pose.lowCostShadow=(s.adaptiveScale??1)<.85;
+ pose.lowCostShadow=(s.adaptiveScale??1)<.85;pose.adaptiveLite=(s.adaptiveScale??1)<=.70||s.frameAverage>45&&s.slowFrames>=3;
  renderer.render(eye,view,parcelPositions(s,pose.hidden,Boolean(renderer.gl)),pose,settings.scale*(s.adaptiveScale??1));
  if(coopStarting)updateRescueMarkers(s,eye);
  if(s.showTraversal||document.querySelector('#traversal-debug'))drawTraversalDebug(s,worlds[0].blocks,renderer,pose,eye,view);

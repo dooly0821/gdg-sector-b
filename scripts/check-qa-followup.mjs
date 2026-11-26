@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {newShift,step,createScene,parcelPositions} from '../dist/mission.js';
+import {beginHandling,advanceHandling} from '../dist/handling.js';
+import {lockerDoorBlocks,lockersFor} from '../dist/lockers.js';
+import {pruneSignals} from '../dist/facility-actions.js';
+import {createRoom,operateRoom,snapshot,tickRoom} from '../server/room-core.js';
+import {readFileSync} from 'node:fs';
+const s=Object.assign(newShift(),{x:0,y:.38,z:0,yaw:0,pitch:-.35,grounded:false,vz:-6,flashlight:true,flashAmount:1,cargo:[{id:'QA',area:'test',pos:[0,.6,-1.65]}],states:['AVAILABLE']});
+assert(beginHandling(s,{...s.cargo[0],index:0},[]));assert.equal(s.pendingUse,null);assert(s.restoreTorch);for(let i=0;i<24;i++)advanceHandling(s,[],1/60);assert.equal(s.carried,0);
+const l=lockersFor('normal')[0],q=Object.assign(newShift(),{x:l.x,z:l.z,slideTime:.7,slideExit:.1,slideRequested:true,slideCooldown:1});
+step(q,new Set(),[],1/60);assert.equal(q.slideTime,0);assert.equal(q.slideRequested,false);assert(q.slideCooldown<1);
+const doors=lockerDoorBlocks(q);q.difficultyLevel='hard';assert.equal(lockerDoorBlocks(q).length,doors.length+6);
+q.signals={old:{until:1},new:{until:3}};q.elapsed=2;pruneSignals(q);assert.deepEqual(Object.keys(q.signals),['new']);
+const {room,player}=createRoom('QATEST',1000);const other=operateRoom(room,{op:'join'},1000);operateRoom(room,{op:'start',token:player.token,level:'hard'},1000);operateRoom(room,{op:'leave',token:other.token},1010);assert.equal(room.phase,'lobby');assert.equal(snapshot(room,player).players.length,1);
+const third=operateRoom(room,{op:'join'},1020);operateRoom(room,{op:'start',token:player.token,level:'normal'},1030);operateRoom(room,{op:'ready',token:player.token},1040);operateRoom(room,{op:'ready',token:third.token},1040);assert.equal(room.phase,'playing');
+room.shared.signals={[player.id]:{until:0},other:{until:20}};tickRoom(room,1100);assert(!room.shared.signals[player.id]);assert(room.shared.signals.other);
+const src=readFileSync(new URL('../dist/app.js',import.meta.url),'utf8');assert(src.includes("if(coopStarting&&coop?.snapshot?.phase==='lobby'){returnCoopLobby();return;}"));assert(!src.includes('session.pendingUse=target;return;'));
+console.log('PASS immediate torch pickup, locker slide cleanup, layout cache, expired signal pruning, loading departure/restart');
