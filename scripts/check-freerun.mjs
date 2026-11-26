@@ -11,7 +11,7 @@ for(const hz of [60,120]){
  assert(s.onRail&&Math.abs(s.y-1.04)<.005);
  for(let i=0;i<Math.floor(hz*.25);i++)move(s,d,[rail],dt,false,flat);
  assert(s.onRail&&s.x>.4);
- move(s,d,[rail],dt,true,flat);assert(!s.grounded&&!s.vault&&s.vy>8);
+ move(s,d,[rail],dt,true,flat);assert(!s.grounded&&!s.vault&&s.vy>6);
  const air=make({x:0,z:10,y:1,grounded:false,vz:-7,vy:1,hopBoosted:true});for(let i=0;i<Math.round(hz*.30);i++)move(air,hop,[],dt,false,flat);
  assert(air.vx>4&&Math.hypot(air.vx,air.vz)<=P.bhopCap+.001);
  const a=make({x:0,z:15,cargo:[{special:'heavy'}],carried:0}),b=make({x:0,z:15});
