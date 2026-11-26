@@ -52,3 +52,6 @@ export function signalForActor(root,a,nav,freeAt,body){
   if(!freeAt(nav,sig.x,sig.z,body))continue;best=sig;distance=d;}
  return best;
 }
+
+// Expired signals need not occupy shared room storage or be sent to clients.
+export function pruneSignals(s){if(!s.signals)return;for(const [id,signal] of Object.entries(s.signals))if(signal.until<=s.elapsed)delete s.signals[id];}

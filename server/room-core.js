@@ -5,7 +5,7 @@ import {DIFFICULTIES,normalizeDifficulty,effectiveDifficulty,cargoQuota,difficul
 import {randomBytes} from 'node:crypto';
 import {createShiftEvents,tickShiftEvents} from '../dist/shift-events.js';
 import {normalizeNickname} from '../dist/nickname.js';
-import {powerTarget,toggleZone,emitSignal} from '../dist/facility-actions.js';
+import {powerTarget,toggleZone,emitSignal,pruneSignals} from '../dist/facility-actions.js';
 import {expandedLayout} from '../dist/map-layout.js';
 import {createScene,newShift,randomCargo,step,forward,handlingTarget,canUse,dropTarget,deliveryCount,MISSION_TOTAL,parcelBlocks} from '../dist/mission.js';
 import {beginHandling,advanceHandling,toggleFlashlight,updateViewmodel} from '../dist/handling.js';
@@ -51,7 +51,7 @@ function dropOwned(room,p){
  const s=attach(room,p);if(s.carried>=0){const i=s.carried,blocks=world(room).blocks.concat(lockerDoorBlocks(s)),t=dropTarget(s,blocks);if(t)room.shared.parked[i]=t.pos.slice();else delete room.shared.parked[i];room.shared.states[i]='AVAILABLE';s.carried=-1;room.shared.horrorEvent={type:'drop',time:room.shared.elapsed};}detach(p);
 }
 function removePlayer(room,p){
- dropOwned(room,p);delete room.players[p.id];if(room.host===p.id)room.host=Object.keys(room.players)[0]??null;
+ dropOwned(room,p);if(room.shared.signals)delete room.shared.signals[p.id];delete room.players[p.id];if(room.host===p.id)room.host=Object.keys(room.players)[0]??null;
  if(!Object.keys(room.players).length)room.phase='closed';
  if(room.phase==='loading'&&Object.values(room.players).length<2){room.phase='lobby';for(const a of Object.values(room.players))a.ready=false;}
 }
@@ -79,7 +79,7 @@ function tickRevives(room,active,now,dt){
   if(p.reviveTarget!==t.id){p.reviveTarget=t.id;p.reviveProgress=0;}
   p.reviveProgress=(p.reviveProgress??0)+dt;
   if(p.reviveProgress+1e-8>=REVIVE_SECONDS){
-   Object.assign(t.state,{failed:false,capturedBy:null,handAction:null,pendingUse:null,vault:null,vx:0,vy:0,vz:0,jumpBuffer:0,hitProtectedUntil:room.shared.elapsed+3});
+   Object.assign(t.state,{failed:false,capturedBy:null,handAction:null,pendingUse:null,vault:null,vx:0,vy:0,vz:0,jumpBuffer:0,slideTime:0,slideExit:0,slideRequested:false,hopBoosted:false,hitProtectedUntil:room.shared.elapsed+3});
    t.input.keys=[];t.reviveHeld=false;t.jump=false;t.reviveProgress=0;t.reviveTarget=null;p.reviveProgress=0;p.reviveTarget=null;
    pushEvent(room,{type:'revive',player:t.id,by:p.id});
   }
@@ -133,14 +133,14 @@ export function tickRoom(room,now=Date.now()){
    }
    syncShared(room,p);
   }
-  q.elapsed+=dt;tickRevives(room,active,now,dt);const anomaly=tickShiftEvents(q);if(anomaly)pushEvent(room,anomaly);
+  q.elapsed+=dt;pruneSignals(q);tickRevives(room,active,now,dt);const anomaly=tickShiftEvents(q);if(anomaly)pushEvent(room,anomaly);
   for(const p of active){const s=attach(room,p);s.teamView=forward(s);}
   const anchor=active[0].state;Object.assign(q,{x:anchor.x,y:anchor.y,z:anchor.z,bodyHeight:anchor.bodyHeight,flashAmount:anchor.flashAmount,grounded:anchor.grounded});
   q.teamPlayers=active.map(p=>p.state);q.hauntSounds=[];
   updateHaunt(q,blocks,forward(anchor),dt);
   for(const e of q.hauntSounds)pushEvent(room,{type:'haunt',...e});
   delete q.teamPlayers;
-  for(const p of active){if(p.state.failed){p.reviveProgress=0;p.reviveTarget=null;p.input.keys=[];p.reviveHeld=false;p.jump=false;dropOwned(room,p);pushEvent(room,{type:'capture',player:p.id,kind:p.state.capturedBy});}detach(p);}
+  for(const p of active){if(p.state.failed){p.state.slideTime=0;p.state.slideExit=0;p.state.slideRequested=false;p.state.restoreTorch=false;p.reviveProgress=0;p.reviveTarget=null;p.input.keys=[];p.reviveHeld=false;p.jump=false;dropOwned(room,p);pushEvent(room,{type:'capture',player:p.id,kind:p.state.capturedBy});}detach(p);}
   if(q.states.every(v=>v==='DELIVERED')){room.phase='complete';break;}
  }
  if(!live(room).length&&room.phase==='playing')room.phase='failed';

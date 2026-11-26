@@ -106,7 +106,7 @@ export function step(s,keys,blocks,dt,jump=false){
  const dynamic=sceneBlocks.has(blocks)?parcelBlocks(s).filter(b=>b[0]<s.x+3&&b[2]>s.x-3&&b[1]<s.z+3&&b[3]>s.z-3):[];
  if(!s.skipLockerAdvance)advanceLockers(s,dt);
  if(sceneBlocks.has(blocks))dynamic.push(...lockerDoorBlocks(s).filter(b=>b[0]<s.x+3&&b[2]>s.x-3&&b[1]<s.z+3&&b[3]>s.z-3));
- if(closedLocker(s)){s.vx=s.vz=s.vy=0;s.jumpBuffer=0;s.elapsed+=dt;return;}
+ if(closedLocker(s)){s.vx=s.vz=s.vy=0;s.jumpBuffer=0;s.slideTime=0;s.slideExit=0;s.slideRequested=false;s.slideCooldown=Math.max(0,(s.slideCooldown??0)-dt);s.elapsed+=dt;return;}
  const grounded=s.grounded,vy=s.vy,previousStep=Math.floor(s.steps/.90);
  move(s,keys,blocks,dt,jump,surface,dynamic);
  const speed=Math.hypot(s.vx,s.vz);
@@ -244,7 +244,7 @@ export function baySlot(n,bay=0){const dock=EXPANDED_DOCKS[bay]??DOCK;return [do
 export function nextBaySlot(s,bay=0){const n=(s.deliveryOrder??s.states.flatMap((v,i)=>v==='DELIVERED'?[i]:[])).filter(i=>(s.deliveryBays?.[i]??0)===bay).length;return baySlot(s.states.length>30?n%24:n,bay);}
 export function parcelPositions(s,hidden=-1,visual=false){
  const order=s.deliveryOrder??s.states.flatMap((v,i)=>v==='DELIVERED'?[i]:[]);
- const slots=new Map();for(let bay=0;bay<docksFor(s).length;bay++){const list=order.filter(i=>(s.deliveryBays?.[i]??0)===bay);const offset=s.states.length>30?Math.max(0,Math.floor((list.length-1)/24)*24):0;list.slice(offset).forEach((i,n)=>slots.set(i,[n,bay]));}
+ const slots=new Map(),byBay=Array.from({length:docksFor(s).length},()=>[]);for(const i of order)byBay[s.deliveryBays?.[i]??0]?.push(i);for(let bay=0;bay<byBay.length;bay++){const list=byBay[bay];const offset=s.states.length>30?Math.max(0,Math.floor((list.length-1)/24)*24):0;list.slice(offset).forEach((i,n)=>slots.set(i,[n,bay]));}
  return s.states.flatMap((p,i)=>{
   if(i===hidden)return [];
   if(p==='AVAILABLE'){

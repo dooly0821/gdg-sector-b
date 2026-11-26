@@ -44,7 +44,7 @@ export function workerLegLayers(s){
 export function beginHandling(s,target,blocks,locked=false){
  if(s.handAction||!canUse(s,target,blocks,locked))return false;
  if((target.dock||target.drop)?s.carried<0:s.states[target.index]!=='AVAILABLE'||s.carried>=0)return false;
- s.flashlight=false;s.flashAmount=0;
+ s.restoreTorch=!!(s.restoreTorch||s.flashlight);s.flashlight=false;s.flashAmount=0;s.pendingUse=null;
  s.handAction={placing:!!(target.dock||target.drop),target,index:target.dock?s.carried:target.index,
   worldPos:target.dock?nextBaySlot(s,target.bay??0):target.pos.slice(),time:0,duration:target.dock||target.drop?HAND_TIMING.place:HAND_TIMING.pickup};
  return true;

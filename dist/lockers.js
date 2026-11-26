@@ -47,8 +47,8 @@ function door(l,open){
 }
 const cache=new WeakMap();
 export function lockerDoorBlocks(s){
- const rev=s.lockerRevision??0,old=cache.get(s);if(old?.rev===rev)return old.blocks;
- const blocks=lockersFor(s).flatMap(l=>door(l,state(s,l).open));cache.set(s,{rev,blocks});return blocks;
+ const rev=s.lockerRevision??0,wide=expandedLayout(s),old=cache.get(s);if(old?.rev===rev&&old.wide===wide&&old.lockers===s.lockers)return old.blocks;
+ const blocks=lockersFor(s).flatMap(l=>door(l,state(s,l).open));cache.set(s,{rev,wide,lockers:s.lockers,blocks});return blocks;
 }
 export function lockerLayers(s,group){return lockersFor(s).map(l=>{const [x,z]=hinge(l),a=state(s,l).open*Math.PI*.5,m=new Float32Array([...basis(0,a,0).flatMap(v=>[...v,0]),x,0,z,1]);return {group,matrix:m,root:[l.x,1,l.z],prop:true};});}
 export function insideLocker(s,l){return Math.abs(s.x-l.x)<.28&&s.z>l.z-.22&&s.z<l.z+.23&&s.y>=-.02&&s.y<.26;}
