@@ -165,7 +165,7 @@ export function advanceCoopPrediction(s,blocks,dynamic,dt,now){
  }
  s.coopVisualClock=(s.coopVisualClock??s.elapsed??0)+dt;
  const a=s.handAction;
- if(a){const contact=a.duration*(a.placing?.72:.30),limit=a.result?a.duration-.001:Math.max(a.time,contact-.001);a.time=Math.min(limit,a.time+dt);}
+ if(a){const contact=a.duration*(a.placing?.72:.17),limit=a.result?a.duration-.001:Math.max(a.time,contact-.001);a.time=Math.min(limit,a.time+dt);}
  recordCoopPrediction(s,now);
 }
 export function interpolateCoopHaunt(s,dt,now=performance.now()){
