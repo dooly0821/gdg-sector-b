@@ -10,6 +10,6 @@ for(const hz of [60,120]){
 }
 assert.deepEqual(renderPosition({x:5,y:1,z:0},[0,0,0],.5),[5,1,0]);
 assert.deepEqual(shiftPrevious([1,2,3],[4,5,6],[5,5,5]),[2,2,2]);
-assert.equal(mouseDelta(10,1),.021);assert(Math.abs(mouseDelta(1200,2))<=.6);assert.equal(mouseDelta(NaN,1),0);
+assert(Math.abs(mouseDelta(10,1)-.021)<1e-12);assert(Math.abs(mouseDelta(1200,2))<=.6);assert.equal(mouseDelta(NaN,1),0);
 assert(blockGameplayShortcut({code:'KeyW',ctrlKey:true}));assert(blockGameplayShortcut({code:'Tab'}));assert(!blockGameplayShortcut({code:'Space'}));assert(!blockGameplayShortcut({code:'KeyC'}));
 console.log('PASS: fixed-step interpolation at 60/120 Hz, bounded catch-up, mouse spike and shortcut guards');
