@@ -1,0 +1,16 @@
+name: Co-op regression
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check dist/app.js && node --check dist/multiplayer.js && node --check dist/mission.js && node --check dist/haunt.js && node --check server/room-core.js
+      - run: node scripts/check-haunt-release.mjs
+      - run: node scripts/check-climb-routes.mjs

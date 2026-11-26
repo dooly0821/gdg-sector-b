@@ -26,7 +26,7 @@ export class CoopClient{
   this.snapshot=next;this.room=next.room;
   if(prev?.room===next.room&&Number.isFinite(next.netReceived)&&Number.isFinite(prev.netReceived))this.snapshotGap=Math.max(0,next.netReceived-prev.netReceived);
   const now=data.snapshot.netReceived??performance.now(),seen=new Set();
-  for(const p of data.snapshot.players??[]){if(p.id===data.snapshot.you||p.failed||p.hidden)continue;seen.add(p.id);this.remoteTracks.set(p.id,appendRemote(this.remoteTracks.get(p.id),p,data.snapshot.netSample,now,data.snapshot.netTickTime??data.snapshot.serverTime));}
+  for(const p of data.snapshot.players??[]){if(p.id===data.snapshot.you||p.hidden)continue;seen.add(p.id);this.remoteTracks.set(p.id,appendRemote(this.remoteTracks.get(p.id),p,data.snapshot.netSample,now,data.snapshot.netTickTime??data.snapshot.serverTime));}
   for(const id of this.remoteTracks.keys())if(!seen.has(id))this.remoteTracks.delete(id);
   this.queue=this.queue.filter(q=>q.seq>data.snapshot.ack);
   this.onState?.(data.snapshot);
@@ -74,7 +74,7 @@ export function peerLayers(client,s,dt,group){
  if(!client?.snapshot)return [];
  const layers=[],seen=new Set();
  for(const p of client.snapshot.players){
-  if(p.id===client.snapshot.you||p.failed||p.hidden)continue;
+  if(p.id===client.snapshot.you||p.hidden)continue;
   if(Math.hypot(p.x-s.x,p.z-s.z)>35)continue;
   seen.add(p.id);let old=client.peers.get(p.id);
   if(!old||(Math.hypot(old.x-p.x,old.z-p.z)>16&&(client.remoteTracks?.get(p.id)?.samples?.length??0)<=1)){old={...p};client.peers.set(p.id,old);}
@@ -84,7 +84,7 @@ export function peerLayers(client,s,dt,group){
   old.visualSpeed=blend(finite(old.visualSpeed,targetSpeed),targetSpeed,alpha);
   old.steps=blend(old.steps+old.visualSpeed*dt,visual.steps,1-Math.exp(-dt*10));
   old.yaw+=Math.atan2(Math.sin(visual.yaw-old.yaw),Math.cos(visual.yaw-old.yaw))*alpha;
-  const speed=old.visualSpeed,bob=Math.sin(old.steps*10)*Math.min(.035,speed*.008),sy=Math.max(.61,Math.min(1,old.bodyHeight/1.7));
+  const speed=p.failed?0:old.visualSpeed,bob=Math.sin(old.steps*10)*Math.min(.035,speed*.008),sy=Math.max(.61,Math.min(1,old.bodyHeight/1.7))*(p.failed?.25:1);
   const axes=basis(Math.sin(old.steps*5)*Math.min(.06,speed*.01),Math.PI+old.yaw,0);
   const matrix=new Float32Array([...axes.flatMap((a,i)=>[...a.map(v=>v*(i===1?sy:1)),0]),old.x,old.y+bob,old.z,1]);
   layers.push({group,matrix,root:[old.x,old.y+1,old.z],skinName:'player',skin:{name:'player',root:matrix,floor:p.grounded!==false&&!p.vault?old.y:null,state:{speed,steps:old.steps,bodyHeight:old.bodyHeight,carried:p.carried??-1,vault:!!p.vault}}});
@@ -121,7 +121,8 @@ export function applyCoopSnapshot(s,snap,first=false){
  s.netMismatchAt=mismatch?(s.netMismatchAt??now):null;
  // Ordinary delayed snapshots must not cause a multi-meter teleport.
  // Snap only on authoritative transitions or sustained, genuinely divergent collision state.
- const hard=first||hidden!==oldHidden||v.failed||err>9||(err>4.25&&now-(s.netDivergenceSince??now)>1400&&now-(s.netBlockedSince??now)>650)||(verticalConflict&&now-s.netFloorSince>450)||(mismatch&&sameLocalFloor&&sampleAge<300&&now-s.netMismatchAt>1400&&vertical>.85);
+ const revived=!!s.failed&&!v.failed;
+  const hard=first||revived||hidden!==oldHidden||v.failed||err>9||(err>4.25&&now-(s.netDivergenceSince??now)>1400&&now-(s.netBlockedSince??now)>650)||(verticalConflict&&now-s.netFloorSince>450)||(mismatch&&sameLocalFloor&&sampleAge<300&&now-s.netMismatchAt>1400&&vertical>.85);
  if(hard){
   for(const k of ['x','y','z','vx','vy','vz','grounded','bodyHeight','steps','vault','onRail'])s[k]=v[k]??(k==='vault'?null:s[k]);
   s.netHistory=[];s.netAppliedX=s.netAppliedZ=0;s.netCorrection=[0,0];s.netMismatchAt=null;s.netDivergenceSince=null;s.netBlockedSince=null;s.netFloorSince=null;s.netHardCorrections=(s.netHardCorrections??0)+(first||v.failed||hidden!==oldHidden?0:1);
@@ -131,7 +132,7 @@ export function applyCoopSnapshot(s,snap,first=false){
  }else s.netCorrection=[0,0];
  s.netGrounded=!!v.grounded&&!v.vault;s.netOnRail=!!v.onRail;
  if(first){s.yaw=v.yaw;s.pitch=v.pitch;s.coopVisualClock=snap.elapsed??0;}else if(hidden&&!oldHidden){s.yaw=0;s.pitch=0;}
- for(const k of ['cargo','states','parked','deliveryOrder','lockers','lockerRevision','elapsed','cargoDeadlines','shiftEvents'])s[k]=snap[k];
+ for(const k of ['cargo','states','parked','deliveryOrder','deliveryBays','lockers','lockerRevision','elapsed','cargoDeadlines','shiftEvents'])s[k]=snap[k];
  s.difficultyLevel=snap.difficulty?.level??'normal';s.startCount=snap.startCount??1;
  const prevAction=s.handAction;
  for(const k of ['carried','flashlight','handAction','failed','capturedBy','noise','horrorEvent','cargoSignalAt'])s[k]=v[k]??(k==='carried'?-1:k==='flashlight'||k==='failed'?false:null);

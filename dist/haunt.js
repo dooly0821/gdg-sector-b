@@ -225,9 +225,9 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
    actor.phase+=dt*8;actor.timer=Math.max(0,actor.timer-dt);
    const canSee=dist<10&&visible(local,[actor.x,5.6,actor.z],[s.x,s.y+1,s.z]);
    if(actor.state==='ceilingStalk'){
-    const next=actor.z+(canSee?Math.sign(s.z-actor.z):actor.surfaceDir)*dt*2.8;
+    const next=actor.z+(canSee?Math.sign(s.z-actor.z):actor.surfaceDir)*dt*2.8*.95;
     if(next>56&&next<76&&clear(blocks,actor.x,next,.75,0,10.7))actor.z=next;else actor.surfaceDir*=-1;
-    actor.yaw=actor.surfaceDir>0?0:Math.PI;actor.speed=2.8;
+    actor.yaw=actor.surfaceDir>0?0:Math.PI;actor.speed=2.8*.95;
     if(canSee||!actor.timer){actor.state='wallDescent';actor.timer=1.4;(s.hauntSounds??=[]).push({x:actor.x,z:actor.z,kind:i,accent:true});}
    }else{
     const t=1-actor.timer/1.4;
@@ -238,7 +238,7 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
   }
   const hiding=closedLocker(s),entry=hiding?lockerEntry(hiding):null;
   const climb=updateClimber(actor,s,nav,local,dt,!!hiding);
-  if(climb?.handled){if(climb.hit){actor.speed=0;captured=type.name;s.handAction=null;s.pendingUse=null;s.vault=null;s.jumpBuffer=0;s.vx=s.vz=s.vy=0;s.failed=true;s.capturedBy=i;}return;}
+  if(climb?.handled){if(climb.hit&&!s.netHitProtected&&(s.hitProtectedUntil??0)<=root.elapsed){actor.speed=0;captured=type.name;s.handAction=null;s.pendingUse=null;s.vault=null;s.jumpBuffer=0;s.vx=s.vz=s.vy=0;s.failed=true;s.capturedBy=i;}return;}
   const safe=s.grounded&&REFUGES.some(([x,y,z,r])=>Math.abs(s.y-y)<.09&&Math.hypot(s.x-x,s.z-z)<r);
   const pursuit=actor.pursuit??false,torchOn=(s.flashAmount??0)>.25;
   const detectRange=type.range*difficulty.range*1.04*(s.bodyHeight<1.2&&!torchOn?.67:1);
@@ -386,7 +386,7 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
   const rage=lit&&(i===1||i===2)?1.14:1;
   // Different chase rhythms; the telegraphed charge is faster than sprinting.
   const pulse=i===0?.88+.22*Math.sin(actor.phase*.73):i===1?.91+.18*Math.sin(actor.phase*.46):i===2?.94+.10*Math.sin(actor.phase*.31):.87+.26*Math.pow(.5+.5*Math.sin(actor.phase*.69),3);
-  const goalSpeed=actor.state==='lockerWait'?.70:actor.state==='lockerSearch'?3.0:['lockerLeave','lockerAway'].includes(actor.state)?2.8:actor.state==='ambush'||actor.state==='inspect'?0:actor.state==='fakeLeave'?2.3:actor.state==='guard'?Math.hypot(actor.x-target[0],actor.z-target[1])>1.3?2.5:0:retreat?3.3:actor.state==='windup'?type.speed*.38:actor.state==='charge'?Math.min(11.05,type.speed*1.32*pressure):actor.state==='recovery'?type.speed*.72:chasing?Math.min(10.9,type.speed*profile.speed*pressure*pulse*rage*(actor.state==='search'?.88*profile.search:1)):actor.state==='search'?2.8:1.35;
+  const goalSpeed=.95*(actor.state==='lockerWait'?.70:actor.state==='lockerSearch'?3.0:['lockerLeave','lockerAway'].includes(actor.state)?2.8:actor.state==='ambush'||actor.state==='inspect'?0:actor.state==='fakeLeave'?2.3:actor.state==='guard'?Math.hypot(actor.x-target[0],actor.z-target[1])>1.3?2.5:0:retreat?3.3:actor.state==='windup'?type.speed*.38:actor.state==='charge'?Math.min(11.05,type.speed*1.32*pressure):actor.state==='recovery'?type.speed*.72:chasing?Math.min(10.9,type.speed*profile.speed*pressure*pulse*rage*(actor.state==='search'?.88*profile.search:1)):actor.state==='search'?2.8:1.35);
   actor.speed=approach(actor.speed,aim?goalSpeed:0,dt*(actor.state==='charge'?18:chasing?[23,22,20,25][i]:7));
   const before=[actor.x,actor.z],distance=aim?Math.hypot(aim[0]-actor.x,aim[1]-actor.z):0;
   const stride=Math.min(actor.speed*dt,distance);
@@ -420,7 +420,7 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
   const vertical=Math.max(0,s.y-strikeHeight,strikeHeight-s.y-(s.bodyHeight??1.70));
   const hitDx=s.x-actor.x,hitDz=s.z-actor.z,hitDist=Math.hypot(hitDx,hitDz);
   const aligned=(Math.sin(actor.yaw)*hitDx+Math.cos(actor.yaw)*hitDz)/Math.max(.001,hitDist);
-  if(!hiding&&!safe&&striking&&(!captured||team)&&actor.age>.65&&actor.timer<.56&&line(local,actor,s)&&aligned>.40&&visible(local,[actor.x,strikeHeight,actor.z],[s.x,clamp(strikeHeight,s.y+.1,s.y+(s.bodyHeight??1.7)-.1),s.z])&&Math.hypot(hitDist,vertical)<armReach[i]&&s.hauntCooldown===0){
+  if(!hiding&&!safe&&!s.netHitProtected&&(s.hitProtectedUntil??0)<=root.elapsed&&striking&&(!captured||team)&&actor.age>.65&&actor.timer<.56&&line(local,actor,s)&&aligned>.40&&visible(local,[actor.x,strikeHeight,actor.z],[s.x,clamp(strikeHeight,s.y+.1,s.y+(s.bodyHeight??1.7)-.1),s.z])&&Math.hypot(hitDist,vertical)<armReach[i]&&s.hauntCooldown===0){
    actor.speed=0;captured=type.name;
    s.handAction=null;s.pendingUse=null;s.vault=null;s.jumpBuffer=0;s.vx=s.vz=s.vy=0;s.failed=true;s.capturedBy=i;
   }

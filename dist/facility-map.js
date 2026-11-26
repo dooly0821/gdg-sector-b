@@ -2,7 +2,7 @@ import {LOCKERS} from './lockers.js';
 import {HIDING_POINTS,REFUGES} from './annex.js';
 import {DRESSING_HIDE} from './dressing.js';
 import {RUN_LANES} from './layout.js';
-import {DOCK,PARCELS} from './mission.js';
+import {DOCK,DOCKS,PARCELS} from './mission.js';
 import {cargoColor} from './shift-ui.js';
 export const mapX=x=>8+(x+43)*5,mapZ=z=>8+(z+22)*5;
 const X=mapX,Y=mapZ;
@@ -28,7 +28,7 @@ export function mapBase(blocks){
  for(const [x,y,z] of REFUGES)out+='<path d="M'+X(x)+' '+(Y(z)-3)+'l3 6h-6z" fill="#94b7af"/>';
  for(const {x,z,id} of LOCKERS)out+='<g transform="translate('+n(X(x))+' '+n(Y(z))+')"><rect x="-4" y="-4" width="8" height="8" rx="1" fill="#438c72" stroke="#c3f4d9" stroke-width="1"/><path d="M-1.6 -2v4m3.2 -4v4M-1.6 0h3.2" stroke="#effff6" stroke-width=".9"/><title>은신 사물함 '+id+'</title></g>';
  for(const [x,z,w,d,id] of regions)out+='<text x="'+X(x+1.2)+'" y="'+Y(z+1.8)+'" fill="#e2e7e5" font-size="7.5" font-weight="800" paint-order="stroke" stroke="#222521" stroke-width="1.7">'+id+'</text>';
- out+='<g transform="translate('+X(DOCK[0])+' '+Y(DOCK[2])+')"><rect x="-5" y="-3" width="10" height="6" fill="#79c9ec" stroke="#effbff" stroke-width="1"/><text x="-7" y="10" style="fill:#a9e8ff;font-size:6.2px" paint-order="stroke" stroke="#202426" stroke-width="1.6">출고 02</text></g>';
+ for(const [i,dock] of DOCKS.entries())out+='<g transform="translate('+X(dock[0])+' '+Y(dock[2])+')"><rect x="-5" y="-3" width="10" height="6" fill="#79c9ec" stroke="#effbff" stroke-width="1"/><text x="-7" y="10" style="fill:#a9e8ff;font-size:6.2px" paint-order="stroke" stroke="#202426" stroke-width="1.6">출고 '+String(i+2).padStart(2,'0')+'</text></g>';
  cache.set(blocks,out);return out;
 }
 const teamColors=['#bb9bf5','#6ed9e3','#ff9ac6','#b7d987'];
@@ -41,7 +41,7 @@ export function mapMarkers(s,peers=[],you=null){
   const marker=p.special?'<path d="M0 -3.4L3.4 0 0 3.4 -3.4 0Z" fill="'+fill+'" stroke="#fff2ce" stroke-width=".7"/>':'<rect x="-2.2" y="-2.2" width="4.4" height="4.4" rx=".5" fill="'+fill+'" stroke="#252322" stroke-width=".6"/>';
   out+='<g transform="translate('+n(X(x))+' '+n(Y(z))+')">'+marker+(y>1.25?'<path d="M-2 -4l2 -2 2 2" stroke="#fff1b8" fill="none" stroke-width=".85"/>':'')+'<title>'+safe(p.id)+(p.special?' · 특수 화물':'')+'</title></g>';
  }
- for(const [i,p] of peers.entries())if(p.id!==you&&!p.failed)out+=arrow(p,teamColors[i%4],String(p.name??'팀원').slice(0,12)+(p.hidden?' · 은신':'')+(p.carried>=0?' · 화물':''));
+ for(const [i,p] of peers.entries())if(p.id!==you){if(p.failed)out+='<g transform="translate('+n(X(p.x))+' '+n(Y(p.z))+')"><circle r="4" fill="#b83232" stroke="#fff" stroke-width=".7"/><path d="M-2 0h4M0 -2v4" stroke="#fff" stroke-width="1.1"/><title>'+safe(String(p.name??'팀원'))+' · 구조 대기</title></g>';else out+=arrow(p,teamColors[i%4],String(p.name??'팀원').slice(0,12)+(p.hidden?' · 은신':'')+(p.carried>=0?' · 화물':''));}
  if(s&&!s.failed)out+=arrow(s,'#fff','나'+(s.carried>=0?' · 화물':''));else if(!s)out+=arrow({x:1.7,z:15,yaw:0},'#fff','시작 위치');
  return out;
 }
