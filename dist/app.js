@@ -157,7 +157,7 @@ function panel(name,body,title,eyebrow='GDG / 근무 안내'){
  nav.innerHTML='<img src="assets/interface/wordmark.webp" alt="GDG">'+(pauseNav?'<div class="nav-pause-label">일시 정지 Ⅱ</div>':'<img class="pane-tagline" src="assets/interface/tagline.webp" alt="배송 임무를 수행하세요">')+buttons.map(([id,label,art])=>'<button class="pane-nav-button '+(id===name||id==='resume'?'chosen':'')+' '+(['solo-start','coop','resume'].includes(id)?'yellow':'')+'" '+(id==='quit'?'data-pane="quit"':'data-action="'+id+'"')+' aria-label="'+label+'">'+(art?'<img src="assets/interface/'+art+'.webp" alt="">':label)+'</button>').join('');
  }
  if(name==='manual')decorateManual($('#paneBody'));
- modal.hidden=false;const scroller=modal.querySelector('.panel');if(scroller)scroller.scrollTop=0;$('#close').focus({preventScroll:true});
+ modal.hidden=false;const scroller=modal.querySelector('.panel');if(scroller)scroller.scrollTop=0;nav.scrollTop=0;$('#close').focus({preventScroll:true});
 }
 function openPane(name){
  if(mode==='game'){pauseShift(false);}
