@@ -1,6 +1,6 @@
 import {nearbyBlocks} from './contact.js';
 // Original, Source-inspired movement controller. All units are metres/seconds.
-export const PHYSICS=Object.freeze({hz:120,walk:4.5,sprint:7,groundAccel:11,friction:7,stopSpeed:1.7,airAccel:22,airWish:2.65,hopTurn:3.35,bhopCap:13.4,gravity:18,jump:9.2,radius:.255,height:1.70,stepHeight:.25,groundSnap:.16,jumpBuffer:.18,skin:.001});
+export const PHYSICS=Object.freeze({hz:120,walk:4.5,sprint:7,groundAccel:11,friction:7,stopSpeed:1.7,airAccel:22,airWish:2.65,hopTurn:3.35,bhopCap:13.4,gravity:18,jump:Math.sqrt(2*18*1.2),jumpHeight:1.2,crouchJumpHeight:1.0,radius:.255,height:1.70,stepHeight:.25,groundSnap:.16,jumpBuffer:.18,skin:.001});
 const P=PHYSICS,clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const bounds=[[-16,-23,-14.79,12,-10,20],[-16,16,-14.79,23,-10,20],[14.55,-23,16,23,-10,20],[-16,-23,16,-21.4,-10,20],[-16,21.4,-3,22.15,-10,20],[3,21.4,16,22.15,-10,20],[11,-20,14.9,7,3.12,3.6]];
 function contact(x,z,b,r){const [a,c,d,e]=b;const qx=clamp(x,a,d),qz=clamp(z,c,e),dx=x-qx,dz=z-qz,len=Math.hypot(dx,dz);if(len>=r)return null;if(len>1e-8)return [dx/len,dz/len,r-len];const sides=[[x-a,-1,0],[d-x,1,0],[z-c,0,-1],[e-z,0,1]].sort((a,b)=>a[0]-b[0]);return [sides[0][1],sides[0][2],r+sides[0][0]];}
@@ -60,7 +60,8 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
  s.wasDuck=duck;
  s.slideTime=Math.max(0,(s.slideTime??0)-dt);
  if(s.grounded&&s.jumpBuffer>0){
-  s.vy=P.jump;s.grounded=false;s.onRail=false;s.jumpBuffer=0;s.hopBoosted=false;
+  // Compensate the semi-implicit gravity step equally at 60 and 120 Hz.
+  s.vy=Math.sqrt(2*P.gravity*(duck?P.crouchJumpHeight:P.jumpHeight))+P.gravity*dt*.5;s.grounded=false;s.onRail=false;s.jumpBuffer=0;s.hopBoosted=false;
   s.slideTime=0;
  }
  // One small momentum gain per airborne hop, never a per-frame speed exploit.

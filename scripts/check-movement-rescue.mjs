@@ -11,7 +11,7 @@ for(const hz of [60,120]){
  const q=Object.assign(newShift(),{x:0,y:0,z:.65,yaw:0,vz:-3});
  const b=[[-.7,-1,.7,.15,0,1.02,'climb']];let max=0;
  for(let i=0;i<hz*2;i++){move(q,new Set(['KeyW']),b,1/hz,i===0,flat);assert(!q.vault);max=Math.max(max,q.y);}
- assert(max>2.2&&q.z<-.9,'physical obstacle jump');
+ assert(max>1.18&&q.z<-.9,'physical obstacle jump');
 }
 const s=Object.assign(newShift(),{x:0,y:.38,z:0,yaw:0,pitch:-.35,grounded:false,vz:-6,cargo:[{id:'B-01',area:'test',pos:[0,.6,-1.65]}],states:['AVAILABLE']});
 const t=handlingTarget(s,[]);assert(canUse(s,t,[]));assert(!canUse(s,t,[[-1,-.8,1,-.7,0,3]]));assert(beginHandling(s,t,[]));for(let i=0;i<30;i++)advanceHandling(s,[],1/60);assert.equal(s.carried,0);
