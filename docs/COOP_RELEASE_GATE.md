@@ -1,0 +1,3 @@
+# Mandatory multiplayer release gate
+Every change to GDG (including UI, assets, movement, AI and server changes) must pass the full release suite and the 2/3/4-player regression matrix before promotion. Vercel's build runs scripts/check-haunt-release.mjs; GitHub Actions also runs it on PRs and main pushes. Never bypass failed checks.
+Matrix covers concurrent requests, jitter, stale control packets, reconnect reservation, duplicate commands and high-speed correction. These deterministic tests are not a substitute for live multiplayer browser tests. Before claiming zero lag, measure actual 2/3/4-player sessions, packet delay/loss, frame time, corrections and reconnection. Keep server authority, wall collision and capture protection intact.
