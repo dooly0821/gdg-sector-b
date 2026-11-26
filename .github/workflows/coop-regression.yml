@@ -12,8 +12,5 @@ jobs:
         with:
           node-version: '22'
       - run: node --check dist/app.js && node --check dist/multiplayer.js && node --check dist/mission.js && node --check dist/haunt.js && node --check server/room-core.js
-      - run: node scripts/check-coop.mjs
-      - run: node scripts/check-coop-smooth.mjs
-      - run: node scripts/check-coop-jitter-recovery.mjs
-      - run: node scripts/check-coop-revive-dispatch.mjs
+      - run: node scripts/check-haunt-release.mjs
       - run: node scripts/check-climb-routes.mjs

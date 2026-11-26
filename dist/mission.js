@@ -22,8 +22,8 @@ export const PARCELS=[
  {id:'B-03',area:'Conveyor sorting',pos:[7.15,1.072,2.4]},
  {id:'B-04',area:'Upper catwalk',pos:[13.90,4.32,-4.45]},
  {id:'B-05',area:'Loading aisle',pos:[-7.75,.72,-13.4]}];
-export const DOCK=[4.6,.24,-19.6];
-export const DOCKS=[DOCK,[-34,.24,13.5],[.5,.24,49.5]];
+export {DOCK,DOCKS} from './dispatch-bays.js';
+import {DOCK,DOCKS,clearOfNewDocks} from './dispatch-bays.js';
 // Eight risk pools with thirty unique cargo assignments per shift. Keep the original
 // five-position fixture for automated legacy tests (newShift without RNG).
 export const MISSION_TOTAL=30;
@@ -44,7 +44,7 @@ function shuffle(items,rng){
  return selected;
 }
 export function randomCargo(rng=Math.random,total=MISSION_TOTAL,level='normal'){
- const counts=COOP_COUNTS[total],selected=counts?COOP_POOLS.flatMap((pool,i)=>shuffle(pool,rng).slice(0,counts[i])):cargoPools.flatMap((pool,i)=>shuffle(pool,rng).slice(0,[4,4,4,4,3,3,4,4][i]));
+ const counts=COOP_COUNTS[total],selected=counts?COOP_POOLS.flatMap((pool,i)=>shuffle(pool,rng).slice(0,counts[i])):cargoPools.flatMap((pool,i)=>shuffle(pool.filter(p=>clearOfNewDocks(p.pos)),rng).slice(0,[4,4,4,4,3,3,4,4][i]));
  // Keep elevated tasks in co-op, with the previously supported climb points.
  if(counts){selected[0]=PARCELS[3];selected[counts[0]]={area:'Annex rack',pos:[-24.5,2.355,7]};}
  const profile=DIFFICULTIES[normalizeDifficulty(level)];
