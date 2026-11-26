@@ -127,16 +127,20 @@ export function applyCoopSnapshot(s,snap,first=false){
  const sampleAge=Math.max(0,now-sampleAt),sameLocalFloor=Math.abs((history?.y??s.y)-s.y)<.24;
  const reliable=sampleAge<230&&finite(snap.netRtt)<360&&finite(snap.simLagMs)<100;
  const speed=Math.hypot(finite(s.vx),finite(s.vz));
+ const stationary=speed<.45&&Math.hypot(finite(v.vx),finite(v.vz))<.45&&!s.vault&&!v.vault;
  const verticalConflict=reliable&&sameLocalFloor&&(history?.grounded??s.grounded)&&v.grounded&&s.grounded&&vertical>.55;
- s.netFloorSince=verticalConflict?(s.netFloorSince??now):null;
- s.netDivergenceSince=reliable&&err>4.25?(s.netDivergenceSince??now):null;
+ s.netFloorSince=verticalConflict&&stationary?(s.netFloorSince??now):null;
+ s.netDivergenceSince=reliable&&stationary&&err>4.25?(s.netDivergenceSince??now):null;
  const mismatch=!!(history?.grounded??s.grounded)!==!!v.grounded||!!(history?.vault??s.vault)!==!!v.vault;
- s.netMismatchAt=reliable&&mismatch?(s.netMismatchAt??now):null;
+ s.netMismatchAt=reliable&&stationary&&mismatch?(s.netMismatchAt??now):null;
  // Ordinary delayed snapshots must not cause a multi-meter teleport.
  // Snap only on authoritative transitions or sustained, genuinely divergent collision state.
  const revived=!!s.failed&&!v.failed;
-  const stationary=speed<.45&&Math.hypot(finite(v.vx),finite(v.vz))<.45&&!s.vault&&!v.vault;
-  const hard=first||revived||hidden!==oldHidden||v.failed||(reliable&&stationary&&err>4.25&&now-(s.netDivergenceSince??now)>1800)||(verticalConflict&&stationary&&now-s.netFloorSince>900)||(reliable&&stationary&&mismatch&&sameLocalFloor&&now-(s.netMismatchAt??now)>1800&&vertical>.85);
+ // A running disagreement must not pre-arm a teleport on the first stopped frame.
+ // Same-floor drift converges through collision-safe nudges; snap only if those
+ // actually remain blocked and both sides have settled for several seconds.
+ const blocked=Number.isFinite(s.netBlockedSince)&&now-s.netBlockedSince>2500;
+ const hard=first||revived||hidden!==oldHidden||v.failed||(reliable&&stationary&&err>4.25&&blocked&&now-(s.netDivergenceSince??now)>2500)||(verticalConflict&&stationary&&now-s.netFloorSince>1800)||(reliable&&stationary&&mismatch&&sameLocalFloor&&now-(s.netMismatchAt??now)>2500&&vertical>.85);
  if(hard){
   for(const k of ['x','y','z','vx','vy','vz','grounded','bodyHeight','steps','vault','onRail'])s[k]=v[k]??(k==='vault'?null:s[k]);
   s.netHistory=[];s.netAppliedX=s.netAppliedZ=0;s.netCorrection=[0,0];s.netMismatchAt=null;s.netDivergenceSince=null;s.netBlockedSince=null;s.netFloorSince=null;s.netHardCorrections=(s.netHardCorrections??0)+(first||revived||v.failed||hidden!==oldHidden?0:1);
