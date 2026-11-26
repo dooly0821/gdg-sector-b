@@ -1,0 +1,59 @@
+/* Final cascade layer: exact supplied sprite-sheet interior crops; preserve all original image buttons. */
+:root{
+ --ui-paper-fill:url('assets/interface/paper-fill-v2.webp');
+ --ui-metal-fill:url('assets/interface/metal-fill-v2.webp');
+ --ui-hazard:url('assets/interface/hazard-v2.webp');
+}
+#modal:not([data-pane=failed]) .panel,
+#modal:not([data-pane=failed]) .gdg-section:not(.paper-note),
+#modal .manual-section,#modal .team-goals,#modal .cargo-guide-card,
+#modal .anomaly-guide-grid article,#modal .shift-result-row,#modal .facility-legend,
+#play .gdg-plate,#play #prompt,#play #carry-status,#play #shift-event-notice:not([hidden]),
+#modal .failure-value{
+ background:#292320 linear-gradient(130deg,#201b18ab,#201b18a0) center/cover no-repeat!important;
+ background-image:linear-gradient(130deg,#201b187d,#201b18ad),var(--ui-metal-fill)!important;
+ background-size:cover,cover!important;background-repeat:no-repeat,no-repeat!important;
+ background-position:center,center!important;
+}
+#modal .gdg-section.paper-note{
+ background:#d9b891 linear-gradient(115deg,#ead2b0a8,#dfbd98b8) center/cover no-repeat!important;
+ background-image:linear-gradient(115deg,#ead2b0b5,#dfbd98b5),var(--ui-paper-fill)!important;
+ background-size:cover,cover!important;background-repeat:no-repeat,no-repeat!important;
+ background-position:center,center!important;
+ box-shadow:inset 0 0 9px #79502b20!important;color:#32261d!important;border-color:#bfa17e!important;
+}
+#modal .gdg-section h3::after{background:var(--ui-hazard) center/100% 100% no-repeat!important}
+#modal .paper-note h3,#modal .paper-note p{color:#302319!important;text-shadow:none}
+#modal .paper-note p{font-weight:650;line-height:1.5;margin:6px 0}
+#modal:not([data-pane=failed]){box-sizing:border-box;grid-template-rows:minmax(0,1fr);min-height:0;overflow:hidden}
+#modal:not([data-pane=failed]) .panel{box-sizing:border-box;min-height:0;max-height:100%!important;min-width:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;align-self:center}
+#modal:not([data-pane=failed]) #paneBody{min-width:0;overflow-wrap:anywhere}
+#modal:not([data-pane=failed]) .panel-head{min-height:26px}
+#modal:not([data-pane=failed]) .panel-actions{flex-wrap:wrap}
+#modal[data-layout=menu] #paneNav:not([hidden]),#modal[data-layout=pause] #paneNav:not([hidden]){
+ min-height:0;max-height:100%;box-sizing:border-box;overflow-y:auto;overflow-x:hidden;justify-content:safe center;scrollbar-width:thin;
+}
+#modal[data-layout=pause] #paneNav>img:first-child{flex:0 0 auto;width:90%;height:auto;max-height:15dvh;object-fit:contain}
+#modal[data-layout=pause] #paneNav .nav-pause-label{flex:0 0 auto;width:95%;max-height:10dvh}
+#modal[data-layout=pause] #paneNav .pane-nav-button{flex:0 0 auto;width:90%;height:min(7.5dvh,70px);max-height:none}
+#modal[data-layout=pause] #paneNav .pane-nav-button img{max-height:100%}
+#modal[data-pane=pause] #paneTitle{width:min(100%,clamp(150px,34dvh,400px));margin:0 0 8px}
+#modal[data-pane=pause] .panel .row{min-height:0;padding:clamp(4px,.8dvh,9px) 0}
+#modal[data-pane=pause] .gdg-section{padding:clamp(9px,1.1vw,18px)}
+#modal[data-pane=pause] .gdg-section+.gdg-section{margin-top:9px}
+#modal[data-pane=pause] .paper-note p:last-child{margin-bottom:0}
+#modal[data-pane=pause] .gdg-section h3{margin-bottom:7px;padding-bottom:6px}
+#modal .settings-grid .gdg-section{height:auto}
+#modal .setting-range input{min-width:0;width:100%}
+#modal .presets{flex-wrap:wrap}
+@media(max-height:600px){
+ #modal[data-layout=pause]{padding:7px;gap:10px}
+ #modal[data-layout=pause] #paneNav:not([hidden]){gap:3px}
+ #modal[data-pane=pause] .panel{padding:8px!important;border-width:10px!important}
+ #modal[data-pane=pause] #paneTitle{width:min(100%,clamp(110px,28dvh,185px));margin-bottom:3px}
+ #modal[data-pane=pause] .gdg-section{padding:8px}
+ #modal[data-pane=pause] .gdg-section h3{font-size:16px;margin-bottom:5px;padding-bottom:4px}
+ #modal[data-pane=pause] .panel .row{font-size:12px;line-height:1.3;padding:4px 0}
+ #modal[data-pane=pause] .paper-note p{font-size:12px;margin:4px 0}
+}
+@media(max-width:600px){#modal .setting-range{grid-template-columns:minmax(0,1fr) 48px!important}#modal .setting-range>span{grid-column:1/-1}#modal .setting-range output{justify-self:end}#modal .panel-actions{gap:5px}}
