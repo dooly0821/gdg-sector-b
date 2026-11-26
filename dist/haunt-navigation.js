@@ -73,11 +73,11 @@ export function navigate(actor,target,nav,body,dt,budget=48){
  // Direct movement is only allowed if the full body fits along the segment.
  // Avoid checking distant targets every tick; refresh at a fixed cadence.
  if(actor.navDelay===0){
-  actor.navDelay=.14;
+  actor.navDelay=.12;
   const d=Math.hypot(target[0]-actor.x,target[1]-actor.z);
   actor.navDirect=d<=18&&segmentFree(nav,here,target,body);
   if(actor.navDirect){actor.navJob=null;actor.navPath=null;}
-  else if(!actor.navJob&&(!actor.navPath?.length||!actor.navGoal||Math.hypot(target[0]-actor.navGoal[0],target[1]-actor.navGoal[1])>1.8||actor.stuck>.45)){
+  else if(!actor.navJob&&(!actor.navPath?.length||!actor.navGoal||Math.hypot(target[0]-actor.navGoal[0],target[1]-actor.navGoal[1])>1.45||actor.stuck>.45)){
    actor.navJob=startJob(actor,target,nav,body);actor.navGoal=target.slice();
   }
  }

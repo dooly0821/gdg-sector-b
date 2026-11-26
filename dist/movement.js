@@ -19,16 +19,31 @@ function heightSpan(b,x,z){
 function railTop(b,x,z){const span=b[7]?heightSpan(b,x,z):0;return Math.max(blockHeight(b,z-span,1),blockHeight(b,z+span,1));}
 function railSupport(b,x,z){return b[6]==='rail'&&contact(x,z,b,.15);}
 function overlaps(y,b,z,x,height=P.height){
+ if(b[6]==='stair-ramp')return y<stairTop(b,x,z)-.012&&y+height>.012;
  if(!b[7])return y<b[5]-.012&&y+height>b[4]+.012;
  const span=heightSpan(b,x,z);
  return y<Math.max(blockHeight(b,z-span,1),blockHeight(b,z+span,1))-.012&&
   y+height>Math.min(blockHeight(b,z-span,0),blockHeight(b,z+span,0))+.012;
 }
+// Visual treads and AI/visibility geometry remain unchanged. The player
+// uses a cached, continuous floor across each tagged stair flight.
+const stairCache=new WeakMap();
+export function movementBlocks(blocks){
+ if(stairCache.has(blocks))return stairCache.get(blocks);
+ const groups=new Map(),out=[];
+ for(const b of blocks){const meta=b[8];if(!meta?.id){out.push(b);continue;}
+  let r=groups.get(meta.id);if(!r){r=[b[0],b[1],b[2],b[3],0,meta.top,'stair-ramp',null,meta];groups.set(meta.id,r);out.push(r);}
+  else {r[0]=Math.min(r[0],b[0]);r[1]=Math.min(r[1],b[1]);r[2]=Math.max(r[2],b[2]);r[3]=Math.max(r[3],b[3]);}
+ }
+ const result=groups.size?out:blocks;stairCache.set(blocks,result);return result;
+}
+export function stairTop(b,x,z){const m=b[8],a=m.axis===0?x:z;return m.top*clamp((a-m.low)/(m.high-m.low),0,1);}
+function supportTop(b,x,z){return b[6]==='stair-ramp'?stairTop(b,x,z):b[6]==='rail'?railTop(b,x,z):blockHeight(b,z,1);}
 function clip(s,nx,nz){let v=s.vx*nx+s.vz*nz;if(v<0){s.vx-=nx*v;s.vz-=nz*v;}}
 function solve(s,blocks,dx,dz,surface){
  const oldX=s.x,oldZ=s.z,oldY=s.y; s.x+=dx;s.z+=dz;
  // Only allow a step if the top is accessible and the full body fits.
- if(s.grounded){let top=surface(s.x,s.z,s.y);for(const b of blocks){if(b[6]!=='rail'&&b[5]>s.y+.012&&b[5]<=s.y+P.stepHeight&&contact(s.x,s.z,b,P.radius+.005))top=Math.max(top,b[5]);else if(railSupport(b,s.x,s.z)&&railSupport(b,oldX,oldZ)&&Math.abs(railTop(b,oldX,oldZ)-oldY)<.20){const h=railTop(b,s.x,s.z);if(h<=s.y+P.stepHeight)top=Math.max(top,h);}}
+ if(s.grounded){let top=surface(s.x,s.z,s.y);for(const b of blocks){if(b[6]==='stair-ramp'&&contact(s.x,s.z,b,P.radius-.035)){const h=stairTop(b,s.x,s.z);if(h<=s.y+P.stepHeight)top=Math.max(top,h);}else if(b[6]!=='rail'&&b[6]!=='stair-ramp'&&b[5]>s.y+.012&&b[5]<=s.y+P.stepHeight&&contact(s.x,s.z,b,P.radius+.005))top=Math.max(top,b[5]);else if(railSupport(b,s.x,s.z)&&railSupport(b,oldX,oldZ)&&Math.abs(railTop(b,oldX,oldZ)-oldY)<.20){const h=railTop(b,s.x,s.z);if(h<=s.y+P.stepHeight)top=Math.max(top,h);}}
   if(top>s.y&&top-s.y<=P.stepHeight&&!blocks.some(b=>overlaps(top,b,s.z,s.x,s.bodyHeight)&&contact(s.x,s.z,b,P.radius)))s.y=top;
  }
  for(let i=0;i<7;i++){let hit=false;for(const b of blocks){if(!overlaps(s.y,b,s.z,s.x,s.bodyHeight))continue;const n=contact(s.x,s.z,b,P.radius);if(!n)continue;hit=true;s.x+=n[0]*(n[2]+P.skin);s.z+=n[1]*(n[2]+P.skin);clip(s,n[0],n[1]);}if(!hit)break;}
@@ -49,7 +64,7 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
  // Retire legacy scripted vaults; all jumps are controlled by gravity and input.
  s.vault=null;s.ledgeIntent=0;
  if(jump||hopHeld)s.jumpBuffer=P.jumpBuffer;else s.jumpBuffer=Math.max(0,s.jumpBuffer-dt);
- const blocks=[...nearbyBlocks(staticBlocks,s.x,s.z),...dynamic,...bounds];
+ const blocks=[...nearbyBlocks(movementBlocks(staticBlocks),s.x,s.z),...dynamic,...bounds];
  const current=s.bodyHeight??P.height,target=duck?1.06:P.height;
  const height=current+clamp(target-current,-dt*6.8,dt*5.5);
  s.bodyHeight=height<=current||!blocks.some(b=>contact(s.x,s.z,b,P.radius)&&overlaps(s.y,b,s.z,s.x,height))?height:current;
@@ -84,7 +99,7 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
  s.steps+=Math.hypot(s.x-ox,s.z-oz);
  const old=s.y;s.vy-=P.gravity*dt;let next=old+s.vy*dt;
  let floor=surface(s.x,s.z,old);
- for(const b of blocks){if(!contact(s.x,s.z,b,P.radius-.035))continue;const top=b[6]==='rail'?railTop(b,s.x,s.z):blockHeight(b,s.z,1);if((b[6]!=='rail'||railSupport(b,s.x,s.z))&&top<=old+(s.vy<=0?.065:.025)&&top>=floor&&!blocks.some(c=>c!==b&&overlaps(top,c,s.z,s.x,s.bodyHeight)&&contact(s.x,s.z,c,P.radius)))floor=top;
+ for(const b of blocks){if(!contact(s.x,s.z,b,P.radius-.035))continue;const top=supportTop(b,s.x,s.z);if((b[6]!=='rail'||railSupport(b,s.x,s.z))&&top<=old+(s.vy<=0?.065:.025)&&top>=floor&&!blocks.some(c=>c!==b&&overlaps(top,c,s.z,s.x,s.bodyHeight)&&contact(s.x,s.z,c,P.radius)))floor=top;
   const span=b[7]?heightSpan(b,s.x,s.z):0;
   const bottom=Math.min(blockHeight(b,s.z-span,0),blockHeight(b,s.z+span,0));
   if(s.vy>0&&old+s.bodyHeight<=bottom+.012&&next+s.bodyHeight>=bottom){next=Math.min(next,bottom-s.bodyHeight-.002);s.vy=0;}}
@@ -96,7 +111,7 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
 // Apply small network corrections without changing input velocity or crossing walls.
 export function nudgeCoopPosition(s,staticBlocks,dx,dz,dynamic=[]){
  if(!Number.isFinite(dx)||!Number.isFinite(dz)||s.vault)return;
- const blocks=[...nearbyBlocks(staticBlocks,s.x,s.z),...dynamic,...bounds],n=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.025));
+ const blocks=[...nearbyBlocks(movementBlocks(staticBlocks),s.x,s.z),...dynamic,...bounds],n=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.025));
  const rail=s.onRail&&s.netOnRail?blocks.find(b=>railSupport(b,s.x,s.z)&&Math.abs(railTop(b,s.x,s.z)-s.y)<.035):null;
  const clear=(x,z)=>(!rail||railSupport(rail,x,z)&&Math.abs(railTop(rail,x,z)-s.y)<.08)&&!blocks.some(b=>overlaps(s.y,b,z,x,s.bodyHeight??P.height)&&contact(x,z,b,P.radius));
  for(let i=0;i<n;i++){const x=s.x+dx/n,z=s.z+dz/n;if(clear(x,z)){s.x=x;s.z=z;}else{if(clear(x,s.z))s.x=x;if(clear(s.x,z))s.z=z;}}

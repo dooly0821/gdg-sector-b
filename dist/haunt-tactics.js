@@ -2,14 +2,14 @@
 import {freeAt,segmentFree} from './haunt-navigation.js';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),finite=v=>Number.isFinite(v)?v:0;
 export const HUNT_PROFILE=Object.freeze([
- {lead:.27,reach:2.1,memory:10,hearing:1.07,search:1.10,speed:1.045},
- {lead:.16,reach:1.25,memory:13,hearing:1.15,search:1.13,speed:1.055},
- {lead:.34,reach:2.65,memory:10,hearing:1.05,search:1.15,speed:1.045},
- {lead:.39,reach:2.9,memory:12,hearing:1.08,search:1.12,speed:1.05}
+ {lead:.34,reach:2.6,memory:12,hearing:1.07,search:1.10,speed:1.045},
+ {lead:.22,reach:1.65,memory:14,hearing:1.15,search:1.13,speed:1.055},
+ {lead:.42,reach:3.1,memory:12,hearing:1.05,search:1.15,speed:1.045},
+ {lead:.48,reach:3.4,memory:14,hearing:1.08,search:1.12,speed:1.05}
 ].map(Object.freeze));
-export function clearObservation(a){a.observedVelocity=null;a.observedPoint=null;a.predictedTarget=null;a.predictDelay=0;a.trailUsed=false;a.trailTarget=null;}
+export function clearObservation(a){a.observedVelocity=null;a.observedPoint=null;a.predictedTarget=null;a.predictDelay=0;a.trailUsed=false;a.trailTarget=null;a.sweepChecked=[];a.inspectRetry=0;}
 export function observePlayer(a,s){
- const vx=finite(s.vx),vz=finite(s.vz),speed=Math.hypot(vx,vz),limit=speed>11.2?11.2/speed:1;
+ const vx=finite(s.vx),vz=finite(s.vz),speed=Math.hypot(vx,vz),limit=speed>13.4?13.4/speed:1;
  const old=a.observedVelocity??[vx*limit,vz*limit];
  a.observedVelocity=[old[0]*.4+vx*limit*.6,old[1]*.4+vz*limit*.6];
  a.observedPoint=[s.x,s.z];a.trailUsed=false;a.trailTarget=null;
@@ -26,12 +26,12 @@ export function pursueVisible(a,s,nav,body,dt){
  const profile=HUNT_PROFILE[a.kind],p=a.observedPoint??[s.x,s.z],dist=Math.hypot(a.x-p[0],a.z-p[1]);
  if(dist<2.5||s.y>.65){a.predictedTarget=null;a.predictDelay=0;return p;}
  a.predictDelay=Math.max(0,(a.predictDelay??0)-dt);
- if(!a.predictDelay){a.predictDelay=.22+a.kind*.025;a.predictedTarget=predictedPoint(a,nav,body,profile.lead,profile.reach);}
+ if(!a.predictDelay){a.predictDelay=.17+a.kind*.025;a.predictedTarget=predictedPoint(a,nav,body,profile.lead,profile.reach);}
  return a.predictedTarget??p;
 }
 export function lostTrail(a,nav,body){
  if(a.trailUsed)return a.trailTarget??null;
- a.trailUsed=true;a.trailTarget=predictedPoint(a,nav,body,.55,3.1);return a.trailTarget;
+ a.trailUsed=true;a.trailTarget=predictedPoint(a,nav,body,.65,3.5);return a.trailTarget;
 }
 export function searchBearing(a,phase){
  const v=a.observedVelocity;if(!v||Math.hypot(...v)<.8)return phase;
@@ -43,3 +43,8 @@ export function searchExpired(a,difficulty,dist){
   dist>difficulty.escape&&lost>difficulty.memory;
 }
 export function alreadyChecked(a,p){return (a.checked??[]).some(q=>Array.isArray(q)&&Math.hypot(q[0]-p[0],q[1]-p[1])<.25);}
+
+// Prefer fresh search locations aligned with the last observed motion.
+export function sweepVisited(a,p){return (a.sweepChecked??[]).some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<1.1);}
+export function rememberSweep(a,p){if(p&&!sweepVisited(a,p))a.sweepChecked=[...(a.sweepChecked??[]).slice(-7),p.slice()];}
+export function hidingScore(a,p){const origin=a.lastKnown??[a.x,a.z],v=a.observedVelocity??[0,0],speed=Math.hypot(...v),dx=p[0]-origin[0],dz=p[1]-origin[1],d=Math.hypot(dx,dz);const ahead=speed>.8&&d>.1?(dx*v[0]+dz*v[1])/(d*speed):0;return Math.hypot(p[0]-a.x,p[1]-a.z)+d*.35-ahead*1.4;}
