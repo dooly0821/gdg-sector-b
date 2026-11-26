@@ -7,7 +7,7 @@ import {closedLocker,lockerDoorBlocks,lockerEntry} from './lockers.js';
 import {HIDING_POINTS,REFUGES} from './annex.js';
 import {worldBounds} from './movement.js';
 import {traceBox} from './contact.js';
-import {indexBlocks,queryBlocks,freeAt,segmentFree,navigate,recover} from './haunt-navigation.js';
+import {indexBlocks,queryBlocks,freeAt,segmentFree,navigate,recover,trappedTooLong} from './haunt-navigation.js';
 import {basis,multiply,dot} from './world.js';
 import {buildCreatureRigs,CREATURE_JOINTS} from './creature-models.js';
 
@@ -238,7 +238,7 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
   }
   const hiding=closedLocker(s),entry=hiding?lockerEntry(hiding):null;
   const climb=updateClimber(actor,s,nav,local,dt,!!hiding);
-  if(climb?.handled){if(climb.hit&&!s.netHitProtected&&(s.hitProtectedUntil??0)<=root.elapsed){actor.speed=0;captured=type.name;s.handAction=null;s.pendingUse=null;s.vault=null;s.jumpBuffer=0;s.vx=s.vz=s.vy=0;s.failed=true;s.capturedBy=i;}return;}
+  if(climb?.handled){if(actor.state==='disappear')return;if(climb.hit&&!s.netHitProtected&&(s.hitProtectedUntil??0)<=root.elapsed){actor.speed=0;captured=type.name;s.handAction=null;s.pendingUse=null;s.vault=null;s.jumpBuffer=0;s.vx=s.vz=s.vy=0;s.failed=true;s.capturedBy=i;}return;}
   const safe=s.grounded&&REFUGES.some(([x,y,z,r])=>Math.abs(s.y-y)<.09&&Math.hypot(s.x-x,s.z-z)<r);
   const pursuit=actor.pursuit??false,torchOn=(s.flashAmount??0)>.25;
   const detectRange=type.range*difficulty.range*1.04*(s.bodyHeight<1.2&&!torchOn?.67:1);
@@ -396,12 +396,13 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
   let moved=resolved;
   if(aim&&stride>1e-5&&!resolved&&goalSpeed>0){
    // Travel towards the collision-checked waypoint, independently of cosmetic body yaw.
-   for(const turn of [0,.32,-.32,.68,-.68,1.1,-1.1]){
+   for(const turn of [0,.32,-.32,.68,-.68,1.1,-1.1,1.55,-1.55]){
     const angle=(actor.state==='lockerWait'?Math.atan2(heading[0]-actor.x,heading[1]-actor.z):desired)+turn,p=[actor.x+Math.sin(angle)*stride,actor.z+Math.cos(angle)*stride];
     if(segmentFree(nav,before,p,body,0)){actor.x=p[0];actor.z=p[1];moved=true;break;}
    }
   }
-  const wantsMove=!still&&goalSpeed>.1&&Math.hypot(seek[0]-actor.x,seek[1]-actor.z)>.65;
+  const wantsMove=!still&&goalSpeed>.1&&(Math.hypot(seek[0]-actor.x,seek[1]-actor.z)>.65||!freeAt(nav,actor.x,actor.z,body));
+  if(trappedTooLong(actor,wantsMove,dt)){actor.state='disappear';actor.speed=0;actor.navJob=null;actor.navPath=null;actor.recoverPoint=null;return;}
   actor.stuck=wantsMove&&!moved?(actor.stuck??0)+dt:Math.max(0,(actor.stuck??0)-dt*2);
   // Detect oscillation at a corner even when every tiny step is technically valid.
   actor.progressClock=(actor.progressClock??0)+dt;
