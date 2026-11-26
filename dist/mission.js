@@ -23,7 +23,7 @@ export const PARCELS=[
  {id:'B-04',area:'Upper catwalk',pos:[13.90,4.32,-4.45]},
  {id:'B-05',area:'Loading aisle',pos:[-7.75,.72,-13.4]}];
 export const DOCK=[4.6,.24,-19.6];
-export const DOCKS=[DOCK,[-33,.24,15.7],[-2.7,.24,49.5]];
+export const DOCKS=[DOCK,[-34,.24,13.5],[.5,.24,49.5]];
 // Eight risk pools with thirty unique cargo assignments per shift. Keep the original
 // five-position fixture for automated legacy tests (newShift without RNG).
 export const MISSION_TOTAL=30;

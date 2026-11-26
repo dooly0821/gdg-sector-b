@@ -7,6 +7,7 @@ import {normalizeNickname} from '../dist/nickname.js';
 import {createScene,newShift,randomCargo,step,forward,handlingTarget,canUse,dropTarget,deliveryCount,MISSION_TOTAL,parcelBlocks} from '../dist/mission.js';
 import {beginHandling,advanceHandling,toggleFlashlight,updateViewmodel} from '../dist/handling.js';
 import {advanceLockers,lockerDoorBlocks,lockerTarget,useLocker,insideLocker,closedLocker,LOCKERS} from '../dist/lockers.js';
+import {nearbyBlocks,traceBox} from '../dist/contact.js';
 import {updateHaunt,teamDifficulty} from '../dist/haunt.js';
 export const ROOM_TTL=7200,MAX_PLAYERS=4;
 const keysAllowed=new Set(['KeyW','KeyA','KeyS','KeyD','KeyC','ShiftLeft','ShiftRight','Space','KeyE']);
@@ -23,7 +24,7 @@ const finite=(v,d=0)=>Number.isFinite(v)?v:d;
 const publicPlayer=p=>({id:p.id,name:p.name,ready:p.ready,failed:!!p.state.failed,reviveProgress:p.reviveProgress??0,reviveTarget:p.reviveTarget??null,hidden:!!closedLocker(p.state),x:p.state.x,y:p.state.y,z:p.state.z,yaw:p.state.yaw,pitch:p.state.pitch,bodyHeight:p.state.bodyHeight??1.7,steps:p.state.steps,carried:p.state.carried,flashlight:!!p.state.flashlight,vx:p.state.vx,vy:p.state.vy,vz:p.state.vz,grounded:p.state.grounded!==false,vault:!!p.state.vault});
 const sharedKeys=['cargo','states','parked','deliveryOrder','deliveryBays','lockers','lockerRevision','horrorEvent','cargoDeadlines','shiftEvents'];
 function attach(room,p){
- const s=p.state,q=room.shared;q.cargoDeadlines??={};for(const k of sharedKeys)s[k]=q[k];
+ const s=p.state,q=room.shared;q.cargoDeadlines??={};q.deliveryBays??={};for(const k of sharedKeys)s[k]=q[k];
  s.elapsed=q.elapsed;s.skipLockerAdvance=true;s.id=p.id;return s;
 }
 function detach(p){for(const k of sharedKeys)delete p.state[k];delete p.state.hauntSounds;delete p.state.teamView;}
@@ -56,13 +57,14 @@ function prune(room,now){
 }
 function canStart(room,now){
  if(room.phase==='loading'&&Object.keys(room.players).length>=2&&Object.values(room.players).every(p=>p.ready)){
-  room.phase='playing';room.lastTick=now;room.fraction=0;room.simDebt=0;room.shared.elapsed=0;pushEvent(room,{type:'notice',message:difficultyLabel(room.shared.difficultyLevel)+' · 팀 화물 '+room.shared.states.length+'개 배송 시작.'});
+  room.phase='playing';for(const p of Object.values(room.players))p.lastInputAt=now;room.lastTick=now;room.fraction=0;room.simDebt=0;room.shared.elapsed=0;pushEvent(room,{type:'notice',message:difficultyLabel(room.shared.difficultyLevel)+' · 팀 화물 '+room.shared.states.length+'개 배송 시작.'});
  }
 }
 function syncShared(room,p){const s=p.state,q=room.shared;if(s.lockerRevision!==q.lockerRevision)q.lockerRevision=s.lockerRevision;if(s.horrorEvent&&s.horrorEvent!==q.horrorEvent)q.horrorEvent=s.horrorEvent;}
 export const REVIVE_SECONDS=3,REVIVE_RANGE=2.2;
 function reviveTarget(room,p){const s=p.state;if(s.failed||closedLocker(s)||s.handAction||s.vault)return null;
- return Object.values(room.players).filter(a=>a.state.failed&&Math.abs(a.state.y-s.y)<1.2&&Math.hypot(a.state.x-s.x,a.state.z-s.z)<=REVIVE_RANGE).sort((a,b)=>Math.hypot(a.state.x-s.x,a.state.z-s.z)-Math.hypot(b.state.x-s.x,b.state.z-s.z))[0]??null;
+ const blocks=nearbyBlocks(world().blocks,s.x,s.z).concat(lockerDoorBlocks(s));
+ return Object.values(room.players).filter(a=>a.state.failed&&Math.abs(a.state.y-s.y)<1.2&&Math.hypot(a.state.x-s.x,a.state.z-s.z)<=REVIVE_RANGE&&!blocks.some(b=>traceBox([s.x,s.y+1,s.z],[a.state.x,a.state.y+.5,a.state.z],b)<.99)).sort((a,b)=>Math.hypot(a.state.x-s.x,a.state.z-s.z)-Math.hypot(b.state.x-s.x,b.state.z-s.z))[0]??null;
 }
 function tickRevives(room,active,now,dt){
  const claimed=new Set();
@@ -155,7 +157,7 @@ export function operateRoom(room,body,now=Date.now()){
  else if(op==='ready'){check(['loading','playing'].includes(room.phase),'아직 근무를 시작하지 않았습니다.',409);p.ready=true;canStart(room,now);}
  else if(op==='sync'){
   if(room.phase==='playing'&&!p.state.failed){
-   const input=body.input??{};const gap=now-(p.lastInputAt??now);p.lastInputAt=now;if(gap>500)p.state.hitProtectedUntil=Math.max(p.state.hitProtectedUntil??0,room.shared.elapsed+.55);p.input={keys:Array.isArray(input.keys)?[...new Set(input.keys.filter(k=>keysAllowed.has(k)))].slice(0,8):[],yaw:clamp(finite(input.yaw,p.input.yaw),-1e4,1e4),pitch:clamp(finite(input.pitch,p.input.pitch),-1.3,1.3)};
+   const input=body.input??{};const gap=now-(p.lastInputAt??now);p.lastInputAt=now;if(gap>500)p.state.hitProtectedUntil=Math.max(p.state.hitProtectedUntil??0,room.shared.elapsed+.55);p.input={keys:Array.isArray(input.keys)?[...new Set(input.keys.filter(k=>keysAllowed.has(k)))].slice(0,9):[],yaw:clamp(finite(input.yaw,p.input.yaw),-1e4,1e4),pitch:clamp(finite(input.pitch,p.input.pitch),-1.3,1.3)};
    for(const cmd of (Array.isArray(body.commands)?body.commands.slice(0,16):[]))command(room,p,cmd);
   }
  }else if(op!=='start'&&op!=='ready')throw new RoomError('잘못된 명령입니다.');

@@ -41,7 +41,7 @@ export function mapMarkers(s,peers=[],you=null){
   const marker=p.special?'<path d="M0 -3.4L3.4 0 0 3.4 -3.4 0Z" fill="'+fill+'" stroke="#fff2ce" stroke-width=".7"/>':'<rect x="-2.2" y="-2.2" width="4.4" height="4.4" rx=".5" fill="'+fill+'" stroke="#252322" stroke-width=".6"/>';
   out+='<g transform="translate('+n(X(x))+' '+n(Y(z))+')">'+marker+(y>1.25?'<path d="M-2 -4l2 -2 2 2" stroke="#fff1b8" fill="none" stroke-width=".85"/>':'')+'<title>'+safe(p.id)+(p.special?' · 특수 화물':'')+'</title></g>';
  }
- for(const [i,p] of peers.entries())if(p.id!==you&&!p.failed)out+=arrow(p,teamColors[i%4],String(p.name??'팀원').slice(0,12)+(p.hidden?' · 은신':'')+(p.carried>=0?' · 화물':''));
+ for(const [i,p] of peers.entries())if(p.id!==you){if(p.failed)out+='<g transform="translate('+n(X(p.x))+' '+n(Y(p.z))+')"><circle r="4" fill="#b83232" stroke="#fff" stroke-width=".7"/><path d="M-2 0h4M0 -2v4" stroke="#fff" stroke-width="1.1"/><title>'+safe(String(p.name??'팀원'))+' · 구조 대기</title></g>';else out+=arrow(p,teamColors[i%4],String(p.name??'팀원').slice(0,12)+(p.hidden?' · 은신':'')+(p.carried>=0?' · 화물':''));}
  if(s&&!s.failed)out+=arrow(s,'#fff','나'+(s.carried>=0?' · 화물':''));else if(!s)out+=arrow({x:1.7,z:15,yaw:0},'#fff','시작 위치');
  return out;
 }
