@@ -6,7 +6,9 @@ import {indexBlocks,freeAt} from '../dist/haunt-navigation.js';
 import {createRoom,operateRoom,tickRoom,snapshot} from '../server/room-core.js';
 const w=new Set(['KeyW']),dt=1/60;
 for(const hz of [60,120]){const d=1/hz;const s=Object.assign(newShift(),{x:0,z:10,vz:-7,yaw:0});move(s,new Set(['KeyC']),[],d,false,()=>0);assert(!s.slideTime);
- Object.assign(s,{vz:-7,grounded:true,slideRequested:true});const z=s.z;move(s,w,[],d,false,()=>0);assert(s.slideTime>.79&&s.slideCooldown>1.49);assert(Math.abs(s.z-z)<.15);let max=0;for(let i=0;i<hz;i++){move(s,w,[],d,false,()=>0);max=Math.max(max,Math.abs(s.vz));}assert(!s.slideTime&&max<=13.4);s.slideRequested=true;move(s,w,[],d,false,()=>0);assert(!s.slideTime);}
+ Object.assign(s,{vz:-7,grounded:true,slideRequested:true});const z=s.z;move(s,w,[],d,false,()=>0);assert(s.slideTime>.79&&Math.abs(s.slideCooldown-1.2)<1e-8);assert(Math.abs(s.z-z)<.15);let max=0;for(let i=0;i<hz;i++){move(s,w,[],d,false,()=>0);max=Math.max(max,Math.abs(s.vz));}assert(!s.slideTime&&max<=13.4);s.slideRequested=true;move(s,w,[],d,false,()=>0);assert(!s.slideTime);}
+// 0.4 seconds recovery after the uninterrupted 0.8 second slide.
+for(const hz of [60,120]){const dt=1/hz,run=new Set(['KeyW','ShiftLeft']),s=Object.assign(newShift(),{x:0,z:10,yaw:0,vz:-7,slideRequested:true});move(s,run,[],dt,false,()=>0);for(let i=1;i<Math.round(1.2*hz);i++){s.slideRequested=true;move(s,run,[],dt,false,()=>0);assert(s.slideTime<.8-1e-8,'no early restart');}s.slideRequested=true;move(s,run,[],dt,false,()=>0);if(!s.slideTime){s.slideRequested=true;move(s,run,[],dt,false,()=>0);}assert(s.slideTime>.79,'restart after 0.4s recovery');}
 // Check real momentum throughout the slide, not just its timer.
 for(const hz of [60,120]){
  const d=1/hz,run=new Set(['KeyW','ShiftLeft']);
