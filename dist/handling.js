@@ -6,7 +6,7 @@ import {relaxedFingerAmounts,vaultPose} from './hand-motion.js';
 import {ACTOR_START,CREATURE_GROUP_COUNT,buildHauntRigs} from './haunt.js';
 import {basis,cameraView,multiply,unit,cross,dot} from './world.js';
 import {TORCH_LOCAL,SOCKETS,FINGER_FLEX} from './viewmodel.js';
-import {CONFIG,baySlot,deliveryCount,canUse,interact,forward} from './mission.js';
+import {CONFIG,baySlot,nextBaySlot,deliveryCount,canUse,interact,forward} from './mission.js';
 
 const smooth=x=>{x=Math.max(0,Math.min(1,x));return x*x*(3-2*x);};
 const mix=(a,b,t)=>a+(b-a)*t;
@@ -46,7 +46,7 @@ export function beginHandling(s,target,blocks,locked=false){
  if((target.dock||target.drop)?s.carried<0:s.states[target.index]!=='AVAILABLE'||s.carried>=0)return false;
  s.flashlight=false;s.flashAmount=0;
  s.handAction={placing:!!(target.dock||target.drop),target,index:target.dock?s.carried:target.index,
-  worldPos:target.dock?baySlot(deliveryCount(s)):target.pos.slice(),time:0,duration:target.dock||target.drop?HAND_TIMING.place:HAND_TIMING.pickup};
+  worldPos:target.dock?nextBaySlot(s,target.bay??0):target.pos.slice(),time:0,duration:target.dock||target.drop?HAND_TIMING.place:HAND_TIMING.pickup};
  return true;
 }
 export function advanceHandling(s,blocks,dt){

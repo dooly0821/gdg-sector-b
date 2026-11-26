@@ -23,6 +23,7 @@ export const PARCELS=[
  {id:'B-04',area:'Upper catwalk',pos:[13.90,4.32,-4.45]},
  {id:'B-05',area:'Loading aisle',pos:[-7.75,.72,-13.4]}];
 export const DOCK=[4.6,.24,-19.6];
+export const DOCKS=[DOCK,[-33,.24,15.7],[-2.7,.24,49.5]];
 // Eight risk pools with thirty unique cargo assignments per shift. Keep the original
 // five-position fixture for automated legacy tests (newShift without RNG).
 export const MISSION_TOTAL=30;
@@ -65,14 +66,15 @@ export function createScene(){
   w.box(x,y-.048,z,1.03,.096,.79,plank);w.box(x,y-.13,z+.33,1.0,.12,.045,edge);
   w.block(x-1.03/2,z-.79/2,x+1.03/2,z+.79/2,base,y,"climb");
  }
- const [x,y,z]=DOCK;
+ for(const [dockIndex,[x,y,z]] of DOCKS.entries()){
  for(let dx of [-1,0,1])w.box(x+dx,.092,z,.13,.184,1.6,plank);
  for(let i=0;i<9;i++)w.box(x+(i-4)*.283,.208,z,.266,.064,1.6,plank);
  w.block(x-1.27,z-.8,x+1.27,z+.8,0,.27);
  for(const dx of [-1.52,1.52])w.box(x+dx,.009,z,.09,.015,1.95,amber);
  for(const dz of [-.98,.98])w.box(x,.009,z+dz,3.12,.015,.09,amber);
  for(const dx of [-1.65,1.65]){w.box(x+dx,.82,z-1,.07,1.64,.07,steel);w.box(x+dx,.08,z-1,.21,.16,.21,black);}
- w.box(x,1.72,z-1,3.46,.55,.1,black);w.sign(x,1.71,z-.94,3.32,.45,'DISPATCH   /   BAY 02','#b08837','#171b17');
+ w.box(x,1.72,z-1,3.46,.55,.1,black);w.sign(x,1.71,z-.94,3.32,.45,'DISPATCH   /   BAY '+String(dockIndex+2).padStart(2,'0'),'#b08837','#171b17');
+ }
  const parcel=new World(),empty=new World(),carry=new World();buildParcel(parcel,0,0,0,CONFIG.parcelWidth);buildHands(empty,false);buildHands(carry,true);
  const flashlight=new World();buildFlashlight(flashlight);
  buildDressing(w);buildDenseDressing(w);markRunLanes(w);
@@ -115,7 +117,8 @@ export function step(s,keys,blocks,dt,jump=false){
  s.zone=zone;
 }
 const parcelPos=(s,i)=>s.parked?.[i]??shiftParcel(s,i).pos;
-const dockTarget=()=>({pos:DOCK,id:'BAY 02',area:'Outbound dispatch',dock:true});
+const dockTarget=(i=0)=>({pos:DOCKS[i],id:'BAY '+String(i+2).padStart(2,'0'),area:'Outbound dispatch',dock:true,bay:i});
+const dockTargets=s=>DOCKS.map((_,i)=>dockTarget(i)).sort((a,b)=>Math.hypot(s.x-a.pos[0],s.z-a.pos[2])-Math.hypot(s.x-b.pos[0],s.z-b.pos[2]));
 const parcelHalf=[CONFIG.parcelWidth/2,CONFIG.parcelWidth*.88,CONFIG.parcelWidth*.41];
 function placementClear(s,pos,blocks){
  const [x,y,z]=pos,[w,h,d]=parcelHalf;
@@ -148,7 +151,7 @@ export function dropTarget(s,blocks){
 // Select the box under the crosshair, not merely the closest objective.
 export function handlingTarget(s,blocks){
  if(s.carried>=0){
-  const target=dockTarget();return canUse(s,target,blocks)?target:dropTarget(s,blocks);
+  return dockTargets(s).find(target=>canUse(s,target,blocks))??dropTarget(s,blocks);
  }
  let best=null,score=Infinity;
  for(let i=0;i<s.states.length;i++){
@@ -160,7 +163,7 @@ export function handlingTarget(s,blocks){
  return best??nextTarget(s);
 }
 export function nextTarget(s){
- if(s.carried>=0)return dockTarget();
+ if(s.carried>=0)return dockTargets(s)[0];
  let best=null,d=Infinity;for(let i=0;i<s.states.length;i++){if(s.states[i]!=='AVAILABLE')continue;const p={...shiftParcel(s,i),pos:parcelPos(s,i)};let dist=Math.hypot(s.x-p.pos[0],s.z-p.pos[2],(s.y-p.pos[1])*1.8);if(dist<d){best={...p,index:i};d=dist;}}
  return best;
 }
@@ -226,21 +229,21 @@ export function interact(s,target,blocks,locked=false){
   s.states[target.index]='AVAILABLE';s.carried=-1;
   s.noise={x:target.pos[0],y:target.pos[1],z:target.pos[2],radius:4.5,time:s.elapsed};s.horrorEvent={type:'drop',time:s.elapsed};return 'dropped';
  }
- if(target.dock&&s.carried>=0&&s.states[s.carried]==='CARRIED'){s.deliveryOrder??=s.states.flatMap((v,i)=>v==='DELIVERED'?[i]:[]);s.deliveryOrder.push(s.carried);s.states[s.carried]='DELIVERED';s.carried=-1;s.horrorEvent={type:'delivery',time:s.elapsed};s.noise={x:s.x,y:s.y+.5,z:s.z,radius:7,time:s.elapsed};return 'delivered';}
+ if(target.dock&&s.carried>=0&&s.states[s.carried]==='CARRIED'){s.deliveryOrder??=s.states.flatMap((v,i)=>v==='DELIVERED'?[i]:[]);(s.deliveryBays??={})[s.carried]=target.bay??0;s.deliveryOrder.push(s.carried);s.states[s.carried]='DELIVERED';s.carried=-1;s.horrorEvent={type:'delivery',time:s.elapsed};s.noise={x:s.x,y:s.y+.5,z:s.z,radius:7,time:s.elapsed};return 'delivered';}
  if(!target.dock&&s.carried===-1&&s.states[target.index]==='AVAILABLE'){s.carried=target.index;s.states[target.index]='CARRIED';beginSpecial(s,target.index);s.horrorEvent={type:'pickup',time:s.elapsed};s.noise={x:s.x,y:s.y+.5,z:s.z,radius:5,time:s.elapsed};return 'picked';}
  return null;
 }
-export function baySlot(n){return [DOCK[0]+((n%3)-1)*.65,DOCK[1]+Math.floor(n/6)*.484,DOCK[2]+(Math.floor((n%6)/3)-.5)*.60];}
+export function baySlot(n,bay=0){const dock=DOCKS[bay]??DOCK;return [dock[0]+((n%3)-1)*.65,dock[1]+Math.floor(n/6)*.484,dock[2]+(Math.floor((n%6)/3)-.5)*.60];}
+export function nextBaySlot(s,bay=0){const n=(s.deliveryOrder??s.states.flatMap((v,i)=>v==='DELIVERED'?[i]:[])).filter(i=>(s.deliveryBays?.[i]??0)===bay).length;return baySlot(s.states.length>30?n%24:n,bay);}
 export function parcelPositions(s,hidden=-1,visual=false){
  const order=s.deliveryOrder??s.states.flatMap((v,i)=>v==='DELIVERED'?[i]:[]);
- const offset=s.states.length>30?Math.max(0,Math.floor((order.length-1)/24)*24):0;
- const slots=new Map(order.slice(offset).map((i,n)=>[i,n]));
+ const slots=new Map();for(let bay=0;bay<DOCKS.length;bay++){const list=order.filter(i=>(s.deliveryBays?.[i]??0)===bay);const offset=s.states.length>30?Math.max(0,Math.floor((list.length-1)/24)*24):0;list.slice(offset).forEach((i,n)=>slots.set(i,[n,bay]));}
  return s.states.flatMap((p,i)=>{
   if(i===hidden)return [];
   if(p==='AVAILABLE'){
    const pos=parcelPos(s,i),code=visual?cargoGlowCode(s.cargo?.[i]?.special):0;
    return [code?[pos[0],pos[1],pos[2],code]:pos];
   }
-  return p==='DELIVERED'&&slots.has(i)?[baySlot(slots.get(i))]:[];
+  return p==='DELIVERED'&&slots.has(i)?[baySlot(...slots.get(i))]:[];
  });
 }
