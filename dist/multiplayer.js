@@ -21,7 +21,9 @@ export class CoopClient{
   if(data.token)this.token=data.token;
   if(!data.snapshot)return;
   if(this.snapshot?.room===data.snapshot.room&&Number.isFinite(data.snapshot.serverTime)&&data.snapshot.serverTime<(this.snapshot.serverTime??0))return;
-  this.snapshot=data.snapshot;this.room=data.snapshot.room;
+  const prev=this.snapshot,next=data.snapshot;
+  if(prev?.room===next.room&&prev.phase===next.phase&&prev.cargo?.length===next.cargo?.length&&JSON.stringify(prev.cargo)===JSON.stringify(next.cargo))next.cargo=prev.cargo;
+  this.snapshot=next;this.room=next.room;
   const now=data.snapshot.netReceived??performance.now(),seen=new Set();
   for(const p of data.snapshot.players??[]){if(p.id===data.snapshot.you||p.failed||p.hidden)continue;seen.add(p.id);this.remoteTracks.set(p.id,appendRemote(this.remoteTracks.get(p.id),p,data.snapshot.netSample,now,data.snapshot.serverTime));}
   for(const id of this.remoteTracks.keys())if(!seen.has(id))this.remoteTracks.delete(id);

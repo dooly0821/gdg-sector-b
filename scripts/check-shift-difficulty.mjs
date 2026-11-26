@@ -12,26 +12,26 @@ for(const pool of COOP_POOLS)for(const {pos:[x,y,z]} of pool){
  assert.ok(!LOCKERS.some(l=>Math.abs(l.x-x)<1.65&&z>l.z-3&&z<l.z+1.25),'locker approach');
  assert.ok(!RUN_LANES.some(({a,b,width})=>x>Math.min(a[0],b[0])-width/2-.5&&x<Math.max(a[0],b[0])+width/2+.5&&z>Math.min(a[1],b[1])-width/2-.5&&z<Math.max(a[1],b[1])+width/2+.5),'run lane');
 }
-for(const n of [2,3,4]){
+for(const n of [2,3,4])for(const level of (n===4?['easy','normal','hard','hell']:['hard'])){
  const t=100000,{room,player}=createRoom('TEST'+n,t),players=[player];
  for(let i=1;i<n;i++){const r=operateRoom(room,{op:'join'},t+i);players.push(Object.values(room.players).find(p=>p.token===r.token));}
  assert.throws(()=>operateRoom(room,{op:'difficulty',token:players[1].token,level:'hard'},t+5),e=>e.status===403);
- operateRoom(room,{op:'difficulty',token:player.token,level:'hard'},t+6);
+ operateRoom(room,{op:'difficulty',token:player.token,level},t+6);
  assert.equal(snapshot(room,player).quota,cargoQuota(n));
- assert.equal(snapshot(room,player).difficulty.level,n===4?'hell':'hard');
+ assert.equal(snapshot(room,player).difficulty.level,level);
  operateRoom(room,{op:'start',token:player.token},t+10);
- const q=room.shared;assert.equal(q.states.length,cargoQuota(n));assert.equal(q.cargo.length,q.states.length);assert.equal(q.cargo.filter(p=>p.special).length,n===2?12:n===3?16:24);assert.equal(new Set(q.cargo.map(p=>p.pos.join(','))).size,q.cargo.length);
+ const q=room.shared;assert.equal(q.states.length,cargoQuota(n));assert.equal(q.cargo.length,q.states.length);assert.equal(q.cargo.filter(p=>p.special).length,Math.round(cargoQuota(n)*({easy:.20,normal:.267,hard:.32,hell:.36}[level])/4)*4);assert.equal(new Set(q.cargo.map(p=>p.pos.join(','))).size,q.cargo.length);
  assert.equal(new Set(q.cargo.map(p=>p.id)).size,q.cargo.length);
  for(let i=0;i<n;i++)operateRoom(room,{op:'ready',token:players[i].token},t+11+i);
  assert.equal(room.phase,'playing');
  assert.throws(()=>operateRoom(room,{op:'difficulty',token:player.token,level:'easy'},t+20),e=>e.status===409);
  q.hauntDirector.delay=1e6;q.states.fill('DELIVERED');q.states[q.states.length-1]='AVAILABLE';q.deliveryOrder=Array.from({length:q.states.length-1},(_,i)=>i);
  assert.ok(parcelPositions(q).length<=25);
- players[1].state.failed=true;tickRoom(room,t+60);assert.equal(room.phase,'playing');assert.equal(snapshot(room,player).quota,cargoQuota(n));assert.equal(snapshot(room,player).difficulty.level,n===4?'hell':'hard');
+ players[1].state.failed=true;tickRoom(room,t+60);assert.equal(room.phase,'playing');assert.equal(snapshot(room,player).quota,cargoQuota(n));assert.equal(snapshot(room,player).difficulty.level,level);
  q.states.fill('DELIVERED');tickRoom(room,t+90);assert.equal(room.phase,'complete');assert.equal(JSON.parse(serializeRoom(room)).shared.states.length,cargoQuota(n));
 }
 for(const l of ['easy','normal','hard','hell']){const s=newShift(()=>.42,l);assert.equal(s.difficultyLevel,l);assert.equal(missionTotal(s),30);}
 assert.ok(teamDifficulty(1,'easy').speed<teamDifficulty(1,'normal').speed);assert.ok(teamDifficulty(1,'hard').speed<teamDifficulty(1,'hell').speed);
-assert.equal(teamDifficulty(4,'easy').level,'hell');assert.equal(teamDifficulty(1,'hell',4).level,'hell');
+assert.equal(teamDifficulty(4,'easy').level,'easy');assert.equal(teamDifficulty(1,'hell',4).level,'hell');
 for(const total of [40,50,70])for(let i=0;i<12;i++){const c=randomCargo(Math.random,total,'hell');assert.equal(c.length,total);assert.equal(new Set(c.map(p=>p.pos.join(','))).size,total);}
 console.log('PASS: 30/40/50/70 cargo, floor positions, authority, fixed quota, difficulty locks, dispatch capacity, completion');

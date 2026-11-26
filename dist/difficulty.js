@@ -6,7 +6,7 @@ export const DIFFICULTIES=Object.freeze({
  hell:{label:'헬 / HELL',speed:1.14,range:1.24,hearing:1.25,interval:.65,memory:4,event:.65,special:.36,description:'극한 추격 · 높은 감지 · 잦은 정전'}
 });
 export const normalizeDifficulty=value=>typeof value==='string'&&Object.hasOwn(DIFFICULTIES,value)?value:'normal';
-export const effectiveDifficulty=(value,startCount=1)=>startCount>=4?'hell':normalizeDifficulty(value);
+export const effectiveDifficulty=(value,startCount=1)=>normalizeDifficulty(value);
 export const cargoQuota=count=>[30,40,50,70][Math.max(1,Math.min(4,Math.trunc(count)||1))-1];
 export const missionTotal=s=>s?.cargo?.length??30;
 export const difficultyLabel=value=>DIFFICULTIES[normalizeDifficulty(value)].label;

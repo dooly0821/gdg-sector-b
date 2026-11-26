@@ -25,7 +25,7 @@ export function resultMarkup(s,won,alive=1){
  return '<p>'+(won?'이번 야간 근무가 종료되었습니다.':'근무 중 작업자 신호가 소실되었습니다.')+'</p><div class="shift-result-grid"><div class="shift-result-rows">'+rows.map(([id,label,value])=>'<div class="shift-result-row">'+art('result-'+id)+'<span>'+label+'</span><b>'+value+'</b></div>').join('')+'</div><div class="shift-result-stamp">'+(won?art('result-stamp'):'<strong class="failed-stamp">근무 실패</strong>')+'</div></div>';
 }
 export function teamGoals(count){
- return '<div class="team-goals"><b>팀 목표</b>'+[[2,40],[3,50],[4,70]].map(([n,q])=>'<span class="'+(n===count?'current':'')+'">'+n+'인 <strong>'+q+'개</strong>'+(n===4?' · HELL':'')+'</span>').join('')+'</div>';
+ return '<div class="team-goals"><b>팀 목표</b>'+[[2,40],[3,50],[4,70]].map(([n,q])=>'<span class="'+(n===count?'current':'')+'">'+n+'인 <strong>'+q+'개</strong>'+'</span>').join('')+'</div>';
 }
 export function mapLegendArt(){
  return '<aside class="facility-legend"><h3>범례</h3>'+[['player','플레이어','흰색 화살표 · 팀원은 색상별 구분'],['box','화물','노란 사각형 · 미배송 상자'],['hide','은신함','벽면의 철제 사물함'],['dock','출고대 02','하늘색 사각형 · 배송 목표 지점'],['special','특수 화물','마름모 · 유형별 색상 표시']].map(([id,label,detail])=>'<div class="legend-item">'+art('map-'+id)+'<div><b>'+label+'</b><small>'+detail+'</small></div></div>').join('')+'<div class="legend-colors">'+Object.values(CARGO_UI).map(v=>'<span style="--cargo-color:'+v.color+'"><i></i>'+v.label+'</span>').join('')+'</div><p>△ 높은 위치 · ┄ 가속 통로 · 청회색 엄폐 지점</p></aside>';

@@ -303,7 +303,7 @@ export class Renderer{
   gl.activeTexture(gl.TEXTURE3);gl.bindTexture(gl.TEXTURE_2D,this.floorTex);gl.uniform1i(u.skinBase,3);
   gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,this.floorTex);gl.uniform1i(u.skinEmission,4);gl.activeTexture(gl.TEXTURE0);
   const planes=[];for(let i=0;i<3;i++)for(let s of [-1,1]){let pl=[0,1,2,3].map(j=>vp[4*j+3]+s*vp[4*j+i]);planes.push(pl.map(v=>v/Math.hypot(...pl.slice(0,3))));}
-  for(const b of this.groups[0])if(planes.every(p=>dot(p.slice(0,3),b.center)+p[3]>-b.radius))this.draw(b);
+  for(const b of this.groups[0])if(planes.every(p=>p[0]*b.center[0]+p[1]*b.center[1]+p[2]*b.center[2]+p[3]>-b.radius))this.draw(b);
   for(const xyz of items){if(!planes.every(p=>p[0]*xyz[0]+p[1]*(xyz[1]+.24)+p[2]*xyz[2]+p[3]>-.65))continue;setGlow(xyz[3]??0,xyz[3]?(xyz[0]-eye[0])**2+(xyz[1]+.24-eye[1])**2+(xyz[2]-eye[2])**2:0);gl.uniform3f(u.offset,xyz[0],xyz[1],xyz[2]);for(const b of this.groups[1])this.draw(b);}
   setGlow();
   if(pose.actors?.length){
