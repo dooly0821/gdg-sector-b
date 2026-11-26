@@ -6,6 +6,14 @@ import {nudgeCoopPosition} from './movement.js';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),finite=(v,d=0)=>Number.isFinite(v)?v:d,blend=(a,b,t)=>a+(b-a)*t;
 export function sampleTiming(snap,sent,received){const rtt=Math.max(0,received-sent);if(![snap.serverReceived,snap.serverSent,snap.serverTime].every(Number.isFinite))return {sample:received-Math.min(rtt*.5,500),rtt};const processing=clamp(snap.serverSent-snap.serverReceived,0,rtt),transit=(rtt-processing)*.5,age=clamp(snap.serverSent-snap.serverTime+clamp(finite(snap.simLagMs),0,350),0,1300);return {sample:received-clamp(transit+age,0,1200),rtt};}
 export function pollDelay({rtt=120,players=2,collided=false,contention=0,dirty=false,playing=true,spectating=false,gap=0,random=Math.random()}){if(!playing)return 850+random*80;if(collided)return Math.min(220,35+24*contention)+random*45;if(spectating)return clamp(260-rtt,45,210)+random*22;const pressure=players>2&&gap>250?Math.min(65,(gap-250)*.18):0,target=(players>2?145:120)+pressure;return dirty?Math.max(12,30-rtt)+random*5:clamp(target-rtt,16,100)+random*18;}
+// A leave can collide with another player's lifecycle lock. Retain the old
+// credentials until acknowledged; 401/404 mean the membership no longer exists.
+export async function retryLeave(request,room,token,pause=ms=>new Promise(r=>setTimeout(r,ms))){
+ if(!room||!token)return true;
+ for(let i=0;i<6;i++){try{await request('leave',{room,token});return true;}catch(e){if(e.status===401||e.status===404)return true;if(e.status&&![408,423,429,500,502,503,504].includes(e.status))return false;if(i<5)await pause(90+i*120);}}
+ return false;
+}
+export const retryableAction=e=>!e?.status||[408,423,429,500,502,503,504].includes(e.status);
 export class CoopClient{
  constructor(onState,onError,input){this.onState=onState;this.onError=onError;this.input=input;this.room=null;this.token=null;this.snapshot=null;this.seq=0;this.inputSeq=0;this.queue=[];this.running=false;this.busy=false;this.peers=new Map();this.remoteTracks=new Map();}
  async request(op,extra={}){
@@ -24,7 +32,7 @@ export class CoopClient{
   if(this.snapshot?.room===data.snapshot.room&&Number.isFinite(data.snapshot.serverTime)&&data.snapshot.serverTime<(this.snapshot.serverTime??0))return;
   const prev=this.snapshot,next=data.snapshot;
   if(prev?.room===next.room&&Number.isFinite(next.inputAck)&&Number.isFinite(prev.inputAck)&&next.inputAck<prev.inputAck)return;
-  if(prev?.room===next.room&&prev.phase===next.phase){for(const k of ['states','parked','deliveryOrder','deliveryBays','lockers'])if(prev[k]&&next[k]&&JSON.stringify(prev[k])===JSON.stringify(next[k]))next[k]=prev[k];}
+  if(prev?.room===next.room&&prev.phase===next.phase){for(const k of ['states','parked','deliveryOrder','deliveryBays','lockers','powerZones','signals'])if(prev[k]&&next[k]&&JSON.stringify(prev[k])===JSON.stringify(next[k]))next[k]=prev[k];}
   if(prev?.room===next.room&&prev.phase===next.phase&&prev.cargo?.length===next.cargo?.length&&JSON.stringify(prev.cargo)===JSON.stringify(next.cargo))next.cargo=prev.cargo;
   this.snapshot=next;this.room=next.room;
   if(prev?.room===next.room&&Number.isFinite(next.netReceived)&&Number.isFinite(prev.netReceived))this.snapshotGap=Math.max(0,next.netReceived-prev.netReceived);
@@ -43,7 +51,7 @@ export class CoopClient{
   if(!this.running)return;
   // Serialize start/ready with an in-flight sync rather than racing server state.
   if(this.busy){this.pendingAction={op,extra};return;}
-  this.busy=true;try{const data=await this.request(op,extra);if(this.running)this.accept(data);}catch(e){if(e.status===423)this.pendingAction={op,extra};else this.onError?.(e);}finally{this.busy=false;}
+  this.busy=true;try{const data=await this.request(op,extra);if(this.running)this.accept(data);}catch(e){if(retryableAction(e))this.pendingAction={op,extra};else this.onError?.(e);}finally{this.busy=false;}
  }
  inputChanged(){if(!this.running||this.snapshot?.phase!=='playing')return;this.dirty=true;if(!this.busy&&this.runPoll){clearTimeout(this.timer);this.timer=setTimeout(this.runPoll,Math.max(0,30-(performance.now()-(this.lastRequestAt??0))));}}
  command(type){if(this.running&&this.snapshot?.phase==='playing'&&this.queue.length<64){this.queue.push({seq:++this.seq,type});this.inputChanged();}}
@@ -60,7 +68,7 @@ export class CoopClient{
      const data=await this.request(pending?.op||'sync',pending?pending.extra:{input,inputSeq:++this.inputSeq,commands:this.queue.slice(0,16)});
      if(this.running){this.accept(data);this.failures=0;this.authFailures=0;this.connectionState='connected';this.contention=Math.max(0,(this.contention??0)-1);}
     }catch(e){
-     if(this.running&&e.status!==423){this.dirty=true;this.failures=(this.failures??0)+1;this.connectionState='recovering';if(pending)this.pendingAction=pending;this.authFailures=(e.status===401||e.status===404)?(this.authFailures??0)+1:0;if(this.authFailures>=3){this.connectionState='expired';this.running=false;this.onError?.(new Error('방 연결이 만료되었습니다. 메인 메뉴에서 다시 참가하세요.'));return;}if(this.failures===3)this.onError?.(new Error('서버 연결 복구 중 · 잠시 안전한 위치에서 대기하세요.'));}
+     if(this.running&&e.status!==423){this.dirty=true;this.failures=(this.failures??0)+1;this.connectionState='recovering';if(pending&&retryableAction(e))this.pendingAction=pending;this.authFailures=(e.status===401||e.status===404)?(this.authFailures??0)+1:0;if(this.authFailures>=3){this.connectionState='expired';this.running=false;this.onError?.(new Error('방 연결이 만료되었습니다. 메인 메뉴에서 다시 참가하세요.'));return;}if(this.failures===3)this.onError?.(new Error('서버 연결 복구 중 · 잠시 안전한 위치에서 대기하세요.'));}
      else if(this.running){collided=true;this.contention=Math.min(5,(this.contention??0)+1);if(pending)this.pendingAction=pending;}
     }finally{this.busy=false;}
    }
@@ -71,7 +79,7 @@ export class CoopClient{
    }
   };this.runPoll=run;this.timer=setTimeout(run,70+Math.random()*70);
  }
- async leave(){const room=this.room,token=this.token;this.running=false;clearTimeout(this.timer);this.room=this.token=null;this.snapshot=null;this.pendingAction=null;this.runPoll=null;this.peers.clear();this.remoteTracks.clear();try{if(room&&token)await this.request('leave',{room,token});}catch{}}
+ async leave(){const room=this.room,token=this.token;this.running=false;clearTimeout(this.timer);this.room=this.token=null;this.snapshot=null;this.pendingAction=null;this.runPoll=null;this.peers.clear();this.remoteTracks.clear();return retryLeave(this.request.bind(this),room,token);}
 }
 export function peerLayers(client,s,dt,group,focusId=null){
  if(!client?.snapshot)return [];
@@ -132,7 +140,7 @@ export function applyCoopSnapshot(s,snap,first=false){
  if(hard){
   for(const k of ['x','y','z','vx','vy','vz','grounded','bodyHeight','steps','vault','onRail'])s[k]=v[k]??(k==='vault'?null:s[k]);
   s.netHistory=[];s.netAppliedX=s.netAppliedZ=0;s.netCorrection=[0,0];s.netMismatchAt=null;s.netDivergenceSince=null;s.netBlockedSince=null;s.netFloorSince=null;s.netHardCorrections=(s.netHardCorrections??0)+(first||revived||v.failed||hidden!==oldHidden?0:1);
- }else if(!s.vault&&!v.vault&&!!s.grounded===!!v.grounded&&!hidden&&(history||sampleAge<260)){
+ }else if(!s.vault&&!v.vault&&!!s.grounded===!!v.grounded&&!hidden&&(history||sampleAge<260)&&sampleAge<350&&finite(snap.netRtt)<650&&finite(snap.simLagMs)<150){
   const dead=.07+Math.min(.24,finite(snap.netRtt)*.00035+finite(snap.simLagMs)*.0005),amount=Math.max(0,err-dead),weight=err>0?Math.min(s.grounded?3.2:1.1,amount)/err:0;
   s.netCorrection=[dx*weight,dz*weight];
  }else s.netCorrection=[0,0];

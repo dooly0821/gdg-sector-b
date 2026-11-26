@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {createRoom,operateRoom,snapshot,serializeRoom} from '../server/room-core.js';
 import {createSyncEngine} from '../server/room-sync.js';
-import {applyCoopSnapshot,recordCoopPrediction,advanceCoopPrediction,CoopClient} from '../dist/multiplayer.js';
+import {applyCoopSnapshot,recordCoopPrediction,advanceCoopPrediction,CoopClient,retryLeave,retryableAction} from '../dist/multiplayer.js';
 import {roomConnectionTimeout} from '../dist/public-servers.js';
 for(const count of [2,3,4]){
  let now=100000;const {room,player}=createRoom('MAT234',now);const tokens=[player.token];
@@ -32,3 +32,12 @@ for(const count of [2,3,4]){
  console.log('PASS '+count+' players: irregular sync, shared state, stale inputs, 40s reconnect, high-speed rollback guard');
 }
 assert.equal(roomConnectionTimeout('playing'),90000);
+
+// Live QA reproduced a ghost membership after a simultaneous leave. Also
+// never drag the local worker towards a high-latency, stale position sample.
+let attempts=0;assert(await retryLeave(async(op,{room,token})=>{assert.equal(room,'GDGS24');assert.equal(token,'qa');if(++attempts<3)throw Object.assign(Error('locked'),{status:423});},'GDGS24','qa',async()=>{}));assert.equal(attempts,3);
+assert(await retryLeave(async()=>{throw Object.assign(Error('already left'),{status:401});},'GDGS24','qa',async()=>{}));
+assert(!retryableAction({status:409}));assert(retryableAction({status:423}));
+const delayed={x:10,y:0,z:0,vx:7,vz:0,grounded:true,bodyHeight:1.7,steps:0,elapsed:0};
+recordCoopPrediction(delayed,1000);applyCoopSnapshot(delayed,{self:{...delayed,x:1},players:[{id:'a'}],you:'a',netSample:1000,netReceived:1500,netRtt:900,simLagMs:250,haunt:[]});assert.deepEqual(delayed.netCorrection,[0,0]);
+console.log('PASS live recovery: contended leave retries, terminal lifecycle failures, stale soft-correction suppression');
