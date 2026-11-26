@@ -179,13 +179,14 @@ function lineClear(s,target,eye,p,blocks,others=[]){
  return true;
 }
 function pickupContact(s,target,blocks,locked=false){
- if(!target||s.failed||s.vault||s.carried>=0||s.states[target.index]!=='AVAILABLE')return null;
+ if(!target||s.failed||s.carried>=0||s.states[target.index]!=='AVAILABLE')return null;
  const eye=useEye(s),f=forward(s),[x,y,z]=target.pos,[w,h,d]=parcelHalf;
- const box=cargoBox(target.pos),limit=locked?2.02:1.80;
+ const moving=Math.hypot(s.vx??0,s.vz??0)>3||!s.grounded||!!s.vault;
+ const box=cargoBox(target.pos),limit=locked?2.65:moving?2.42:2.05;
  const nearest=[Math.max(x-w,Math.min(x+w,eye[0])),Math.max(y,Math.min(y+h,eye[1])),Math.max(z-d,Math.min(z+d,eye[2]))];
  if(Math.hypot(...vsub(nearest,eye))>limit)return null;
- const nearby=blocks.filter(b=>b[2]>=eye[0]-2.2&&b[0]<=eye[0]+2.2&&b[3]>=eye[2]-2.2&&b[1]<=eye[2]+2.2);
- const others=parcelPositions(s,target.index).map(cargoBox).filter(b=>b[2]>=eye[0]-2.2&&b[0]<=eye[0]+2.2&&b[3]>=eye[2]-2.2&&b[1]<=eye[2]+2.2);
+ const nearby=blocks.filter(b=>b[2]>=eye[0]-2.8&&b[0]<=eye[0]+2.8&&b[3]>=eye[2]-2.8&&b[1]<=eye[2]+2.8);
+ const others=parcelPositions(s,target.index).map(cargoBox).filter(b=>b[2]>=eye[0]-2.8&&b[0]<=eye[0]+2.8&&b[3]>=eye[2]-2.8&&b[1]<=eye[2]+2.8);
  const end=eye.map((v,i)=>v+f[i]*limit),t=traceBox(eye,end,box);
  const direct=t<=1?eye.map((v,i)=>v+(end[i]-v)*t):null;
  // Real visible surfaces: center, front/back, edges and upper/lower faces.
@@ -194,7 +195,7 @@ function pickupContact(s,target,blocks,locked=false){
  let best=null;
  for(const p of points){
   const v=vsub(p,eye),dist=Math.hypot(...v),alignment=dot(unit(v),f);
-  if(dist>limit||(!locked&&alignment<.78))continue;
+  if(dist>limit||(!locked&&alignment<(moving?.48:.64)))continue;
   if(!lineClear(s,target,eye,p,nearby,others))continue;
   const score=dist*.13+(1-alignment)*5-(p===direct?2:0);
   if(!best||score<best.score)best={point:p,score};
@@ -203,7 +204,8 @@ function pickupContact(s,target,blocks,locked=false){
  return best;
 }
 export function canUse(s,target,blocks=[],locked=false){
- if(!target||s.vault||s.failed)return false;
+ if(!target||s.failed)return false;
+ if(s.vault&&(target.drop||target.dock))return false;
  if(!target.dock&&!target.drop)return !!pickupContact(s,target,blocks,locked);
  if(target.drop&&(!s.grounded||s.carried!==target.index||!placementClear(s,target.pos,blocks)))return false;
  if(target.dock&&s.carried<0)return false;

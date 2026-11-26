@@ -58,7 +58,7 @@ export function advanceHandling(s,blocks,dt){
  }
  if(!a.result&&!canUse(s,a.target,blocks,true)){s.handAction=null;return 'cancelled';}
  a.time+=dt;
- const contact=a.duration*(a.placing?.72:.30);
+ const contact=a.duration*(a.placing?.72:.17);
  if(!a.result&&a.time>=contact)a.result=interact(s,a.target,blocks,true);
  if(a.time<a.duration)return null;
  s.handAction=null;

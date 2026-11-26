@@ -61,20 +61,23 @@ function canStart(room,now){
  }
 }
 function syncShared(room,p){const s=p.state,q=room.shared;if(s.lockerRevision!==q.lockerRevision)q.lockerRevision=s.lockerRevision;if(s.horrorEvent&&s.horrorEvent!==q.horrorEvent)q.horrorEvent=s.horrorEvent;}
-export const REVIVE_SECONDS=3,REVIVE_RANGE=2.2;
-function reviveTarget(room,p){const s=p.state;if(s.failed||closedLocker(s)||s.handAction||s.vault)return null;
+import {REVIVE_SECONDS,REVIVE_RANGE,findReviveTarget} from '../dist/revive.js';
+export {REVIVE_SECONDS,REVIVE_RANGE};
+function reviveTarget(room,p){const s=p.state;if(s.failed||closedLocker(s))return null;
  const blocks=nearbyBlocks(world().blocks,s.x,s.z).concat(lockerDoorBlocks(s));
- return Object.values(room.players).filter(a=>a.state.failed&&Math.abs(a.state.y-s.y)<1.2&&Math.hypot(a.state.x-s.x,a.state.z-s.z)<=REVIVE_RANGE&&!blocks.some(b=>traceBox([s.x,s.y+1,s.z],[a.state.x,a.state.y+.5,a.state.z],b)<.99)).sort((a,b)=>Math.hypot(a.state.x-s.x,a.state.z-s.z)-Math.hypot(b.state.x-s.x,b.state.z-s.z))[0]??null;
+ const players=Object.values(room.players).map(a=>({...a.state,id:a.id}));const target=findReviveTarget(s,players,blocks,p.id,p.reviveTarget);return target?room.players[target.id]:null;
 }
 function tickRevives(room,active,now,dt){
  const claimed=new Set();
- for(const p of active){const s=p.state,t=p.input.keys.includes('KeyE')&&now-(p.lastInputAt??now)<=650?reviveTarget(room,p):null;
+ for(const p of active){const s=p.state,age=now-(p.lastInputAt??now),held=p.input.keys.includes('KeyE')||!!p.reviveHeld;const t=held&&age<=1100?reviveTarget(room,p):null;
   if(!t||claimed.has(t.id)){p.reviveTarget=null;p.reviveProgress=0;continue;}claimed.add(t.id);
+  if(s.handAction&&!s.handAction.result){s.handAction=null;s.pendingUse=null;if(s.restoreTorch){s.flashlight=true;s.restoreTorch=false;}}
+  if(age>650)continue;
   if(p.reviveTarget!==t.id){p.reviveTarget=t.id;p.reviveProgress=0;}
   p.reviveProgress=(p.reviveProgress??0)+dt;
   if(p.reviveProgress+1e-8>=REVIVE_SECONDS){
    Object.assign(t.state,{failed:false,capturedBy:null,handAction:null,pendingUse:null,vault:null,vx:0,vy:0,vz:0,jumpBuffer:0,hitProtectedUntil:room.shared.elapsed+3});
-   t.input.keys=[];t.jump=false;t.reviveProgress=0;t.reviveTarget=null;p.reviveProgress=0;p.reviveTarget=null;
+   t.input.keys=[];t.reviveHeld=false;t.jump=false;t.reviveProgress=0;t.reviveTarget=null;p.reviveProgress=0;p.reviveTarget=null;
    pushEvent(room,{type:'revive',player:t.id,by:p.id});
   }
  }
@@ -87,7 +90,8 @@ function command(room,p,cmd){
  const staticBlocks=world().blocks,blocks=staticBlocks.concat(lockerDoorBlocks(s));
  if(cmd.type==='jump')p.jump=true;
  if(cmd.type==='torch'){if(!s.handAction)toggleFlashlight(s);}
- if(cmd.type==='use'&&!s.handAction&&!s.pendingUse&&!reviveTarget(room,p)){
+ if(cmd.type==='use'&&reviveTarget(room,p)){p.reviveHeld=p.input.keys.includes('KeyE');if(s.handAction&&!s.handAction.result){s.handAction=null;s.pendingUse=null;}}
+ else if(cmd.type==='use'&&!s.handAction&&!s.pendingUse){
   const l=lockerTarget(s,staticBlocks);
   if(l&&s.carried<0){
    const other=live(room).some(a=>a!==p&&insideLocker(a.state,l));
@@ -130,7 +134,7 @@ export function tickRoom(room,now=Date.now()){
   updateHaunt(q,blocks,forward(anchor),dt);
   for(const e of q.hauntSounds)pushEvent(room,{type:'haunt',...e});
   delete q.teamPlayers;
-  for(const p of active){if(p.state.failed){p.reviveProgress=0;p.reviveTarget=null;p.input.keys=[];p.jump=false;dropOwned(room,p);pushEvent(room,{type:'capture',player:p.id,kind:p.state.capturedBy});}detach(p);}
+  for(const p of active){if(p.state.failed){p.reviveProgress=0;p.reviveTarget=null;p.input.keys=[];p.reviveHeld=false;p.jump=false;dropOwned(room,p);pushEvent(room,{type:'capture',player:p.id,kind:p.state.capturedBy});}detach(p);}
   if(q.states.every(v=>v==='DELIVERED')){room.phase='complete';break;}
  }
  if(!live(room).length&&room.phase==='playing')room.phase='failed';
@@ -158,6 +162,7 @@ export function operateRoom(room,body,now=Date.now()){
  else if(op==='sync'){
   if(room.phase==='playing'&&!p.state.failed){
    const input=body.input??{};const gap=now-(p.lastInputAt??now);p.lastInputAt=now;if(gap>500)p.state.hitProtectedUntil=Math.max(p.state.hitProtectedUntil??0,room.shared.elapsed+.55);p.input={keys:Array.isArray(input.keys)?[...new Set(input.keys.filter(k=>keysAllowed.has(k)))].slice(0,9):[],yaw:clamp(finite(input.yaw,p.input.yaw),-1e4,1e4),pitch:clamp(finite(input.pitch,p.input.pitch),-1.3,1.3)};
+   p.reviveHeld=p.input.keys.includes('KeyE');p.state.yaw=p.input.yaw;p.state.pitch=p.input.pitch;
    for(const cmd of (Array.isArray(body.commands)?body.commands.slice(0,16):[]))command(room,p,cmd);
   }
  }else if(op!=='start'&&op!=='ready')throw new RoomError('잘못된 명령입니다.');
