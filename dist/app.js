@@ -1,3 +1,4 @@
+import {cargoGuide,anomalyGuide,resultMarkup,teamGoals,mapLegendArt} from './shift-ui.js';
 import {DIFFICULTIES,normalizeDifficulty,difficultyLabel,missionTotal,cargoQuota} from './difficulty.js';
 import {mapMarkup,mapMarkers} from './facility-map.js';
 import {tickShiftEvents,eventLighting,specialLabel} from './shift-events.js';
@@ -36,7 +37,7 @@ const rows=[['W A S D','이동'],['MOUSE','시점 회전'],['SHIFT','달리기']
 const links='<a class="doc" href="characters.html" target="_blank" rel="noopener">캐릭터 검수실 ↗</a><div class="panel-actions"><a class="doc" href="unity-migration.html" target="_blank" rel="noopener">Unity 이식 가이드 ↗</a></div>';
 function action(name,label,primary=false){return '<button class="'+(primary?'primary':'secondary')+'" data-action="'+name+'">'+label+'</button>';}
 const emptyMapBlocks=[];
-function plan(){return mapMarkup(worlds?.[0]?.blocks??emptyMapBlocks,session,coop?.snapshot?.players??[],coop?.snapshot?.you);}
+function plan(){worlds??=createScene();return mapMarkup(worlds[0].blocks,session,coop?.snapshot?.players??[],coop?.snapshot?.you);}
 function mapMarkersNow(){return mapMarkers(session,coop?.snapshot?.players??[],coop?.snapshot?.you);}
 function coopInput(){const s=session??{};return {keys:mode==='game'&&!s.failed?[...keys]:[],yaw:s.yaw??0,pitch:s.pitch??0};}
 function stopServerList(){clearTimeout(coopListTimer);coopListGeneration++;coopListBusy=false;}
@@ -74,11 +75,11 @@ async function refreshServers(){
  finally{if(generation===coopListGeneration){coopListBusy=false;if(pane==='coop'&&!coop&&!coopBusy)coopListTimer=setTimeout(refreshServers,5000);}}
 }
 function difficultyChoices(level,mode,locked=false){
- return '<div class="difficulty-options">'+Object.entries(DIFFICULTIES).map(([id,p])=>'<button class="difficulty-choice '+(id===level?'selected':'')+'" data-action="'+mode+'-difficulty-'+id+'" aria-pressed="'+(id===level)+'" '+(locked?'disabled':'')+'><b>'+p.label+'</b><small>'+p.description+'</small></button>').join('')+'</div>';
+ return '<div class="difficulty-options">'+Object.entries(DIFFICULTIES).map(([id,p])=>'<button class="difficulty-choice '+(id===level?'selected':'')+'" data-level="'+id+'" data-action="'+mode+'-difficulty-'+id+'" aria-pressed="'+(id===level)+'" '+(locked?'disabled':'')+'><b>'+p.label+'</b><small>'+p.description+'</small></button>').join('')+'</div>';
 }
 function soloDifficulty(){
  const continuing=session&&!session.failed&&deliveryCount(session)<missionTotal(session);
- panel('difficulty','<p>싱글 배송 목표 30개 · 근무 난이도를 선택하세요.</p>'+difficultyChoices(settings.difficulty,'solo')+'<div class="panel-actions">'+action('solo-confirm','새 근무 시작',true)+(continuing?action('solo-continue','이전 근무 이어서'):'')+action('back','뒤로')+'</div>','근무 난이도','GDG / SOLO SHIFT');
+ panel('difficulty','<p>싱글 배송 목표 30개 · 근무 난이도를 선택하세요.</p>'+difficultyChoices(settings.difficulty,'solo')+'<div class="shift-guide-links">'+action('cargo','특수 화물 안내')+action('anomalies','이상 현상 안내')+'</div><div class="panel-actions">'+action('solo-confirm','새 근무 시작',true)+(continuing?action('solo-continue','이전 근무 이어서'):'')+action('back','뒤로')+'</div>','근무 난이도','GDG / SOLO SHIFT');
 }
 function coopLobby(){
  stopServerList();
@@ -88,7 +89,7 @@ function coopLobby(){
   refreshServers();
  }else{
   const isHost=snap.host===snap.you,roster='<section class="gdg-section coop-lobby-roster"><h3>현재 팀 정보</h3>'+coopSlots(snap.players.length,snap.players,snap.you,snap.host)+'</section>';
-  panel('coop','<div class="coop-code">'+serverName(snap.room)+'</div><p>접속 작업자 '+snap.players.length+' / 4</p>'+roster+'<section class="gdg-section"><h3>근무 난이도 · 화물 '+(snap.quota??cargoQuota(snap.players.length))+'개</h3>'+difficultyChoices(isHost&&snap.players.length<4?coop.chosenDifficulty??snap.difficulty?.level??'normal':snap.difficulty?.level??'normal','coop',!isHost||snap.players.length>=4)+'<small>'+(snap.players.length>=4?'4인 근무는 헬 난이도 고정':isHost?'방장이 난이도를 선택합니다.':'방장이 난이도를 선택 중입니다.')+'</small></section>'+note+'<div class="panel-actions">'+(isHost?'<button class="primary" data-action="coop-start" '+(snap.players.length<2?'disabled':'')+'>협동 근무 시작</button>':'')+action('coop-leave','서버 목록으로')+'</div>','협동 대기실','GDG / ONLINE SHIFT');
+  panel('coop','<div class="coop-code">'+serverName(snap.room)+'</div><p>접속 작업자 '+snap.players.length+' / 4</p>'+roster+teamGoals(snap.players.length)+'<section class="gdg-section shift-lobby-difficulty"><h3>근무 난이도 · 화물 '+(snap.quota??cargoQuota(snap.players.length))+'개</h3>'+difficultyChoices(isHost&&snap.players.length<4?coop.chosenDifficulty??snap.difficulty?.level??'normal':snap.difficulty?.level??'normal','coop',!isHost||snap.players.length>=4)+'<small>'+(snap.players.length>=4?'4인 근무는 헬 난이도 고정':isHost?'방장이 난이도를 선택합니다.':'방장이 난이도를 선택 중입니다.')+'</small></section>'+note+'<div class="panel-actions">'+(isHost?'<button class="primary" data-action="coop-start" '+(snap.players.length<2?'disabled':'')+'>협동 근무 시작</button>':'')+action('coop-leave','서버 목록으로')+'</div>','협동 대기실','GDG / ONLINE SHIFT');
  }
  if($('#coop-notice'))$('#coop-notice').textContent=coopError||(snap?'방장만 시작 가능 · 최소 2명':'공개 서버 상태를 확인합니다.');
 }
@@ -110,7 +111,7 @@ function disconnectCoop(){stopServerList();if(!coop)return;const client=coop;coo
 function teamResult(snap){
  if(coopEnding&&pane==='coopresult')return;coopEnding=true;if(mode==='game')pauseShift(false);
  const won=snap.phase==='complete',done=snap.states.filter(x=>x==='DELIVERED').length;
- panel('coopresult','<p>'+(won?'팀 배송을 완료했습니다.':'모든 작업자의 신호가 소실되었습니다.')+'</p><div class="row"><span>공동 배송</span><b>'+done+' / '+snap.states.length+'</b></div><div class="panel-actions">'+action('coop-leave','메인 메뉴',true)+'</div>',won?'팀 근무 완료':'팀 근무 실패','GDG / COOPERATIVE RESULT');
+ panel('coopresult',resultMarkup(snap,won,snap.players.filter(p=>!p.failed).length)+'<div class="panel-actions">'+action('coop-leave','메인으로',true)+'</div>',won?'팀 근무 완료':'팀 근무 실패','GDG / COOPERATIVE RESULT');
 }
 function onCoopState(snap){
  if(snap.phase==='lobby'){if(mode==='menu'&&pane==='coop')coopLobby();return;}
@@ -133,8 +134,8 @@ function onCoopState(snap){
 }
 function panel(name,body,title,eyebrow='GDG / 근무 안내'){
  pane=name;const modal=$('#modal'),nav=$('#paneNav');modal.dataset.pane=name;modal.dataset.context=mode==='menu'?'menu':'game';$('#eyebrow').textContent=eyebrow;$('#paneTitle').textContent=title;$('#paneBody').innerHTML=body;
- const menuNav=mode==='menu'&&['manual','settings','quit','coop'].includes(name),pauseNav=name==='pause';
- modal.dataset.layout=menuNav?'menu':pauseNav?'pause':'single';
+ const menuNav=mode==='menu'&&['manual','settings','quit','coop'].includes(name)&&!(name==='coop'&&coop?.snapshot),pauseNav=name==='pause';
+ modal.dataset.layout=menuNav?'menu':pauseNav?'pause':'single';modal.dataset.shiftArt=String(['difficulty','cargo','anomalies','map','complete','coopresult'].includes(name)||(name==='coop'&&!!coop?.snapshot));
  nav.hidden=!(menuNav||pauseNav);
  if(!nav.hidden){
  const buttons=menuNav?[['solo-start','싱글 모드',''],['coop','멀티 모드',''],['manual','조작 방법','manual'],['settings','설정','settings'],['quit','종료','quit']]:[['resume','계속하기',''],['manual','조작 방법','manual'],['settings','설정','settings'],['map','구역 지도',''],['brief','메인 메뉴',''],['quit','게임 종료','quit']];
@@ -147,6 +148,8 @@ function openPane(name){
  if(mode==='game'){pauseShift(false);}
  if(pane==='coop'&&name!=='coop'&&!coopStarting)disconnectCoop();
  if(name==='coop'){coopLobby();return;}
+ if(name==='cargo'){panel(name,cargoGuide()+'<div class="panel-actions">'+action('back','확인',true)+'</div>','특수 화물 발생','GDG / SPECIAL CARGO');return;}
+ if(name==='anomalies'){panel(name,anomalyGuide()+'<div class="panel-actions">'+action('back','계속',true)+'</div>','이상현상 감지','GDG / EVENT WARNING');return;}
  if(name==='quit')panel(name,'<div class="quit-center"><div class="warning-symbol">!</div><h3>정말 게임을 종료하시겠습니까?</h3><p>현재 근무가 종료됩니다. 협동 중에는 서버에서 퇴장합니다.</p><div class="panel-actions">'+action('brief','메인 메뉴로')+action('quit','게임 종료',true)+action('back','취소')+'</div></div>','게임 종료','GDG / 야간 근무');
  if(name==='manual')panel(name,
  '<div class="survival-manual"><p>GDG 상자(싱글 30개, 2인 40개, 3인 50개, 4인 70개)를 한 개씩 02번 출고대로 운반하세요. 가까이 다가가 노란 조준 표시가 생기면 E로 집고, 출고대에서 E로 배송합니다.</p>'+
@@ -163,10 +166,10 @@ function openPane(name){
  '<article class="creature-guide"><h4>적재귀 <small>고속 돌진형</small></h4><p>기본 추격 속도가 가장 빠르고 공격 준비 거리도 깁니다. 정면에서 맞서거나 직선으로만 도망치지 말고 선반과 기둥을 돌아 거리를 벌리세요. 손전등은 오히려 자극합니다. 적재귀는 낮은 상자·작업 발판과 폐기물동·격리동의 ESCAPE DECK까지 느리게 따라 올라옵니다. 높은 곳은 시간을 버는 수단입니다. 올라오는 동안 반대편으로 내려가거나 철제 사물함에 숨으세요.</p></article>'+
  '<article class="creature-guide"><h4>표찰귀 <small>화물 반응형</small></h4><p>직접 비춘 손전등 빛으로 일시적으로 물러나게 할 수 있습니다. 표찰귀가 약 4m 이내에 있을 때 운반 중인 상자를 E로 정상적으로 내려놓으면 사라집니다. 배송 완료가 아닌 임시 적치이며, 내려놓을 공간이 필요합니다. 너무 가까워지기 전에 행동하세요. 격리동에서는 천장 이동 및 하강도 주의하세요.</p></article>'+
  '<h3>05 / 협동 근무</h3><p>메인 메뉴에서 멀티플레이를 선택하고 닉네임(2~12자)을 입력한 뒤 공개 서버 01~03 중 원하는 서버에 참가합니다. 초대 코드는 필요하지 않습니다. 2명 이상 입장하면 방장이 시작할 수 있습니다. 2인 40개, 3인 50개, 4인 70개의 화물을 나눠 배송합니다. 방장은 대기실에서 난이도를 선택하며 4인은 헬 고정입니다. 근무 시작 이후 목표량은 변경되지 않고, 한 명이 사망해도 생존 팀원이 임무를 계속할 수 있습니다. 인원이 늘면 동시에 활동하는 개체 수, 감지 범위, 소음 추적, 수색 지속 시간이 증가합니다. 협동 중 ESC는 개인 메뉴만 열며 서버 시간은 계속 흐릅니다.</p><h3>06 / 지도 및 이동 팁</h3><p>구역 지도의 파란 사각형은 낮은 은신처 입구, 금색 사각형은 철제 사물함, 초록 원은 지정 피신 지점입니다. ESC → 구역 지도로 확인할 수 있습니다. 마우스가 고정되지 않으면 왼쪽 버튼을 누른 채 드래그하거나 방향키로 시점을 돌리세요.</p></div>'+
- '<div class="panel-actions">'+action('map','구역 지도')+'</div>'+links,'조작 방법 및 공략','WORK 모드 / 근무자 생존 매뉴얼');
+ '<div class="panel-actions">'+action('cargo','특수 화물 안내')+action('anomalies','이상 현상 안내')+action('map','구역 지도')+'</div>'+links,'조작 방법 및 공략','WORK 모드 / 근무자 생존 매뉴얼');
  if(name==='map'){
- const n=session?deliveryCount(session):0,target=session?nextTarget(session):null,d=target?Math.round(Math.hypot(session.x-target.pos[0],session.z-target.pos[2])):null;
- panel(name,'<div class="map-layout"><section class="gdg-section"><h3>임무 브리핑</h3><p>GDG 화물 '+missionTotal(session)+'개를 02번 출고대로 운반하세요.</p><ol><li>지정 화물 찾기</li><li>E로 상자 집기</li><li>02번 출고대에 배송</li></ol><h3>주의 사항</h3><p>귀신은 시야와 소음, 손전등에 반응합니다.</p></section><section id="live-map" class="gdg-section">'+plan()+'</section><section class="gdg-section"><h3>배송 현황</h3><strong class="server-big">'+n+' / ' +missionTotal(session)+'</strong>'+progressBar(n,missionTotal(session))+'<h3>현재 위치</h3><p>'+sectorName(session)+'</p><h3>다음 목표 직선거리</h3><p>'+(d===null?'—':d+' m')+'</p><h3>위협 상태</h3><p>'+(session?telemetry(session,!!closedLocker(session)).danger:'근무 전')+'</p></section></div><div class="monster-strip"><div><b>녹령</b><small>직접 비춘 빛에 물러남</small></div><div><b>함귀</b><small>소음에 민감 · 빛 주의</small></div><div><b>적재귀</b><small>등반 가능 · 장애물 활용</small></div><div><b>표찰귀</b><small>근처에서 상자 내려놓기</small></div></div><div class="panel-actions">'+action('back','뒤로')+'</div>','실시간 임무 지도','SECTOR B / 시설 평면도');
+ const n=session?deliveryCount(session):0;
+ panel(name,'<p>현재 위치, 실제 창고 구조, 배송 화물과 숨는 공간을 확인하세요.</p><div class="facility-map-layout"><section id="live-map" class="gdg-section">'+plan()+'</section>'+mapLegendArt()+'</div><div class="facility-footer"><span>배송 '+n+' / '+missionTotal(session)+' · '+sectorName(session)+'</span><span>정전 중에는 지도를 더 자주 확인하세요.</span></div><div class="panel-actions">'+action('back','닫기',true)+'</div>','물류창고 전체 지도','GDG / MAP OVERLAY');
  }
  if(name==='settings'){
  const toggle=(k,l)=>'<div class="row"><span>'+l+'</span><button class="toggle '+(settings[k]?'on':'')+'" data-toggle="'+k+'">'+(settings[k]?'켜기':'끄기')+'</button></div>';
@@ -178,7 +181,7 @@ function openPane(name){
  panel(name,'<section class="gdg-section"><h3>현재 상황</h3><div class="row"><span>현재 섹터</span><b>'+sectorName(session)+'</b></div><div class="row"><span>임무 진행도</span><b>'+n+' / ' +missionTotal(session)+'</b></div>'+progressBar(n,missionTotal(session))+'<div class="row"><span>플레이 시간</span><b>'+clock(session.elapsed)+'</b></div><div class="row"><span>난이도</span><b>'+difficultyLabel(session.difficultyLevel)+'</b></div><div class="row"><span>근무 모드</span><b>'+(coopStarting?'협동 · '+(coop?.snapshot?.players?.filter(p=>!p.failed).length??0)+'명 생존':'싱글')+'</b></div><div class="row"><span>위협 상태</span><b>'+t.danger+'</b></div></section><section class="gdg-section paper-note"><h3>주요 목표</h3><p>□ 지정 화물 찾기</p><p>□ 02번 출고대에 배송 · '+n+' / ' +missionTotal(session)+'</p><p>□ 괴물을 피하며 생존</p>'+(coopStarting?'<p>※ 협동 근무는 메뉴에서도 계속 진행됩니다.</p>':'')+'</section>','일시 정지','GDG / 대기 중');
  }
 }
-function closePane(){if(pane==='coop'&&!coopStarting){disconnectCoop();$('#modal').hidden=true;pane='';$('#start').focus();return;}if(pane==='coopdead'||pane==='coopresult'){return;}if(mode==='paused'&&session?.failed&&coopStarting){panel('coopdead','<p>신호가 소실되었습니다. 생존 팀원이 근무 중입니다.</p><div class="panel-actions">'+action('map','팀 지도')+action('coop-leave','방 나가기',true)+'</div>','작업자 사망','GDG / CO-OP');return;}if(mode==='paused'&&pane!=='pause'&&pane!=='complete'){openPane('pause');return;}if(mode==='paused'&&pane==='pause'){resume();return;}if(pane==='complete'||pane==='failed'){toMenu();return;}$('#modal').hidden=true;pane='';$('#start').focus();}
+function closePane(){if(mode==='menu'&&['cargo','anomalies'].includes(pane)){soloDifficulty();return;}if(pane==='coop'&&!coopStarting){disconnectCoop();$('#modal').hidden=true;pane='';$('#start').focus();return;}if(pane==='coopdead'||pane==='coopresult'){return;}if(mode==='paused'&&session?.failed&&coopStarting){panel('coopdead','<p>신호가 소실되었습니다. 생존 팀원이 근무 중입니다.</p><div class="panel-actions">'+action('map','팀 지도')+action('coop-leave','방 나가기',true)+'</div>','작업자 사망','GDG / CO-OP');return;}if(mode==='paused'&&pane!=='pause'&&pane!=='complete'){openPane('pause');return;}if(mode==='paused'&&pane==='pause'){resume();return;}if(pane==='complete'||pane==='failed'){toMenu();return;}$('#modal').hidden=true;pane='';$('#start').focus();}
 function toMenu(){
  if(coop)disconnectCoop();
  canvas.classList.remove('captured');
@@ -208,7 +211,7 @@ function reportProgress(value,label){
 }
 async function load(){
  if(!setupPromise)setupPromise=(async()=>{
-  worlds=createScene();reportProgress(.12,'창고 배치 완료');await painted();
+  worlds??=createScene();reportProgress(.12,'창고 배치 완료');await painted();
   try{renderer=new Renderer(canvas);}
   catch(error){
    if(!error.message.startsWith('WebGL 2 is unavailable'))throw error;
@@ -225,6 +228,7 @@ $('#start').onclick=async()=>{
  if(coop&&!coopStarting)disconnectCoop();
  if(!coopStarting&&!soloConfirmed){soloDifficulty();return;}soloConfirmed=false;$('#modal').hidden=true;pane='';
  const b=$('#start');b.disabled=true;mode='loading';$('#briefing').hidden=true;$('#loading').hidden=false;
+ $('#loading-quota').textContent='목표: 배송 상자 '+(coopStarting?(coop?.snapshot?.quota??coop?.snapshot?.states?.length??30):30)+'개 완료';
  try{
   audioOn();reportProgress(0,'구역 준비 중');await painted();await load();
   if(!coopStarting&&(!session||session.failed||deliveryCount(session)===missionTotal(session))){session=newShift(Math.random,settings.difficulty);finishAt=null;receiptUntil=0;}
@@ -258,7 +262,7 @@ function failShift(name){
  session=null;$('#play').hidden=true;
  panel('failed','<div class="row"><span>배송 완료</span><b>' +delivered+' / '+total+'</b></div><div class="row"><span>생존 시간</span><b>'+Math.floor(elapsed/60)+'분 '+Math.floor(elapsed%60)+'초</b></div><div class="row"><span>도달 구역</span><b>'+sector+'</b></div><div class="row"><span>실패 원인</span><b>'+escapeNickname(name)+'에게 포획됨</b></div><div class="panel-actions">'+action('retry','다시 시도',true)+action('brief','메인 메뉴')+'</div>','임무 실패','GDG / GAME OVER');
 }
-function complete(){pauseShift(false);beep(630,.3);panel('complete','<div class="row"><span>출고 내역</span><b>30 / 30건 배송 완료</b></div><div class="row"><span>근무 시간</span><b>'+Math.floor(session.elapsed/60)+'분 '+Math.floor(session.elapsed%60)+'초</b></div><p>화물 30개의 배송을 마쳤습니다. 야간 근무에서 살아남았습니다.</p><div class="panel-actions">'+action('brief','근무 마치기',true)+action('resume','창고 둘러보기')+'</div>','전체 배송 완료','출고 02 / 근무 확인서');}
+function complete(){pauseShift(false);beep(630,.3);panel('complete',resultMarkup(session,true,1)+'<div class="panel-actions">'+action('retry','다음 근무',true)+action('brief','메인으로')+action('resume','창고 둘러보기')+'</div>','근무 완료','GDG / SHIFT RESULT');}
 let receiptUntil=0;
 function use(target=null,locked=false){
  if(coopStarting&&coop){coop.command('use');return;}

@@ -1,3 +1,4 @@
+import {updateShiftNotices} from './shift-ui.js';
 export const sectorName=s=>!s?'B 메인 창고':s.z>=54?(s.x< -15?'C-02 폐기물 처리동':'D-04 격리실험동'):s.z>=22?(s.x< -15?'D-03 반품동':'D-02 이송동'):s.x< -15?'C-01 분류동':'B 메인 창고';
 export const clock=t=>{const n=Math.max(0,Math.floor(t||0));return [Math.floor(n/3600),Math.floor(n/60)%60,n%60].map(v=>String(v).padStart(2,'0')).join(':');};
 export function telemetry(s,hidden=false){
@@ -23,7 +24,7 @@ export function updateHud(s,hidden,count,total,plan,now,hints=true,markers=null,
  $('hud-sector').textContent=sectorName(s);$('hud-noise-fill').style.width=Math.round(t.noise*100)+'%';$('hud-noise-label').textContent=t.noiseLabel;
  $('hud-danger').textContent=t.danger;$('hud-progress').style.width=Math.round(count/total*100)+'%';$('hud-clock').textContent=clock(s.elapsed);
  $('hud-movement').textContent=hidden?'사물함 내부':s.onRail&&s.grounded?'난간 균형':(s.bodyHeight??1.7)<1.2?'앉기':!s.grounded?'공중':Math.hypot(s.vx||0,s.vz||0)>4.5?'달리기':'이동 가능';
- $('hud-locker').hidden=!hidden;
+ $('hud-locker').hidden=!hidden;updateShiftNotices(s,$('shift-event-notice'));
  const blackout=s.shiftEvents?.active?.kind==='blackout';play.classList.toggle('blackout-map',blackout);play.classList.toggle('map-expanded',!!s.mapExpanded);
  if(now-lastMap>80||now<lastMap||lastMapWorld!==mapWorld){lastMap=now;const host=$('hud-minimap-content');if(host&&!hidden&&(hints||blackout||s.mapExpanded)){
   if(lastMapWorld!==mapWorld||!host.querySelector('.gdg-map-markers')){host.innerHTML=plan();lastMapWorld=mapWorld;}

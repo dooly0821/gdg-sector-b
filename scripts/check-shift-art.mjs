@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {readFileSync,existsSync} from 'node:fs';
+import {createScene,newShift,DOCK} from '../dist/mission.js';
+import {mapMarkup,mapMarkers,mapX,mapZ,FACILITY_REGIONS} from '../dist/facility-map.js';
+import {CARGO_UI,cargoColor,resultStats,cargoGuide,anomalyGuide,teamGoals,updateShiftNotices} from '../dist/shift-ui.js';
+const [w]=createScene(),s=newShift(()=>.42,'normal');
+assert.equal(FACILITY_REGIONS.length,6);assert.equal(mapX(-43),8);assert.equal(mapZ(-22),8);
+const map=mapMarkup(w.blocks,s,[],null);assert.ok(map.includes('B 메인 창고')&&map.includes('출고 02')&&map.includes('gdg-map-markers'));assert.ok(map.includes('C-02 폐기물동'));
+s.cargo[0].special='heavy';s.parked={0:[3,0,4]};assert.ok(mapMarkers(s).includes('translate('+mapX(3)+' '+mapZ(4)+')'));assert.ok(mapMarkers(s).includes('#528dff'));
+s.states[0]='DELIVERED';assert.equal(resultStats(s).special,1);assert.equal(resultStats(s).done,1);
+assert.equal(cargoColor('noisy'),'#ebc54b');assert.equal(cargoColor('cursed'),'#ae52e9');assert.ok(cargoGuide().includes('70초')&&anomalyGuide().includes('전파 간섭'));assert.ok(teamGoals(4).includes('70개'));
+const host={dataset:{},hidden:true,innerHTML:''};s.elapsed=0;updateShiftNotices(s,host);assert.ok(!host.hidden&&host.innerHTML.includes('특수 화물'));
+s.elapsed=15;s.shiftEvents.active={kind:'blackout',until:25};updateShiftNotices(s,host);assert.ok(host.innerHTML.includes('10초')&&host.innerHTML.includes('정전'));s.shiftEvents.active=null;updateShiftNotices(s,host);assert.ok(host.hidden);
+const html=readFileSync('dist/index.html','utf8');assert.ok(html.includes('loading-quota')&&html.includes('shift-event-notice')&&html.includes('shift-art.css'));for(const name of ['loading-art','difficulty-easy','difficulty-normal','difficulty-hard','difficulty-hell','cargo-noisy','cargo-heavy','cargo-urgent','cargo-cursed','blackout','interference','result-stamp','map-player','map-hide','metal'])assert.ok(existsSync('dist/assets/interface/shift-art/'+name+'.webp'),name);
+console.log('PASS: supplied UI art, actual facility map, live result counts, nonblocking warning notices');
