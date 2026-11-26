@@ -1,13 +1,16 @@
+import {expandedLayout,EXTENSION_LOCKERS} from './map-layout.js';
 import {DENSE_LOCKERS} from './density.js';
 import {World,basis,dot} from './world.js';
 import {traceBox} from './contact.js';
 export const LOCKERS=Object.freeze([[-12.6,-17.1],[-40.7,.4],[-9,42.2],[-38.3,53],[-38,63.1],[13.5,58.9],...DENSE_LOCKERS].map(([x,z],i)=>Object.freeze({x,z,id:i+1})));
+const ALL_LOCKERS=Object.freeze([...LOCKERS,...EXTENSION_LOCKERS.map(([x,z],i)=>Object.freeze({x,z,id:LOCKERS.length+i+1}))]);
+export const lockersFor=level=>expandedLayout(level)?ALL_LOCKERS:LOCKERS;
 const W=1.16,D=1.12,H=2.12,half=W/2,front=D/2,span=W-.09;
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const hinge=l=>[l.x-half+.045,l.z-front];
-export function buildLockers(w){
+export function buildLockers(w,level='normal'){
  const shell=w.mat('locker-shell','#46534e','metal'),dark=w.mat('locker-inner','#282e30','metal'),trim=w.mat('locker-edge','#80958a','metal'),mark=w.mat('locker-safe-mark','#87bea5','paint',.20);
- for(const {x,z,id} of LOCKERS){
+ for(const {x,z,id} of lockersFor(level)){
   const solid=(x,y,z,a,b,c,m)=>{w.box(x,y,z,a,b,c,m);w.block(x-a/2,z-c/2,x+a/2,z+c/2,y-b/2,y+b/2,'locker-shell');};
   w.box(x,.018,z,W,.036,D,dark);solid(x,H-.045,z,W,.09,D,shell);
   solid(x,H/2,z+front-.035,W,H,.07,dark);
@@ -45,17 +48,17 @@ function door(l,open){
 const cache=new WeakMap();
 export function lockerDoorBlocks(s){
  const rev=s.lockerRevision??0,old=cache.get(s);if(old?.rev===rev)return old.blocks;
- const blocks=LOCKERS.flatMap(l=>door(l,state(s,l).open));cache.set(s,{rev,blocks});return blocks;
+ const blocks=lockersFor(s).flatMap(l=>door(l,state(s,l).open));cache.set(s,{rev,blocks});return blocks;
 }
-export function lockerLayers(s,group){return LOCKERS.map(l=>{const [x,z]=hinge(l),a=state(s,l).open*Math.PI*.5,m=new Float32Array([...basis(0,a,0).flatMap(v=>[...v,0]),x,0,z,1]);return {group,matrix:m,root:[l.x,1,l.z],prop:true};});}
+export function lockerLayers(s,group){return lockersFor(s).map(l=>{const [x,z]=hinge(l),a=state(s,l).open*Math.PI*.5,m=new Float32Array([...basis(0,a,0).flatMap(v=>[...v,0]),x,0,z,1]);return {group,matrix:m,root:[l.x,1,l.z],prop:true};});}
 export function insideLocker(s,l){return Math.abs(s.x-l.x)<.28&&s.z>l.z-.22&&s.z<l.z+.23&&s.y>=-.02&&s.y<.26;}
-export function closedLocker(s){return LOCKERS.find(l=>insideLocker(s,l)&&state(s,l).open<.025&&state(s,l).target===0)??null;}
+export function closedLocker(s){return lockersFor(s).find(l=>insideLocker(s,l)&&state(s,l).open<.025&&state(s,l).target===0)??null;}
 export function lockerTarget(s,blocks=[]){
  if(s.failed||s.vault||s.handAction||s.pendingUse)return null;
- const inside=LOCKERS.find(l=>insideLocker(s,l));if(inside)return inside;
+ const inside=lockersFor(s).find(l=>insideLocker(s,l));if(inside)return inside;
  if(Math.abs(s.y)>.4)return null;
  const eye=[s.x,s.y+(s.bodyHeight??1.7)-.12,s.z],f=[-Math.sin(s.yaw),0,-Math.cos(s.yaw)];
- return LOCKERS.filter(l=>{
+ return lockersFor(s).filter(l=>{
   const dx=l.x-s.x,dz=l.z-front-s.z,d=Math.hypot(dx,dz);
   if(s.z>l.z-.27||d>1.85||d<.01||dot(f,[dx/d,0,dz/d])<.55)return false;
   return !blocks.some(b=>traceBox(eye,[l.x,1.25,l.z-front-.065],b)<.96);
@@ -77,7 +80,7 @@ export function useLocker(s,l){
  return closing?'closing':'opening';
 }
 export function advanceLockers(s,dt,occupants=[s]){
- for(const l of LOCKERS){
+ for(const l of lockersFor(s)){
   const st=state(s,l);if(st.open===st.target)continue;
   const old=st.open,next=clamp(old+Math.sign(st.target-old)*dt/.48,0,1);
   if(door(l,next).some(b=>occupants.some(p=>overlap(p,b)))){if(st.target===0)st.target=1;continue;}

@@ -5,6 +5,7 @@ import {DIFFICULTIES,normalizeDifficulty,effectiveDifficulty,cargoQuota,difficul
 import {randomBytes} from 'node:crypto';
 import {createShiftEvents,tickShiftEvents} from '../dist/shift-events.js';
 import {normalizeNickname} from '../dist/nickname.js';
+import {expandedLayout} from '../dist/map-layout.js';
 import {createScene,newShift,randomCargo,step,forward,handlingTarget,canUse,dropTarget,deliveryCount,MISSION_TOTAL,parcelBlocks} from '../dist/mission.js';
 import {beginHandling,advanceHandling,toggleFlashlight,updateViewmodel} from '../dist/handling.js';
 import {advanceLockers,lockerDoorBlocks,lockerTarget,useLocker,insideLocker,closedLocker,LOCKERS} from '../dist/lockers.js';
@@ -17,8 +18,8 @@ const rand=(n=18)=>randomBytes(n).toString('hex');
 export const roomCode=()=>Array.from(randomBytes(6),b=>alphabet[b%alphabet.length]).join('');
 export class RoomError extends Error{constructor(message,status=400){super(message);this.status=status;}}
 const check=(ok,msg,status=400)=>{if(!ok)throw new RoomError(msg,status);};
-let scene;
-const world=()=>scene??=createScene()[0];
+const scenes=new Map();
+const world=room=>{const k=expandedLayout(room?.shared)?'hard':'normal';if(!scenes.has(k))scenes.set(k,createScene(k)[0]);return scenes.get(k);};
 const spawns=[[1.7,15],[.7,15],[2.7,15],[1.7,16.1]];
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const finite=(v,d=0)=>Number.isFinite(v)?v:d;
@@ -26,7 +27,7 @@ const publicPlayer=p=>({id:p.id,name:p.name,ready:p.ready,failed:!!p.state.faile
 const sharedKeys=['cargo','states','parked','deliveryOrder','deliveryBays','lockers','lockerRevision','horrorEvent','cargoDeadlines','shiftEvents'];
 function attach(room,p){
  const s=p.state,q=room.shared;q.cargoDeadlines??={};q.deliveryBays??={};for(const k of sharedKeys)s[k]=q[k];
- s.elapsed=q.elapsed;s.skipLockerAdvance=true;s.id=p.id;return s;
+ s.difficultyLevel=q.difficultyLevel??'normal';s.elapsed=q.elapsed;s.skipLockerAdvance=true;s.id=p.id;return s;
 }
 function detach(p){for(const k of sharedKeys)delete p.state[k];delete p.state.hauntSounds;delete p.state.teamView;}
 function pushEvent(room,e){room.eventSeq++;room.events.push({...e,seq:room.eventSeq});if(room.events.length>28)room.events.shift();}
@@ -46,7 +47,7 @@ export function createRoom(code,now=Date.now(),nickname){
 }
 const live=room=>Object.values(room.players).filter(p=>!p.state.failed);
 function dropOwned(room,p){
- const s=attach(room,p);if(s.carried>=0){const i=s.carried,blocks=world().blocks.concat(lockerDoorBlocks(s)),t=dropTarget(s,blocks);if(t)room.shared.parked[i]=t.pos.slice();else delete room.shared.parked[i];room.shared.states[i]='AVAILABLE';s.carried=-1;room.shared.horrorEvent={type:'drop',time:room.shared.elapsed};}detach(p);
+ const s=attach(room,p);if(s.carried>=0){const i=s.carried,blocks=world(room).blocks.concat(lockerDoorBlocks(s)),t=dropTarget(s,blocks);if(t)room.shared.parked[i]=t.pos.slice();else delete room.shared.parked[i];room.shared.states[i]='AVAILABLE';s.carried=-1;room.shared.horrorEvent={type:'drop',time:room.shared.elapsed};}detach(p);
 }
 function removePlayer(room,p){
  dropOwned(room,p);delete room.players[p.id];if(room.host===p.id)room.host=Object.keys(room.players)[0]??null;
@@ -65,7 +66,7 @@ function syncShared(room,p){const s=p.state,q=room.shared;if(s.lockerRevision!==
 import {REVIVE_SECONDS,REVIVE_RANGE,findReviveTarget} from '../dist/revive.js';
 export {REVIVE_SECONDS,REVIVE_RANGE};
 function reviveTarget(room,p){const s=p.state;if(s.failed||closedLocker(s))return null;
- const blocks=nearbyBlocks(world().blocks,s.x,s.z).concat(lockerDoorBlocks(s));
+ const blocks=nearbyBlocks(world(room).blocks,s.x,s.z).concat(lockerDoorBlocks(s));
  const players=Object.values(room.players).map(a=>({...a.state,id:a.id}));const target=findReviveTarget(s,players,blocks,p.id,p.reviveTarget);return target?room.players[target.id]:null;
 }
 function tickRevives(room,active,now,dt){
@@ -88,7 +89,7 @@ function command(room,p,cmd){
  p.commandSeq=cmd.seq;
  const s=attach(room,p),q=room.shared;
  if(s.failed||room.phase!=='playing'){detach(p);return;}
- const staticBlocks=world().blocks,blocks=staticBlocks.concat(lockerDoorBlocks(s));
+ const staticBlocks=world(room).blocks,blocks=staticBlocks.concat(lockerDoorBlocks(s));
  if(cmd.type==='jump')p.jump=true;
  if(cmd.type==='torch'){if(!s.handAction)toggleFlashlight(s);}
  if(cmd.type==='use'&&reviveTarget(room,p)){p.reviveHeld=p.input.keys.includes('KeyE');if(s.handAction&&!s.handAction.result){s.handAction=null;s.pendingUse=null;}}
@@ -112,7 +113,7 @@ export function tickRoom(room,now=Date.now()){
  const due=Math.min(.70,wallDelta+Math.max(0,room.simDebt??0)),delta=Math.min(.40,due);
  room.simDebt=Math.max(0,due-delta);if(!delta)return;
  const q=room.shared,players=live(room);q.cargoDeadlines??={};q.shiftEvents??=createShiftEvents();if(!players.length){room.phase='failed';return;}
- const blocks=world().blocks,dt=1/60,ticks=Math.min(24,Math.floor(delta/dt+(room.fraction??0)));
+ const blocks=world(room).blocks,dt=1/60,ticks=Math.min(24,Math.floor(delta/dt+(room.fraction??0)));
  room.fraction=Math.min(.99,Math.max(0,delta/dt+(room.fraction??0)-ticks));
  for(let k=0;k<ticks;k++){
   const active=live(room);if(!active.length){room.phase='failed';break;}

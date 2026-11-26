@@ -2,7 +2,7 @@
 export const ANNEX={west:-43,east:-15,north:-9,south:21,entry:[-16,0,14]};
 export const CORE=[-34,2.8,-3];
 
-export function buildAnnex(w){
+export function buildAnnex(w,expanded=false){
  const steel=w.mat('annex-steel','#354253','metal'),rib=w.mat('annex-rib','#66737c','metal');
  const wall=w.mat('annex-wall','#485463','concrete'),slab=w.mat('annex-floor','#77706a','concrete',0,1.5);
  const amber=w.mat('annex-safety','#c79546','paint'),wood=w.mat('annex-pallet','#8b6346','wood');
@@ -122,10 +122,10 @@ export function buildAnnex(w){
   w.box(x+1.32,2.86,-8.46,.10,.055,.025,filament);
  }
  for(let z=-7.5;z<4;z+=.6)w.box(-31.15,.018,z,.48,.022,.10,amber,0,-.65);
- buildSouthExtension(w);
+ buildSouthExtension(w,expanded);
 }
 
-function buildSouthExtension(w){
+function buildSouthExtension(w,expanded=false){
  const steel=w.mat('extension-steel','#46505a','metal'),floor=w.mat('extension-floor','#68645f','concrete',0,1.4),
  wall=w.mat('extension-wall','#3f4850','concrete'),trim=w.mat('extension-trim','#a16c3a','paint'),
  wood=w.mat('extension-crate','#987653','wood'),dark=w.mat('extension-roof','#303942','metal'),
@@ -162,17 +162,17 @@ function buildSouthExtension(w){
  w.sign(-15.17,3.15,37,2.8,.35,'D-02 / D-03','#392f28','#e5c39b',Math.PI/2);
  w.sign(-30,3.8,22.2,3.4,.35,'RETURNS / D-03','#392f28','#e5c39b');
  w.sign(0,3.8,22.2,3.4,.35,'TRANSFER / D-02','#392f28','#e5c39b');
- buildDeepHalls(w);
+ buildDeepHalls(w,expanded);
 }
 
 export const HIDING_POINTS=[[-35,29.4],[-9,29.4],[-23,48.4],[5,47.4],[-25,7.9],[-37,63],[-22,72],[-7,63],[8,72]];
 export const REFUGES=[[-1.6,5.27,2.35,1.15],[-1.6,3.58,.25,1],[-32,3,68,1.05],[-2,3,68,1.05]];
-function buildDeepHalls(w){
+function buildDeepHalls(w,expanded=false){
  const wall=w.mat('deep-wall','#343a42','concrete'),floor=w.mat('deep-floor','#535153','concrete'),steel=w.mat('deep-steel','#3b444a','metal'),rust=w.mat('deep-rust','#784c36','metal'),black=w.mat('deep-black','#242127','rubber'),amber=w.mat('deep-warning','#b58b48','paint'),red=w.mat('deep-red','#db302b','plain',1.25),wood=w.mat('deep-crate','#77583e','wood'),glass=w.mat('deep-vessel','#51282c','metal',.10),pale=w.mat('deep-inside','#694a48','skin');
  const solid=(x,y,z,a,b,c,m,kind)=>{w.box(x,y+b/2,z,a,b,c,m);w.block(x-a/2,z-c/2,x+a/2,z+c/2,y,y+b,kind);};
  w.box(-14,-.16,66,58,.32,24,floor);
  for(const x of [-43,15])solid(x,0,66,.34,11,24,wall);
- solid(-14,0,78,58,11,.34,wall);
+ if(expanded){for(const [a,b] of [[-43,-33],[-27,-3],[3,15]])solid((a+b)/2,0,78,b-a,11,.34,wall);for(const x of [-30,0])solid(x,3.6,78,6,7.4,.34,wall);}else solid(-14,0,78,58,11,.34,wall);
  for(const [a,b] of [[54,63],[69,78]])solid(-15,0,(a+b)/2,.32,11,b-a,wall);
  solid(-15,3.6,66,.32,7.4,6,wall);
  w.sign(-30,3.85,54.20,4,.4,'C-02 / WASTE PROCESSING','#362b25','#d1b17d');

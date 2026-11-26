@@ -1,3 +1,4 @@
+import {expandedLayout} from './map-layout.js';
 import {cargoGuide,anomalyGuide,resultMarkup,teamGoals,mapLegendArt} from './shift-ui.js';
 import {DIFFICULTIES,normalizeDifficulty,difficultyLabel,missionTotal,cargoQuota} from './difficulty.js';
 import {mapMarkup,mapMarkers} from './facility-map.js';
@@ -40,8 +41,9 @@ function say(line,duration=5){$('#radio').innerHTML='<strong>관제실</strong>'
 const rows=[['W A S D','이동'],['MOUSE','시점 회전'],['SHIFT','달리기'],['C (누르고 유지)','앉기 / 은신'],['C + W A S D','앉은 채 이동 / 낮은 은신처 진입'],['W + SPACE','난간 · 선반 · 상자 위 자유 점프'],['SHIFT + W + SPACE','달리면서 난간 점프'],['C + SPACE + A/D','공중 버니합 방향 전환'],['SPACE / WHEEL','기본 점프 (약 1.2m) · 연속 점프'],['C + SPACE','앉기 점프 (약 1m) · 버니합 가속 시 최대 1.35m'],['Q','손전등 들기 / 내리기'],['E','상자 들기 · 내려놓기 / 쓰러진 팀원 근처 2.5초 유지해 구조'],['M','전체 지도 확대 / 축소'],['ESC','일시 정지']];
 const links='<a class="doc" href="characters.html" target="_blank" rel="noopener">캐릭터 검수실 ↗</a><div class="panel-actions"><a class="doc" href="unity-migration.html" target="_blank" rel="noopener">Unity 이식 가이드 ↗</a></div>';
 function action(name,label,primary=false){return '<button class="'+(primary?'primary':'secondary')+'" data-action="'+name+'">'+label+'</button>';}
-const emptyMapBlocks=[];
-function plan(){worlds??=createScene();return mapMarkup(worlds[0].blocks,session,coop?.snapshot?.players??[],coop?.snapshot?.you);}
+const emptyMapBlocks=[],sceneCache=new Map();let renderLayout=null;
+function sceneFor(level){const k=expandedLayout(level)?'hard':'normal';if(!sceneCache.has(k))sceneCache.set(k,createScene(k));return sceneCache.get(k);}
+function plan(){const scene=sceneFor(session?.difficultyLevel??settings.difficulty);return mapMarkup(scene[0].blocks,session,coop?.snapshot?.players??[],coop?.snapshot?.you);}
 function mapMarkersNow(){return mapMarkers(session,coop?.snapshot?.players??[],coop?.snapshot?.you);}
 function coopInput(){const s=session??{};return {keys:mode==='game'&&!s.failed?[...keys]:[],yaw:s.yaw??0,pitch:s.pitch??0};}
 function stopServerList(){clearTimeout(coopListTimer);coopListGeneration++;coopListBusy=false;}
@@ -247,15 +249,17 @@ function reportProgress(value,label){
  $('#load-detail').textContent=label+'  ·  '+percent+'%';
 }
 async function load(){
+ const layout=expandedLayout(session?.difficultyLevel??settings.difficulty)?'hard':'normal';
+ if(renderer&&setupPromise&&renderLayout!==layout){await setupPromise;worlds=sceneFor(layout);reportProgress(.12,'난이도별 창고 배치');await painted();if(renderer.setWorld)renderer.setWorld(worlds[0]);else await renderer.prepare(rigs(worlds),(value,label)=>reportProgress(.12+.78*value,label));renderLayout=layout;return;}
  if(!setupPromise)setupPromise=(async()=>{
-  worlds??=createScene();reportProgress(.12,'창고 배치 완료');await painted();
+  worlds=sceneFor(layout);reportProgress(.12,'창고 배치 완료');await painted();
   try{renderer=new Renderer(canvas);}
   catch(error){
    if(!error.message.startsWith('WebGL 2 is unavailable'))throw error;
    const {SoftwareRenderer}=await import('./software.js');renderer=new SoftwareRenderer(canvas);
   }
-  await renderer.prepare(rigs(worlds),(value,label)=>reportProgress(.12+.78*value,label));
-  renderer.setQuality(settings.quality);
+  await renderer.prepare(rigs(worlds),(value,label)=>reportProgress(.12+.78*value,label),sceneFor('hard')[0]);
+  renderer.setQuality(settings.quality);renderLayout=layout;
  })();
  await setupPromise;
 }
@@ -267,9 +271,10 @@ $('#start').onclick=async()=>{
  const b=$('#start');b.disabled=true;mode='loading';$('#briefing').hidden=true;$('#loading').hidden=false;
  $('#loading-quota').textContent='목표: 배송 상자 '+(coopStarting?(coop?.snapshot?.quota??coop?.snapshot?.states?.length??30):30)+'개 완료';
  try{
-  audioOn();reportProgress(0,'구역 준비 중');await painted();await load();
+  audioOn();reportProgress(0,'구역 준비 중');await painted();
   if(!coopStarting&&(!session||session.failed||deliveryCount(session)===missionTotal(session))){session=newShift(Math.random,settings.difficulty);finishAt=null;receiptUntil=0;}
   if(coopStarting&&coop?.snapshot){applyCoopSnapshot(session,coop.snapshot,true);finishAt=null;receiptUntil=0;}
+  await load();
   reportProgress(.96,'첫 화면 준비 중');$('#play').hidden=false;
   const eye=[session.x,session.y+CONFIG.eye,session.z],facing=forward(session);
   const pose=choreography(session,eye,false,false,false,session.elapsed);
@@ -286,7 +291,7 @@ $('#start').onclick=async()=>{
   reportProgress(1,'출근 준비 완료');await painted();
   $('#loading').hidden=true;if(coopStarting&&coop){await coop.action('ready');}resume();say(coopStarting?'팀원 준비 확인 중 · 공동 배송 근무':'GDG 표식이 있는 상자를 가까운 출고대로 운반하세요.',4);
  }catch(error){
-  setupPromise=null;renderer=null;toMenu();
+  setupPromise=null;renderer=null;renderLayout=null;toMenu();
   panel('error','<p id="errorText"></p><div class="panel-actions">'+action('retry','다시 시도',true)+'</div>','구역 진입 실패');
   $('#errorText').textContent='창고를 준비하지 못했습니다. '+error.message;
  }finally{b.disabled=false;}
@@ -323,7 +328,7 @@ function onHandling(result,now,id){
  }
 }
 let finishAt=null;
-const areaNames={'Employee intake':'직원 입고대','Storage cross aisle':'보관 통로','Conveyor sorting':'컨베이어 분류대','Upper catwalk':'상층 캣워크','Loading aisle':'하역 통로','Outbound dispatch':'02번 출고대','Annex freight':'C-01 적재 화물','Annex rack':'C-01 선반','High storage':'B-12 상층 선반','Transfer hall':'D-02 이송동','Returns hall':'D-03 반품동','Waste processing':'C-02 폐기물 처리동','Containment lab':'D-04 격리실험동'};
+const areaNames={'Employee intake':'직원 입고대','Storage cross aisle':'보관 통로','Conveyor sorting':'컨베이어 분류대','Upper catwalk':'상층 캣워크','Loading aisle':'하역 통로','Outbound dispatch':'02번 출고대','Annex freight':'C-01 적재 화물','Annex rack':'C-01 선반','High storage':'B-12 상층 선반','Transfer hall':'D-02 이송동','Returns hall':'D-03 반품동','Waste processing':'C-02 폐기물 처리동','Containment lab':'D-04 격리실험동','Oversize freight':'E-01 대형 화물동','Night reserve':'E-02 야간 예비창고'};
 function targetCorners(pos,dock){
  const w=dock?1.25:CONFIG.parcelWidth/2,h=dock?.12:CONFIG.parcelWidth*.88,d=dock?.82:CONFIG.parcelWidth*.41;
  const points=[];for(const x of [-w,w])for(const y of [0,h])for(const z of [-d,d]){

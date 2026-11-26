@@ -1,3 +1,4 @@
+import {expandedLayout,EXTENSION_ROUTES,EXTENSION_HIDE} from './map-layout.js';
 import {DIFFICULTIES,effectiveDifficulty,missionTotal} from './difficulty.js';
 import {updateClimber} from './climber.js';
 import {HUNT_PROFILE,clearObservation,observePlayer,pursueVisible,lostTrail,searchBearing,searchExpired,alreadyChecked,sweepVisited,rememberSweep,hidingScore} from './haunt-tactics.js';
@@ -18,7 +19,7 @@ const cast=[
  {name:'표찰귀',kind:'wraith',speed:5.95,range:15,float:.38}
 ];
 // Shared patrol loops. A creature can start from any of these loops and either direction.
-const routes=[
+const baseRoutes=[
  [[-21,14],[-25,14],[-28,12],[-23,13]],
  [[-38,14],[-35,16],[-32,13],[-35,12]],
  [[-19,4],[-20,8],[-20,12],[-18,11]],
@@ -40,6 +41,7 @@ const routes=[
  [[-12,61],[-12,66],[-5,66],[-5,75]],
  [[13,56],[13,64],[13,74],[10,76]]
 ];
+const allRoutes=[...baseRoutes,...EXTENSION_ROUTES];const routesFor=s=>expandedLayout(s)?allRoutes:baseRoutes;
 const randomOrder=(items,rng)=>{
  const copy=items.slice();
  for(let i=copy.length-1;i>0;i--){
@@ -84,7 +86,7 @@ function lightSense(blocks,actor,s,forward){
 }
 const mapCache=new WeakMap(),staticNavCache=new WeakMap();
 const bodyHeights=[1.85,1.8,.95,1.95];
-const inMap=(x,z)=>x>-42.5&&x<14.35&&z>-21.1&&z<77.5&&(x>=-15||z>-8.65);
+const inMap=(x,z,s)=>x>-42.5&&x<14.35&&z>-21.1&&z<(expandedLayout(s)?101.5:77.5)&&(x>=-15||z>-8.65);
 const sizes=[.35,.34,.44,.32];
 export const SPAWN_BALANCE=Object.freeze({minDistance:16,maxDistance:28,grace:2.5,firstMin:8,intervalMin:12});
 export function hiddenSpawn(s,x,z,kind,blocks,surface=0){
@@ -144,12 +146,12 @@ function updateSpawns(s,blocks,forward,dt,rng){
  const slot=director.bag.findIndex(kind=>!s.haunt.some(actor=>actor.kind===kind));
  if(slot<0)return;
  const kind=director.bag[slot],type=cast[kind];
- const zone=(x,z)=>z>=54?(x<-15?4:5):z>=22?(x<-15?3:2):x<-15?1:0;
+ const zone=(x,z)=>z>=78?(x<-15?6:7):z>=54?(x<-15?4:5):z>=22?(x<-15?3:2):x<-15?1:0;
  const currentZone=zone(anchor.x,anchor.z);
- const candidates=routes.flatMap((path,route)=>path.map(([x,z],index)=>({path,route,index,x,z})));
+ const routes=routesFor(s),candidates=routes.flatMap((path,route)=>path.map(([x,z],index)=>({path,route,index,x,z})));
  const spawn=randomOrder(candidates,rng).sort((a,b)=>Number(zone(b.x,b.z)===currentZone)-Number(zone(a.x,a.z)===currentZone)).find(candidate=>{
   const {x,z,route}=candidate,dist=Math.hypot(x-anchor.x,z-anchor.z);
-  if(!inMap(x,z)||dist<SPAWN_BALANCE.minDistance||dist>SPAWN_BALANCE.maxDistance||!clear(blocks,x,z,.63,type.float,bodyHeights[kind]))return false;
+  if(!inMap(x,z,s)||dist<SPAWN_BALANCE.minDistance||dist>SPAWN_BALANCE.maxDistance||!clear(blocks,x,z,.63,type.float,bodyHeights[kind]))return false;
   if(s.haunt.some(a=>a.route===route||Math.hypot(a.x-x,a.z-z)<5))return false;
   return players.every(p=>{const d=Math.hypot(x-p.x,z-p.z);if(d<SPAWN_BALANCE.minDistance)return false;if(d>35)return true;const local=queryBlocks(s.navIndex,Math.min(x,p.x)-1,Math.min(z,p.z)-1,Math.max(x,p.x)+1,Math.max(z,p.z)+1);return hiddenSpawn(p,x,z,kind,local);});
  });
@@ -188,7 +190,7 @@ function attackContact(actor,s,blocks){
  });
 }
 export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
- const s=root,team=Array.isArray(s.teamPlayers),difficulty=teamDifficulty(team?s.teamPlayers.filter(p=>!p.failed).length:1,s.difficultyLevel,s.startCount??1),assigned=new Map();
+ const s=root,routes=routesFor(root),team=Array.isArray(s.teamPlayers),difficulty=teamDifficulty(team?s.teamPlayers.filter(p=>!p.failed).length:1,s.difficultyLevel,s.startCount??1),assigned=new Map();
  if(!mapCache.has(blocks))mapCache.set(blocks,blocks.concat(worldBounds));
  const staticBlocks=mapCache.get(blocks);
  // Cargo geometry changes only on pickup, drop or delivery. Keep the same
@@ -348,7 +350,7 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
     actor.inspectRetry=Math.max(0,(actor.inspectRetry??0)-dt);
     if(!actor.inspect&&!actor.inspectRetry){
      actor.inspectRetry=.35;
-     actor.inspect=[...HIDING_POINTS,...DRESSING_HIDE].filter(p=>!alreadyChecked(actor,p)&&Math.hypot(p[0]-actor.lastKnown[0],p[1]-actor.lastKnown[1])<7&&clear(blocks,p[0],p[1],sizes[i],type.float,bodyHeights[i])).sort((a,b)=>hidingScore(actor,a)-hidingScore(actor,b))[0]??null;
+     actor.inspect=[...HIDING_POINTS,...DRESSING_HIDE,...(expandedLayout(root)?EXTENSION_HIDE:[])].filter(p=>!alreadyChecked(actor,p)&&Math.hypot(p[0]-actor.lastKnown[0],p[1]-actor.lastKnown[1])<7&&clear(blocks,p[0],p[1],sizes[i],type.float,bodyHeights[i])).sort((a,b)=>hidingScore(actor,a)-hidingScore(actor,b))[0]??null;
     }
     if(actor.inspect&&Math.hypot(actor.x-actor.inspect[0],actor.z-actor.inspect[1])<.85){actor.checked.push(actor.inspect);actor.state='inspect';actor.timer=.65+i*.13;}
     else if(!actor.inspect&&!actor.fakeDone&&(actor.lost??0)>2.1){
@@ -367,7 +369,7 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
     const phase=(actor.scanPhase??0)+2.40;actor.scanPhase=phase;
     const center=actor.lastKnown;
     for(let k=0;k<8;k++){const angle=searchBearing(actor,phase)+k*Math.PI/4,r=1.5+(k%3)*.85,x=center[0]+Math.sin(angle)*r,z=center[1]+Math.cos(angle)*r;
-     if(inMap(x,z)&&!sweepVisited(actor,[x,z])&&clear(blocks,x,z,sizes[i],type.float,bodyHeights[i])){actor.searchPoint=[x,z];break;}}
+     if(inMap(x,z,root)&&!sweepVisited(actor,[x,z])&&clear(blocks,x,z,sizes[i],type.float,bodyHeights[i])){actor.searchPoint=[x,z];break;}}
    }
   }
   const path=actor.path;
