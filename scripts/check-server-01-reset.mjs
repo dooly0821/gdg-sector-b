@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {roomStorageKey} from '../server/room-service.js';
+import {PUBLIC_SERVERS,publicStatus} from '../dist/public-servers.js';
+const now=100000;
+const old=new Map(PUBLIC_SERVERS.map(s=>['gdg:coop:v1:'+s.id,{phase:'playing',players:{a:{lastSeen:now}}}]));
+const statuses=PUBLIC_SERVERS.map(s=>publicStatus(s.id,old.get(roomStorageKey(s.id)),now));
+assert.deepEqual(statuses.map(s=>s.count),[0,1,1]);
+assert.equal(statuses[0].joinable,true);
+assert.equal(roomStorageKey('ABC234'),'gdg:coop:v1:ABC234');
+old.set(roomStorageKey('GDGS22'),{phase:'lobby',players:{newPlayer:{lastSeen:now}}});
+assert.equal(publicStatus('GDGS22',old.get(roomStorageKey('GDGS22')),now).count,1);
+console.log('PASS: server 01 only reset, new connections retained, server 02 and 03 unaffected');
