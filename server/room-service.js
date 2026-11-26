@@ -10,7 +10,10 @@ async function redis(config,cmd){
  if(!res.ok)throw new RoomError('협동 저장 서버 연결에 실패했습니다.',503);
  const data=await res.json();if(data.error)throw new RoomError('협동 저장 서버 처리 오류입니다.',503);return data.result;
 }
-const key=code=>'gdg:coop:v1:'+code;
+// Operator-requested reset of server 01 only; previous tokens remain invalid.
+// Old room data expires naturally; servers 02/03 retain their original keys.
+export const roomStorageKey=code=>'gdg:coop:'+(code==='GDGS22'?'v2':'v1')+':'+code;
+const key=roomStorageKey;
 const release="if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('DEL',KEYS[1]) else return 0 end";
 const acquire="if not redis.call('SET',KEYS[1],ARGV[1],'NX','PX',ARGV[2]) then return {0} end; return {1,redis.call('GET',KEYS[2]) or ''}";
 const commit="if redis.call('GET',KEYS[1])~=ARGV[1] then return 0 end; redis.call('SET',KEYS[2],ARGV[2],'EX',ARGV[3]); redis.call('DEL',KEYS[1]); return 1";
