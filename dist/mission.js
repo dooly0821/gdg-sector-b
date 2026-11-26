@@ -153,10 +153,11 @@ export function handlingTarget(s,blocks){
   return dockTargets(s).find(target=>canUse(s,target,blocks))??dropTarget(s,blocks);
  }
  let best=null,score=Infinity;
+ const cargoOccluders=parcelPositions(s).map(cargoBox);
  for(let i=0;i<s.states.length;i++){
   if(s.states[i]!=='AVAILABLE')continue;
   const target={...shiftParcel(s,i),index:i,pos:parcelPos(s,i)};
-  const hit=pickupContact(s,target,blocks);
+  const hit=pickupContact(s,target,blocks,false,cargoOccluders);
   if(hit&&hit.score<score){best=target;score=hit.score;}
  }
  return best??nextTarget(s);
@@ -177,7 +178,7 @@ function lineClear(s,target,eye,p,blocks,others=[]){
  }
  return true;
 }
-function pickupContact(s,target,blocks,locked=false){
+function pickupContact(s,target,blocks,locked=false,cargoOccluders=null){
  if(!target||s.failed||s.carried>=0||s.states[target.index]!=='AVAILABLE')return null;
  const eye=useEye(s),f=forward(s),[x,y,z]=target.pos,[w,h,d]=parcelHalf;
  const moving=Math.hypot(s.vx??0,s.vz??0)>3||!s.grounded||!!s.vault;
@@ -185,7 +186,8 @@ function pickupContact(s,target,blocks,locked=false){
  const nearest=[Math.max(x-w,Math.min(x+w,eye[0])),Math.max(y,Math.min(y+h,eye[1])),Math.max(z-d,Math.min(z+d,eye[2]))];
  if(Math.hypot(...vsub(nearest,eye))>limit)return null;
  const nearby=blocks.filter(b=>b[2]>=eye[0]-2.8&&b[0]<=eye[0]+2.8&&b[3]>=eye[2]-2.8&&b[1]<=eye[2]+2.8);
- const others=parcelPositions(s,target.index).map(cargoBox).filter(b=>b[2]>=eye[0]-2.8&&b[0]<=eye[0]+2.8&&b[3]>=eye[2]-2.8&&b[1]<=eye[2]+2.8);
+ const own=cargoBox(target.pos);
+ const others=(cargoOccluders??parcelPositions(s,target.index).map(cargoBox)).filter(b=>(!cargoOccluders||!b.every((v,i)=>v===own[i]))&&b[2]>=eye[0]-2.8&&b[0]<=eye[0]+2.8&&b[3]>=eye[2]-2.8&&b[1]<=eye[2]+2.8);
  const end=eye.map((v,i)=>v+f[i]*limit),t=traceBox(eye,end,box);
  const direct=t<=1?eye.map((v,i)=>v+(end[i]-v)*t):null;
  // Real visible surfaces: center, front/back, edges and upper/lower faces.

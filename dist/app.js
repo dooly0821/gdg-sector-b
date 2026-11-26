@@ -10,7 +10,8 @@ import {REVIVE_SECONDS,findReviveTarget} from './revive.js';
 import {spectatorTarget,spectatorCamera,rescueLayers} from './spectator.js';
 import {remoteAt} from './net-smoothing.js';
 import {drawTraversalDebug} from './traversal-debug.js';
-import {equipmentClearance} from './contact.js';
+import {equipmentClearance,nearbyBlocks} from './contact.js';
+import {posePoint,renderPosition,shiftPrevious,mouseDelta,blockGameplayShortcut,frameBudget} from './frame-pacing.js';
 import {updateHaunt,hauntLayers,SPAWN_BALANCE} from './haunt.js';
 import {HIDING_POINTS,REFUGES} from './annex.js';
 import {DENSE_PROPS} from './density.js';
@@ -122,7 +123,7 @@ function onCoopState(snap){
  if(snap.phase==='lobby'){if(mode==='menu'&&pane==='coop'){const key=JSON.stringify([snap.host,snap.you,snap.players.map(p=>[p.id,p.name,p.ready,p.failed]),snap.quota,snap.difficulty?.level,coop?.chosenDifficulty]);if(coop.lobbyKey!==key){coop.lobbyKey=key;coopLobby();}}return;}
  if(!coopStarting&&mode==='menu'&&['loading','playing'].includes(snap.phase)){
   coopStarting=true;coopEnding=false;coopEventSeq=0;soloSession=session;session=newShift();applyCoopSnapshot(session,snap,true);$('#modal').hidden=true;$('#start').click();
- }else if(coopStarting&&session){applyCoopSnapshot(session,snap);if(pane==='map'&&$('#live-map')){const markers=$('#live-map .gdg-map-markers');if(markers)markers.innerHTML=mapMarkersNow();else $('#live-map').innerHTML=plan();textIfChanged($('#facility-progress'),'배송 '+deliveryCount(session)+' / '+missionTotal(session)+' · '+sectorName(session));}}
+ }else if(coopStarting&&session){const old=posePoint(session),wasHidden=session.coopHidden;applyCoopSnapshot(session,snap);if(wasDown!==!!session.failed||wasHidden!==session.coopHidden||Math.hypot(...posePoint(session).map((v,i)=>v-old[i]))>.45)session.renderPrevious=null;if(pane==='map'&&$('#live-map')){const markers=$('#live-map .gdg-map-markers');if(markers)markers.innerHTML=mapMarkersNow();else $('#live-map').innerHTML=plan();textIfChanged($('#facility-progress'),'배송 '+deliveryCount(session)+' / '+missionTotal(session)+' · '+sectorName(session));}}
  if(!coopStarting||!session)return;
  const me=snap.players.find(p=>p.id===snap.you),team=$('#coop-team');
  if(team){team.hidden=false;textIfChanged(team,'CO-OP '+serverName(snap.room)+' · '+difficultyLabel(snap.difficulty?.level)+' · 생존 '+snap.players.filter(p=>!p.failed).length+'/'+snap.players.length+' · 개체 '+snap.haunt.length+'/'+snap.difficulty.maxActive+'\n'+snap.players.map(p=>p.name+(p.id===snap.you?' (나)':'')+(p.failed?' · 구조 대기':p.hidden?' · 은신':' · 생존')).join('\n'));}
@@ -205,9 +206,10 @@ function clockOut(){
  $('#modal').hidden=true;$('#briefing').hidden=true;$('#play').hidden=true;$('#ended').hidden=false;
  $('#ended button').focus();if(document.pointerLockElement===canvas)document.exitPointerLock();audioOn();
 }
-function pauseShift(show=true){if(mode!=='game')return;mode='paused';keys.clear();jump=false;coop?.inputChanged();drag=false;cancelAnimationFrame(raf);if(document.pointerLockElement===canvas)document.exitPointerLock();audioOn();if(show)openPane('pause');}
+function releaseGameInput(){keys.clear();jump=false;drag=false;coop?.inputChanged();if(session)session.renderPrevious=null;accumulator=0;last=performance.now();}
+function pauseShift(show=true){if(mode!=='game')return;mode='paused';releaseGameInput();cancelAnimationFrame(raf);if(document.pointerLockElement===canvas)document.exitPointerLock();audioOn();if(show)openPane('pause');}
 async function lock(){if(grabbing||document.pointerLockElement===canvas)return;grabbing=true;try{await canvas.requestPointerLock();}catch{}finally{grabbing=false;}}
-function resume(){if(session?.failed&&coopStarting){beginSpectator();return;}if(!renderer||session?.failed)return;canvas.classList.remove('captured');mode='game';pane='';$('#modal').hidden=true;$('#briefing').hidden=true;$('#play').hidden=false;canvas.focus();lock();audioOn();last=performance.now();accumulator=0;cancelAnimationFrame(raf);frame(last);}
+function resume(){if(session?.failed&&coopStarting){beginSpectator();return;}if(!renderer||session?.failed)return;canvas.classList.remove('captured');mode='game';pane='';$('#modal').hidden=true;$('#briefing').hidden=true;$('#play').hidden=false;canvas.focus();lock();audioOn();last=performance.now();accumulator=0;session.renderPrevious=null;cancelAnimationFrame(raf);raf=requestAnimationFrame(frame);}
 function clearSpectator(){spectateId=null;spectateCamera=null;$('#play')?.classList.remove('spectating');const h=$('#spectator-hud');if(h)h.hidden=true;const m=$('#rescue-markers');if(m)m.replaceChildren();}
 function beginSpectator(){
  if(!renderer||!session?.failed||!coopStarting)return;
@@ -331,10 +333,11 @@ function targetCorners(pos,dock){
  return [Math.min(...xx),Math.min(...yy),Math.max(...xx)-Math.min(...xx),Math.max(...yy)-Math.min(...yy)];
 }
 const textIfChanged=(el,value)=>{if(el&&el.textContent!==value)el.textContent=value;};
-function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/1000),dt=Math.min(.067,rawDt);last=now;const s=session;if(coopStarting&&s.failed){spectateFrame(now,dt);return;}
+function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/1000),dt=Math.min(.067,rawDt);last=now;const s=session;if(document.hidden){accumulator=0;s.renderPrevious=null;raf=requestAnimationFrame(frame);return;}if(coopStarting&&s.failed){spectateFrame(now,dt);return;}
  if(keys.has('ArrowLeft'))s.yaw+=dt*1.65;if(keys.has('ArrowRight'))s.yaw-=dt*1.65;if(keys.has('ArrowUp'))s.pitch=Math.min(CONFIG.pitchLimit,s.pitch+dt);if(keys.has('ArrowDown'))s.pitch=Math.max(-CONFIG.pitchLimit,s.pitch-dt);
- const was=s.steps;const tick=1/(coopStarting?60:PHYSICS.hz);if(coopStarting&&coop?.snapshot?.phase!=='playing'){accumulator=0;s.vx=s.vz=s.vy=0;}else if(s.encounterHit){keys.clear();jump=false;s.vx=s.vz=s.vy=0;accumulator=0;}else accumulator+=dt;while(accumulator>=tick){step(s,keys,worlds[0].blocks,tick,jump);jump=false;accumulator-=tick;}const doors=lockerDoorBlocks(s),dynamic=parcelBlocks(s).concat(doors);const interactionBlocks=worlds[0].blocks.concat(doors);
- if(coopStarting&&coop?.snapshot?.phase==='playing')advanceCoopPrediction(s,worlds[0].blocks,dynamic,dt,now);
+ const was=s.steps;const tick=1/(coopStarting?60:PHYSICS.hz);if(coopStarting&&coop?.snapshot?.phase!=='playing'){accumulator=0;s.renderPrevious=null;s.vx=s.vz=s.vy=0;}else if(s.encounterHit){keys.clear();jump=false;s.vx=s.vz=s.vy=0;accumulator=0;s.renderPrevious=null;}else{const budget=frameBudget(rawDt,accumulator,tick);for(let i=0;i<budget.steps;i++){s.renderPrevious=posePoint(s);step(s,keys,worlds[0].blocks,tick,jump);jump=false;}accumulator=budget.remainder;}
+ const doors=lockerDoorBlocks(s),dynamic=parcelBlocks(s).concat(doors).filter(b=>b[0]<s.x+3&&b[2]>s.x-3&&b[1]<s.z+3&&b[3]>s.z-3);const interactionBlocks=nearbyBlocks(worlds[0].blocks,s.x,s.z).concat(doors.filter(b=>b[0]<s.x+3&&b[2]>s.x-3&&b[1]<s.z+3&&b[3]>s.z-3));
+ if(coopStarting&&coop?.snapshot?.phase==='playing'){const before=posePoint(s);advanceCoopPrediction(s,worlds[0].blocks,dynamic,dt,now);s.renderPrevious=shiftPrevious(s.renderPrevious,before,posePoint(s));}
  equipmentClearance(s,worlds[0].blocks,dt,dynamic);
  if(s.lockerLook){const a=s.lockerLook;a.t=Math.min(1,a.t+dt/.44);const t=a.t*a.t*(3-2*a.t);s.yaw=a.yaw+Math.atan2(Math.sin(-a.yaw),Math.cos(-a.yaw))*t;s.pitch=a.pitch*(1-t);if(a.t>=1)s.lockerLook=null;}updateViewmodel(s,dt);
  if(s.pendingUse&&s.flashAmount===0){const target=s.pendingUse;s.pendingUse=null;use(target.drop?dropTarget(s,interactionBlocks):target,true);if(!s.handAction&&s.restoreTorch){s.flashlight=true;s.restoreTorch=false;}}
@@ -364,12 +367,13 @@ function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/10
   voice.onended=()=>{voice.disconnect();gain.disconnect();pan.disconnect();};
  }
  if(s.hauntSounds)s.hauntSounds.length=0;
- const l=lockerTarget(s,worlds[0].blocks),hiddenLocker=closedLocker(s);
+ const l=lockerTarget(s,interactionBlocks),hiddenLocker=closedLocker(s);
  const useTarget=handlingTarget(s,interactionBlocks),available=!hiddenLocker&&canUse(s,useTarget,interactionBlocks);
  const target=s.carried<0&&available?useTarget:nextTarget(s);
  const eyeHeight=(s.bodyHeight??1.70)-.12;
  s.viewHeight=eyeHeight<(s.viewHeight??eyeHeight)?eyeHeight:(s.viewHeight??eyeHeight)+(eyeHeight-(s.viewHeight??eyeHeight))*(1-Math.exp(-dt*19));
- const eye=[s.x,s.y+s.viewHeight+bob-(s.landKick??0)*.8,s.z];
+ const renderAt=renderPosition(s,s.renderPrevious,accumulator/tick);
+ const eye=[renderAt[0],renderAt[1]+s.viewHeight+bob-(settings.motion?(s.landKick??0)*.4:0),renderAt[2]];
  const view=facing;
  const visualTime=coopStarting?(s.coopVisualClock??s.elapsed):s.elapsed;
  const pose=choreography(s,eye,available,moving,keys.has('ShiftLeft')||keys.has('ShiftRight'),visualTime,view);
@@ -378,11 +382,11 @@ function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/10
  // Hysteresis: lower render resolution only after sustained slow frames.
  const frameMs=Math.min(150,rawDt*1000);s.frameAverage=(s.frameAverage??16.7)*.90+frameMs*.10;
  if(s.frameAverage>24){s.slowFrames=(s.slowFrames??0)+1;s.fastFrames=0;}else if(s.frameAverage<17.6){s.fastFrames=(s.fastFrames??0)+1;s.slowFrames=0;}else{s.slowFrames=0;s.fastFrames=0;}
- if((s.slowFrames??0)>=(coopStarting?6:10)&&now-(s.lastScaleChange??-1000)>450){s.adaptiveScale=Math.max(coopStarting?.50:.65,(s.adaptiveScale??1)-.10);s.slowFrames=0;s.lastScaleChange=now;}
+ if((s.slowFrames??0)>=(coopStarting?10:10)&&now-(s.lastScaleChange??-2000)>1200){s.adaptiveScale=Math.max(coopStarting?.50:.65,(s.adaptiveScale??1)-.10);s.slowFrames=0;s.lastScaleChange=now;}
  if((s.fastFrames??0)>=240&&now-(s.lastScaleChange??-1000)>2500){s.adaptiveScale=Math.min(1,(s.adaptiveScale??1)+.05);s.fastFrames=0;s.lastScaleChange=now;}
- pose.lowCostShadow=coopStarting&&(s.adaptiveScale??1)<.85;
+ pose.lowCostShadow=(s.adaptiveScale??1)<.85;
  renderer.render(eye,view,parcelPositions(s,pose.hidden,Boolean(renderer.gl)),pose,settings.scale*(s.adaptiveScale??1));
- updateRescueMarkers(s,eye);
+ if(coopStarting)updateRescueMarkers(s,eye);
  if(s.showTraversal||document.querySelector('#traversal-debug'))drawTraversalDebug(s,worlds[0].blocks,renderer,pose,eye,view);
  const mark=$('#waypoint'),p=$('#prompt'),brackets=$('#target-brackets');
  let msg=s.climbHint>s.elapsed?'높은 선반에 오르려면 E로 상자를 내려놓으세요.':'';brackets.hidden=true;mark.hidden=true;
@@ -390,7 +394,7 @@ function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/10
  if(target&&!s.handAction){
   const distance=Math.hypot(s.x-target.pos[0],s.y-target.pos[1],s.z-target.pos[2]);const pt=target.pos.slice();pt[1]+=target.dock?1.05:.83;
   const clip=renderer.project(pt),label=target.dock?'출고 '+target.id.slice(-2):target.id;
-  if(!blackout&&clip&&Math.abs(clip[0])<.92&&Math.abs(clip[1])<.84){mark.hidden=false;mark.style.left=(clip[0]+1)*50+'%';mark.style.top=(1-clip[1])*50+'%';mark.textContent='◆ '+label+' · '+Math.round(distance)+' m';}
+  if(!blackout&&clip&&Math.abs(clip[0])<.92&&Math.abs(clip[1])<.84){mark.hidden=false;mark.style.left=(clip[0]+1)*50+'%';mark.style.top=(1-clip[1])*50+'%';textIfChanged(mark,'◆ '+label+' · '+Math.round(distance)+' m');}
   else msg=blackout?'정전 · 전체 지도(M)에서 목표 확인':label+' / '+areaNames[target.area]+' · '+Math.round(distance)+' m';
   if(available){
    msg='<kbd>E</kbd> '+(useTarget.dock?'배송하기':useTarget.drop?'상자 내려놓기':'상자 들기');
@@ -401,14 +405,14 @@ function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/10
  if(s.handAction)msg=s.handAction.placing?'상자 내려놓는 중':'상자 드는 중';
  if(l&&!s.handAction&&s.carried<0){msg=lockerPrompt(s,l);brackets.hidden=true;if(hiddenLocker){msg='은신 중 · 문틈 관찰 / Q 소등 / E 열기';mark.hidden=true;}}
  if(coopStarting&&coop?.snapshot){const me=coop.snapshot.players.find(a=>a.id===coop.snapshot.you),down=findReviveTarget(s,coop.snapshot.players,interactionBlocks,coop.snapshot.you,me?.reviveTarget);if(down&&!hiddenLocker){const percent=Math.min(100,Math.floor((me?.reviveProgress??0)/REVIVE_SECONDS*100));msg='<kbd>E</kbd> 2.5초 유지 · '+escapeNickname(down.name)+' 구조 '+percent+'%<span style="display:block;height:4px;background:#48392a;margin-top:5px"><i style="display:block;height:100%;width:'+percent+'%;background:#ffbb54"></i></span>';brackets.hidden=true;}}
- if(!msg&&!document.pointerLockElement&&!drag)msg='드래그로 시점 회전 · WASD 이동';
+ if(document.pointerLockElement!==canvas&&!drag&&!s.failed)msg='화면 클릭 · 마우스 고정 재개'+(msg?' | '+msg:'');
  textIfChanged($('#torch-status'),'Q · 손전등 '+(s.flashlight?'ON':'OFF')+(s.shiftEvents?.active?' · '+(s.shiftEvents.active.kind==='blackout'?'정전':'전파 간섭'):''));if(p.innerHTML!==msg)p.innerHTML=msg;textIfChanged($('#delivered'),deliveryCount(s)+' / '+missionTotal(s));
  textIfChanged($('#carry-status span'),s.handAction?(s.handAction.placing?'내려놓는 중':'드는 중'):s.carried>=0?(s.flashlight?'한 손 운반 중':'운반 중'):'빈손');
  const special=specialLabel(s,s.carried>=0?s.carried:target?.index??-1);
  textIfChanged($('#taskLine'),(target?(target.dock?shiftParcel(s,s.carried).id+' → '+target.id+' 출고대':target.id+' · '+(areaNames[target.area]??'')):'전체 배송 완료')+(special?' · '+special:''));
  const directions=['N','NE','E','SE','S','SW','W','NW'];const bearing=((Math.round(-s.yaw*180/Math.PI)%360)+360)%360;
  textIfChanged($('#heading'),directions[Math.round(bearing/45)%8]+'  '+String(bearing).padStart(3,'0')+'°');
- if(!coopStarting||now-(s.lastCoopHud??-1000)>=80){s.lastCoopHud=now;updateHud(s,!!hiddenLocker,deliveryCount(s),missionTotal(s),plan,now,settings.hints,mapMarkersNow,worlds?.[0]?.blocks);}
+ if(now-(s.lastCoopHud??-1000)>=80){s.lastCoopHud=now;updateHud(s,!!hiddenLocker,deliveryCount(s),missionTotal(s),plan,now,settings.hints,mapMarkersNow,worlds?.[0]?.blocks);}
  if(coopStarting){s.netFrameMs=(s.netFrameMs??frameMs)*.94+frameMs*.06;if(now-(s.lastNetInfo??-1000)>600){s.lastNetInfo=now;const team=$('#coop-team');if(team){team.dataset.connection=coop?.connectionState??'connected';team.title=(coop?.connectionState==='recovering'?'연결 복구 중 · ':coop?.connectionState==='expired'?'연결 만료 · ':'')+'FPS '+Math.round(1000/Math.max(1,s.netFrameMs))+' · 서버 응답 '+Math.round(coop?.rtt??0)+' ms · 갱신 간격 '+Math.round(coop?.snapshotGap??0)+' ms · 강제 보정 '+(s.netHardCorrections??0)+'회';}}}
  if(now>radioUntil)textIfChanged($('#radio'),'');if(now>receiptUntil)$('#receipt').hidden=true;
  if(!coopStarting&&finishAt!==null&&s.elapsed>=finishAt){finishAt=null;complete();return;}
@@ -416,16 +420,18 @@ function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/10
 }
 document.addEventListener('keydown',e=>{
  if(e.code==='Enter'&&!$('#modal').hidden&&pane==='coop'&&!coop&&document.activeElement?.id==='coop-nickname'){e.preventDefault();if(selectedServer)coopConnect(selectedServer);return;}
- if(e.code==='Escape'){if(mode==='game'){pauseShift();}else if(!$('#modal').hidden){closePane();}return;}
+ if(e.code==='Escape'){if(e.repeat)return;e.preventDefault();if(mode==='game'){pauseShift();}else if(!$('#modal').hidden){closePane();}return;}
+ if(mode==='game'&&blockGameplayShortcut(e)){e.preventDefault();e.stopPropagation();return;}
  if(mode!=='game')return;if(coopStarting&&session?.failed){if(['ArrowLeft','ArrowRight','KeyA','KeyD','KeyQ','KeyE','Space'].includes(e.code)){e.preventDefault();if(!e.repeat)switchSpectator(['ArrowLeft','KeyA','KeyQ'].includes(e.code)?-1:1);}else if(e.code==='KeyM'&&!e.repeat){session.mapExpanded=!session.mapExpanded;$('#play').classList.toggle('map-expanded',session.mapExpanded);}return;}if(['Space','KeyW','KeyA','KeyS','KeyD','KeyE','KeyQ','KeyC','ShiftLeft','ShiftRight','ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();
  if(e.code==='KeyM'){e.preventDefault();if(!e.repeat){session.mapExpanded=!session.mapExpanded;$('#play').classList.toggle('map-expanded',session.mapExpanded);}return;}
  if(e.code==='F3'){e.preventDefault();if(!e.repeat)session.showTraversal=!session.showTraversal;return;}
  if(e.code==='KeyQ'&&!e.repeat){if(coopStarting&&coop){coop.command('torch');return;}if(session.handAction){session.restoreTorch=!session.restoreTorch;return;}if(toggleFlashlight(session)){session.pendingUse=false;session.restoreTorch=false;beep(180,.055,'triangle',.025);}else say('상자를 집거나 내려놓는 동안에는 장비 전환을 할 수 없습니다.',2);return;}if(e.code==='KeyE'&&!e.repeat){if(coopStarting&&coop){keys.add('KeyE');coop.inputChanged();}use();return;}if(e.code==='Space'&&!e.repeat){jump=true;if(coopStarting&&coop)coop.command('jump');}const changed=!keys.has(e.code);keys.add(e.code);if(changed&&coopStarting&&coop&&['KeyW','KeyA','KeyS','KeyD','KeyC','ShiftLeft','ShiftRight','Space'].includes(e.code))coop.inputChanged();
 });document.addEventListener('keyup',e=>{const changed=keys.delete(e.code);if(changed&&coopStarting&&coop)coop.inputChanged();});
 canvas.addEventListener('wheel',e=>{if(mode==='game'){e.preventDefault();if(session?.failed){switchSpectator(e.deltaY>0?1:-1);return;}jump=true;if(coopStarting&&coop)coop.command('jump');}},{passive:false});
-function pointer(e){if(mode!=='game'||session?.failed||(!document.pointerLockElement&&!drag)||performance.now()<lookReady||!Number.isFinite(e.movementX)||!Number.isFinite(e.movementY))return;session.yaw-=Math.max(-1200,Math.min(1200,e.movementX))*CONFIG.sensitivity*settings.sensitivity;session.yaw=Math.atan2(Math.sin(session.yaw),Math.cos(session.yaw));session.pitch=Math.max(-CONFIG.pitchLimit,Math.min(CONFIG.pitchLimit,session.pitch-Math.max(-1200,Math.min(1200,e.movementY))*CONFIG.sensitivity*settings.sensitivity*(settings.invert?-1:1)));}
-document.addEventListener('mousemove',pointer);canvas.addEventListener('mousedown',()=>{if(mode==='game'&&!session?.failed){drag=true;lock();}});document.addEventListener('mouseup',()=>drag=false);
-document.addEventListener('pointerlockchange',()=>{lookReady=performance.now()+200;if(!document.pointerLockElement&&mode==='game'&&!session?.failed)pauseShift();});window.addEventListener('blur',()=>pauseShift());document.addEventListener('visibilitychange',()=>{if(document.hidden)pauseShift();});
+function pointer(e){if(mode!=='game'||session?.failed||(document.pointerLockElement!==canvas&&!drag)||performance.now()<lookReady)return;session.yaw-=mouseDelta(e.movementX,settings.sensitivity);session.yaw=Math.atan2(Math.sin(session.yaw),Math.cos(session.yaw));session.pitch=Math.max(-CONFIG.pitchLimit,Math.min(CONFIG.pitchLimit,session.pitch-mouseDelta(e.movementY,settings.sensitivity)*(settings.invert?-1:1)));}
+document.addEventListener('mousemove',pointer);canvas.addEventListener('mousedown',e=>{if(mode==='game'&&!session?.failed&&e.button===0){e.preventDefault();canvas.focus({preventScroll:true});drag=true;lock();}});document.addEventListener('mouseup',()=>drag=false);
+// Browser focus/pointer lock loss is not an intentional menu action.
+ document.addEventListener('pointerlockchange',()=>{lookReady=performance.now()+65;if(document.pointerLockElement!==canvas&&mode==='game'&&!session?.failed)releaseGameInput();});window.addEventListener('blur',()=>{if(mode==='game')releaseGameInput();});document.addEventListener('visibilitychange',()=>{if(mode==='game')releaseGameInput();});canvas.addEventListener('contextmenu',e=>e.preventDefault());
 canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();pauseShift(false);panel('error','<p>그래픽 연결이 끊어졌습니다. 새로 열어 창고에 다시 접속하세요.</p><div class="panel-actions">'+action('reload','다시 열기',true)+'</div>','그래픽 연결 중단');});
 $('#close').onclick=closePane;$('#pause').onclick=()=>pauseShift();
 document.addEventListener('keydown',e=>{

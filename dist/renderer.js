@@ -274,7 +274,7 @@ export class Renderer{
  }
  render(eye,forward,items,pose,scale=1){
   const gl=this.gl,c=this.canvas;const ratio={HIGH:Math.min(devicePixelRatio,1.5),BALANCED:1,PERFORMANCE:.7}[this.quality]*scale;
-  const width=Math.max(2,Math.round(c.clientWidth*ratio)),height=Math.max(2,Math.round(c.clientHeight*ratio));if(c.width!==width||c.height!==height){c.width=width;c.height=height;}
+  const width=Math.max(2,Math.round(c.clientWidth*ratio)),height=Math.max(2,Math.round(c.clientHeight*ratio));if(c.width!==width||c.height!==height){if(c.width!==width)c.width=width;if(c.height!==height)c.height=height;}
   const aspect=width/height,proj=perspective(78*Math.PI/180,aspect,.045,95),vp=multiply(proj,cameraView(eye,forward));this.vp=vp;
   gl.viewport(0,0,width,height);gl.clearColor(.025,.032,.046,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.useProgram(this.program);
   const u=this.loc.main,glows=glowPalette(pose.clock??0);
