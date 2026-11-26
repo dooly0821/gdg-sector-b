@@ -1,3 +1,4 @@
+import {buildVent} from './facility-actions.js';
 // The west loading passage links the original warehouse to a second hall.
 export const ANNEX={west:-43,east:-15,north:-9,south:21,entry:[-16,0,14]};
 export const CORE=[-34,2.8,-3];
@@ -138,7 +139,8 @@ function buildSouthExtension(w,expanded=false){
  for(const x of [-30,0])solid(x,3.6,54,6,7.4,.34,wall);
  // Close the offset between the existing north walls without obstructing the gateways.
  solid(-14.9,0,21.5,.34,11,1,wall);
- for(const [a,b] of [[22,34],[40,54]])solid(-15,0,(a+b)/2,.30,11,b-a,wall);
+ for(const [a,b] of [[22,34],[40,44.25],[45.75,54]])solid(-15,0,(a+b)/2,.30,11,b-a,wall);
+ solid(-15,1.18,45,.30,9.82,1.5,wall);buildVent(w,45);
  solid(-15,3.7,37, .30,7.3,6,wall);
  for(const z of [24,30,36,42,48,53]){
   w.box(-14,11.15,z,58,.18,5.95,dark);
@@ -173,7 +175,8 @@ function buildDeepHalls(w,expanded=false){
  w.box(-14,-.16,66,58,.32,24,floor);
  for(const x of [-43,15])solid(x,0,66,.34,11,24,wall);
  if(expanded){for(const [a,b] of [[-43,-33],[-27,-3],[3,15]])solid((a+b)/2,0,78,b-a,11,.34,wall);for(const x of [-30,0])solid(x,3.6,78,6,7.4,.34,wall);}else solid(-14,0,78,58,11,.34,wall);
- for(const [a,b] of [[54,63],[69,78]])solid(-15,0,(a+b)/2,.32,11,b-a,wall);
+ for(const [a,b] of [[54,57.75],[59.25,63],[69,78]])solid(-15,0,(a+b)/2,.32,11,b-a,wall);
+ solid(-15,1.18,58.5,.32,9.82,1.5,wall);buildVent(w,58.5);
  solid(-15,3.6,66,.32,7.4,6,wall);
  w.sign(-30,3.85,54.20,4,.4,'C-02 / WASTE PROCESSING','#362b25','#d1b17d');
  w.sign(0,3.85,54.20,4,.4,'D-04 / CONTAINMENT','#3d2024','#f1a99b');

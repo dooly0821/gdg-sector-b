@@ -1,3 +1,4 @@
+import {ventsFor,panelsFor} from './facility-actions.js';
 import {lockersFor} from './lockers.js';
 import {hasExtension,extensionRegions,EXTENSION_HIDE} from './map-layout.js';
 import {docksFor} from './dispatch-bays.js';
@@ -30,6 +31,8 @@ export function mapBase(blocks){
  for(const [x,z] of [...HIDING_POINTS,...DRESSING_HIDE,...(expanded?EXTENSION_HIDE:[])])out+='<rect x="'+n(X(x)-1.8)+'" y="'+n(Y(z)-1.8)+'" width="3.6" height="3.6" rx=".6" fill="#9bb3c4"/>';
  for(const [x,y,z] of REFUGES)out+='<path d="M'+X(x)+' '+(Y(z)-3)+'l3 6h-6z" fill="#94b7af"/>';
  for(const {x,z,id} of lockersFor(level))out+='<g transform="translate('+n(X(x))+' '+n(Y(z))+')"><rect x="-4" y="-4" width="8" height="8" rx="1" fill="#438c72" stroke="#c3f4d9" stroke-width="1"/><path d="M-1.6 -2v4m3.2 -4v4M-1.6 0h3.2" stroke="#effff6" stroke-width=".9"/><title>은신 사물함 '+id+'</title></g>';
+ for(const v of ventsFor(level))out+='<rect x="'+(X(v.x)-3)+'" y="'+(Y(v.z)-3)+'" width="6" height="6" fill="#e0ad60"><title>환풍구 · C 앉기</title></rect>';
+ for(const p of panelsFor(level))out+='<circle cx="'+X(p.x)+'" cy="'+Y(p.z)+'" r="2.4" fill="#90b9a2"><title>전력 제어 '+p.name+'</title></circle>';
  for(const [x,z,w,d,id] of regions)out+='<text x="'+X(x+1.2)+'" y="'+Y(z+1.8)+'" fill="#e2e7e5" font-size="7.5" font-weight="800" paint-order="stroke" stroke="#222521" stroke-width="1.7">'+id+'</text>';
  for(const [i,dock] of docksFor(level).entries())out+='<g transform="translate('+X(dock[0])+' '+Y(dock[2])+')"><rect x="-5" y="-3" width="10" height="6" fill="#79c9ec" stroke="#effbff" stroke-width="1"/><text x="-7" y="10" style="fill:#a9e8ff;font-size:6.2px" paint-order="stroke" stroke="#202426" stroke-width="1.6">출고 '+String(i+2).padStart(2,'0')+'</text></g>';
  cache.set(blocks,out);return out;

@@ -63,7 +63,8 @@ void main(){
 const fs=`#version 300 es
 precision highp float;precision highp sampler2DArray;
 in vec3 P,N;in vec2 UV,tile;in vec4 C,Q,shadowPos;
-uniform sampler2DArray atlas;uniform sampler2D shadowMap,floorTex,skinBase,skinEmission;uniform bool skinActive,fpActive;uniform vec2 fpFactors;uniform vec3 eye,lamps[8];uniform float lampRed[8];uniform float shadowStep,hand,clock,torchPower,clay,character,actorOpacity,gridPower,lowCostShadow;uniform vec3 torchPos,torchDir,core;uniform vec4 footprints[2],cargoGlow;uniform float rescueGlow;
+uniform sampler2DArray atlas;uniform sampler2D shadowMap,floorTex,skinBase,skinEmission;uniform bool skinActive,fpActive;uniform vec2 fpFactors;uniform vec3 eye,lamps[8];uniform float lampRed[8];uniform float shadowStep,hand,clock,torchPower,clay,character,actorOpacity,gridPower,lowCostShadow;uniform vec3 torchPos,torchDir,core;uniform vec4 footprints[2],cargoGlow;uniform float rescueGlow;uniform float zonePowers[8];
+ int zoneAt(vec3 p){return p.z>=78.?(p.x< -15.?6:7):p.z>=54.?(p.x< -15.?4:5):p.z>=22.?(p.x< -15.?2:3):(p.x< -15.?1:0);}
 out vec4 outColor;
 float visibility(vec3 n){
  if(hand>.5||shadowStep==0.)return 1.;vec3 s=shadowPos.xyz/shadowPos.w*.5+.5;
@@ -89,17 +90,17 @@ void main(){
  if(Q.w==0.||Q.w==3.||(hand>.5&&Q.w==2.)){vec3 T=cross(dFdy(P),n),B=cross(n,dFdx(P));float det=dot(dFdx(P),T);if(abs(det)>.0000001)n=normalize(n-sign(det)*clamp((dFdx(grit)*T+dFdy(grit)*B)/abs(det),vec3(-.13),vec3(.13))*.27);}
  vec3 base=clay>.5?vec3(.79,.77,.735):sampleC.rgb*C.rgb;float edge=min(min(UV.x,1.-UV.x),min(UV.y,1.-UV.y));
  if(Q.w==1.)base*=.89+.11*smoothstep(.0,.038,edge);
- float shade=visibility(n);vec3 L=normalize(vec3(.35,.81,-.28));
+ float localGrid=gridPower*zonePowers[zoneAt(P)];float shade=visibility(n);vec3 L=normalize(vec3(.35,.81,-.28));
  vec3 amb=mix(vec3(.065,.075,.10),vec3(.20,.23,.29),n.y*.5+.5);
- vec3 lit=(amb+vec3(.085,.105,.145)*max(dot(n,L),0.)*(.14+.86*shade))*mix(.23,1.,gridPower);
- if(hand<.5&&e>0.&&C.r<C.g*1.8)e*=gridPower;
+ vec3 lit=(amb+vec3(.085,.105,.145)*max(dot(n,L),0.)*(.14+.86*shade))*mix(.23,1.,localGrid);
+ if(hand<.5&&e>0.&&C.r<C.g*1.8)e*=localGrid;
  float sheen=0.,mist=0.;vec3 v=normalize(eye-P);
  if(hand>.5){vec3 key=normalize(vec3(-.55,.76,.45));lit=vec3(.48,.49,.55)+vec3(.74,.65,.51)*max(dot(n,key),0.)+vec3(.15,.17,.24)*max(dot(n,normalize(vec3(.8,.25,-.4))),0.);sheen=pow(max(dot(n,normalize(v+key)),0.),32.)*Q.y*.4;}
  else{
   for(int i=0;i<8;i++){
    vec3 d=lamps[i]-P;float ds=dot(d,d);vec3 l=d*inversesqrt(max(.01,ds));
    vec3 toLamp=lamps[i]-eye;float along=dot(toLamp,-v);float gap=length(toLamp+along*v);
-   float supply=mix(gridPower,1.,lampRed[i]);
+   float supply=mix(gridPower*zonePowers[zoneAt(lamps[i])],1.,lampRed[i]);
    if(along>0.&&along<distance(eye,P)+.14)mist+=supply*(.075*exp(-2.8*gap*gap)+.13*exp(-18.*gap*gap));
    float beam=smoothstep(-.05,.89,l.y);float red=lampRed[i];float pulse=1.-red*.12*(.5+.5*sin(clock*2.2+float(i)*1.7));float falloff=mix(14.,32.,red)/(ds+8.)*beam*pulse*supply;
    lit+=mix(vec3(1.,.72,.44),vec3(1.,.075,.035),red)*falloff*(.14+.86*max(dot(n,l),0.))*(.35+.65*shade);
@@ -175,7 +176,7 @@ export class Renderer{
  constructor(canvas){
   this.canvas=canvas;this.gl=canvas.getContext('webgl2',{alpha:false,antialias:true,powerPreference:'high-performance'});if(!this.gl)throw Error('WebGL 2 is unavailable. Enable graphics acceleration in desktop Chrome, then reload.');
   const gl=this.gl;this.program=compile(gl,vs,fs);this.depthProgram=compile(gl,vs,depthFS);
-  this.loc={};for(let p of [this.program,this.depthProgram]){let u={};for(let k of ['VP','offset','lightVP','worldObject','objectMatrix','clock','core','clay','character','actorOpacity','atlas','shadowMap','floorTex','eye','lamps','lampRed[0]','shadowStep','hand','torchPower','torchPos','torchDir','flexPivot','flexForward','flexNormal','flexWidth','flexAmount','digitWidths','knuckles','digitLengths','fingerAmounts','footprints[0]','skinActive','skinBones[0]','skinBase','skinEmission','fpActive','fpFactors','gridPower','lowCostShadow','cargoGlow','rescueGlow'])u[k]=gl.getUniformLocation(p,k);u.skinBones=u['skinBones[0]'];this.loc[p===this.program?'main':'depth']=u;}
+  this.loc={};for(let p of [this.program,this.depthProgram]){let u={};for(let k of ['VP','offset','lightVP','worldObject','objectMatrix','clock','core','clay','character','actorOpacity','atlas','shadowMap','floorTex','eye','lamps','lampRed[0]','shadowStep','hand','torchPower','torchPos','torchDir','flexPivot','flexForward','flexNormal','flexWidth','flexAmount','digitWidths','knuckles','digitLengths','fingerAmounts','footprints[0]','skinActive','skinBones[0]','skinBase','skinEmission','fpActive','fpFactors','gridPower','zonePowers[0]','lowCostShadow','cargoGlow','rescueGlow'])u[k]=gl.getUniformLocation(p,k);u.skinBones=u['skinBones[0]'];this.loc[p===this.program?'main':'depth']=u;}
   this.buffers={};
   const lv=cameraView([-8,88,25],[-10,-88,5]);const ortho=new Float32Array([1/50,0,0,0,0,1/70,0,0,0,0,-2/180,0,0,0,-1,1]);this.lightVP=multiply(ortho,lv);
  }
@@ -289,7 +290,7 @@ export class Renderer{
    gl.uniform4f(u.cargoGlow,c[0],c[1],c[2],a);
   };
   setGlow();gl.uniform1f(u.rescueGlow,0);
-  gl.uniform1f(u.gridPower,pose.gridPower??1);gl.uniform1f(u.lowCostShadow,pose.lowCostShadow?1:0);gl.uniform1i(u.fpActive,0);gl.uniform1i(u.skinActive,0);gl.uniform1f(u.character,0);gl.uniform1f(u.clay,0);gl.uniformMatrix4fv(u.VP,false,vp);gl.uniformMatrix4fv(u.lightVP,false,this.lightVP);gl.uniform3fv(u.eye,eye);const right=unit(cross(forward,[0,1,0])),up=cross(right,forward),off=pose.torchOffset??[0,0,0];
+  gl.uniform1f(u.gridPower,pose.gridPower??1);gl.uniform1fv(u['zonePowers[0]'],pose.zonePowers??[1,1,1,1,1,1,1,1]);gl.uniform1f(u.lowCostShadow,pose.lowCostShadow?1:0);gl.uniform1i(u.fpActive,0);gl.uniform1i(u.skinActive,0);gl.uniform1f(u.character,0);gl.uniform1f(u.clay,0);gl.uniformMatrix4fv(u.VP,false,vp);gl.uniformMatrix4fv(u.lightVP,false,this.lightVP);gl.uniform3fv(u.eye,eye);const right=unit(cross(forward,[0,1,0])),up=cross(right,forward),off=pose.torchOffset??[0,0,0];
   // A viewmodel can overlap nearby geometry; the light origin stays near the eye
   // to avoid placing a light source on the far side of a wall.
   const local=pose.torchLocal?.position??[.325,-.283,-.887],dir=pose.torchLocal?.direction??[-.045,-.025,-1];

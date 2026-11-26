@@ -60,7 +60,10 @@ function steerHop(s,x,z,dt){
 }
 export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
  if(dt<=0)return;s.vx??=0;s.vz??=0;s.jumpBuffer??=0;
- const duck=keys.has('KeyC'),hopHeld=duck&&keys.has('Space');
+ const crouch=keys.has('KeyC'),pressed=keys.has('KeyV')&&!s.wasSlideKey||s.slideRequested;s.wasSlideKey=keys.has('KeyV');s.slideRequested=false;
+ s.slideCooldown=Math.max(0,(s.slideCooldown??0)-dt);s.slideTime=Math.max(0,(s.slideTime??0)-dt);
+ if(pressed&&s.grounded&&!s.slideCooldown&&Math.hypot(s.vx,s.vz)>=P.sprint*.78){s.slideTime=.8;s.slideCooldown=1.5;}
+ const duck=crouch||s.slideTime>0,hopHeld=crouch&&keys.has('Space');
  // Retire legacy scripted vaults; all jumps are controlled by gravity and input.
  s.vault=null;s.ledgeIntent=0;
  if(jump||hopHeld)s.jumpBuffer=P.jumpBuffer;else s.jumpBuffer=Math.max(0,s.jumpBuffer-dt);
@@ -72,10 +75,7 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
  const x=mag?(Math.cos(s.yaw)*side-Math.sin(s.yaw)*up)/mag:0,z=mag?(-Math.sin(s.yaw)*side-Math.cos(s.yaw)*up)/mag:0;
 
  const preSpeed=Math.hypot(s.vx,s.vz);
- if(s.grounded&&duck&&!s.wasDuck&&preSpeed>P.sprint*.78)s.slideTime=.42;
- if(!duck)s.slideTime=0;
- s.wasDuck=duck;
- s.slideTime=Math.max(0,(s.slideTime??0)-dt);
+ s.wasDuck=crouch;
  if(s.grounded&&s.jumpBuffer>0){
   // Compensate the semi-implicit gravity step equally at 60 and 120 Hz.
   s.vy=Math.sqrt(2*P.gravity*jumpHeightFor(preSpeed,duck))+P.gravity*dt*.5;s.grounded=false;s.onRail=false;s.jumpBuffer=0;s.hopBoosted=false;
@@ -83,13 +83,13 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
  }
  // One small momentum gain per airborne hop, never a per-frame speed exploit.
  // Crouch-jumping at running speed rewards a forward or strafe input.
- if(!s.grounded&&duck&&mag&&!s.hopBoosted&&preSpeed>P.sprint*.78&&s.vx*x+s.vz*z>preSpeed*.15){
+ if(!s.grounded&&crouch&&mag&&!s.hopBoosted&&preSpeed>P.sprint*.78&&s.vx*x+s.vz*z>preSpeed*.15){
   const gain=Math.min(P.bhopCap,preSpeed+.88)/preSpeed;
   s.vx*=gain;s.vz*=gain;s.hopBoosted=true;
  }
  if(s.grounded){
-  const speed=Math.hypot(s.vx,s.vz),sliding=s.slideTime>0&&duck&&speed>P.walk;
-  const friction=sliding?1.6:P.friction,next=Math.max(0,speed-Math.max(speed,P.stopSpeed)*friction*dt);
+  const speed=Math.hypot(s.vx,s.vz),sliding=s.slideTime>0&&speed>P.walk;
+  const friction=sliding?1.05:P.friction,next=Math.max(0,speed-Math.max(speed,P.stopSpeed)*friction*dt);
   if(speed>0){s.vx*=next/speed;s.vz*=next/speed;}
   if(mag)accelerate(s,x,z,wish,sliding?3:P.groundAccel,dt);
  }else if(mag){if(duck)steerHop(s,x,z,dt);accelerate(s,x,z,P.airWish,P.airAccel,dt);}
