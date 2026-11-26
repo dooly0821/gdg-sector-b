@@ -14,5 +14,5 @@ import {createRoom,operateRoom,tickRoom,snapshot} from '../server/room-core.js';
 const {room,player}=createRoom('ABC234',1000),joined=operateRoom(room,{op:'join'},1010);const second=Object.values(room.players).find(p=>p.token===joined.token);
 operateRoom(room,{op:'start',token:player.token},1020);operateRoom(room,{op:'ready',token:player.token},1030);operateRoom(room,{op:'ready',token:second.token},1040);
 room.shared.elapsed=71;room.shared.shiftEvents.nextAt=70;room.shared.hauntDirector.delay=1e6;tickRoom(room,1100);
-const a1=snapshot(room,player),a2=snapshot(room,second);assert.equal(a1.shiftEvents.active.kind,'blackout');assert.deepEqual(a1.shiftEvents,a2.shiftEvents);assert.deepEqual(a1.cargo,a2.cargo);assert.equal(a1.cargo.filter(p=>p.special).length,8);assert.equal(room.events.filter(e=>e.type==='anomaly').length,1);
+const a1=snapshot(room,player),a2=snapshot(room,second);assert.equal(a1.shiftEvents.active.kind,'blackout');assert.deepEqual(a1.shiftEvents,a2.shiftEvents);assert.deepEqual(a1.cargo,a2.cargo);assert.equal(a1.cargo.length,40);assert.equal(a1.cargo.filter(p=>p.special).length,12);assert.equal(room.events.filter(e=>e.type==='anomaly').length,1);
 console.log('PASS shared multiplayer anomaly and cargo');

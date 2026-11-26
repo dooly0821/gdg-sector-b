@@ -20,7 +20,7 @@ for(const n of [2,3,4]){
  assert.equal(snapshot(room,player).quota,cargoQuota(n));
  assert.equal(snapshot(room,player).difficulty.level,n===4?'hell':'hard');
  operateRoom(room,{op:'start',token:player.token},t+10);
- const q=room.shared;assert.equal(q.states.length,cargoQuota(n));assert.equal(q.cargo.length,q.states.length);assert.equal(new Set(q.cargo.map(p=>p.pos.join(','))).size,q.cargo.length);
+ const q=room.shared;assert.equal(q.states.length,cargoQuota(n));assert.equal(q.cargo.length,q.states.length);assert.equal(q.cargo.filter(p=>p.special).length,n===2?12:n===3?16:24);assert.equal(new Set(q.cargo.map(p=>p.pos.join(','))).size,q.cargo.length);
  assert.equal(new Set(q.cargo.map(p=>p.id)).size,q.cargo.length);
  for(let i=0;i<n;i++)operateRoom(room,{op:'ready',token:players[i].token},t+11+i);
  assert.equal(room.phase,'playing');
