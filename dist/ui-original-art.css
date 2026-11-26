@@ -23,7 +23,21 @@
 #modal[data-pane=map] .panel{--frame:url('assets/interface/GDG_UI_original_art_upload/original-art/frame-map.webp')}
 #modal[data-pane=failed] .panel{--frame:url('assets/interface/GDG_UI_original_art_upload/original-art/frame-failed.webp')}
 #modal .gdg-section{background:var(--original-metal) repeat;border-color:#b59468}
-#modal .paper-note{background:var(--original-paper) repeat}
+/* User-supplied warehouse sprite sheet: use one clean interior crop, not a tiled torn edge. */
+#modal .paper-note{
+ background-color:#d8b58e;
+ background-image:linear-gradient(115deg,#e7c9a5b8,#d8b58e9c),url('assets/interface/paper-repair.webp');
+ background-repeat:no-repeat,no-repeat;
+ background-position:center,center;
+ background-size:cover,cover;
+ border-color:#c3a077;
+ box-shadow:inset 0 0 12px #7e4f2814;
+ color:#302219;
+}
+#modal .paper-note h3{border-bottom-color:#926b455c}
+#modal .paper-note p{line-height:1.55;overflow-wrap:anywhere}
+#modal .paper-note h3::after{background:url('assets/interface/stripe-repair.webp') center/100% 100% no-repeat;height:8px}
+
 #modal .panel-head{background:transparent;position:relative}
 #modal #paneTitle{--title-art:none;display:block;width:min(100%,460px);height:auto;aspect-ratio:3.2/1;margin:0 0 12px;padding:0;transform:none;background:var(--title-art) left center/contain no-repeat;clip-path:none;box-shadow:none;color:transparent;font-size:0;line-height:0}
 #modal:not([data-pane=manual],[data-pane=settings],[data-pane=quit],[data-pane=coop],[data-pane=pause],[data-pane=map],[data-pane=failed]) #paneTitle{color:#ffd168;font-size:clamp(22px,3vw,48px);line-height:1.2;aspect-ratio:auto}
@@ -170,3 +184,14 @@
 .difficulty-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}
 .difficulty-choice{display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-height:70px;padding:12px;text-align:left;background:#1c252b;color:#e6e4d8;border:1px solid #66706e;border-radius:2px;font:inherit}
 .difficulty-choice b{font-size:15px;letter-spacing:.04em}.difficulty-choice small{font-size:11px!important;line-height:1.45;color:#c0c3ba!important;letter-spacing:0!important}.difficulty-choice.selected{border-color:#e9b54c;background:#393529;color:#ffd068}.difficulty-choice[data-action$="-hell"].selected{border-color:#c04c4b;color:#ffc4b1;background:#43292b}.difficulty-choice:disabled{opacity:.65;cursor:default}.difficulty-choice.selected:disabled{opacity:1}
+
+/* Keep the pause artwork and original nav; fit the scrollable interior to its viewport. */
+#modal[data-layout=pause]{grid-template-rows:minmax(0,1fr)}
+#modal[data-layout=pause] .panel{min-height:0;max-height:100%;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+#modal[data-pane=pause] #paneTitle{width:min(100%,clamp(200px,39dvh,460px));margin-bottom:8px}
+#modal[data-pane=pause] .gdg-section{padding:clamp(10px,1.15vw,18px)}
+#modal[data-pane=pause] .gdg-section+.gdg-section{margin-top:10px}
+#modal[data-pane=pause] .panel .row{min-height:0;padding:clamp(5px,1dvh,9px) 0;line-height:1.45}
+#modal[data-pane=pause] .paper-note p{margin:7px 0}
+#modal[data-layout=pause] #paneNav:not([hidden]){min-height:0;max-height:100%;overflow-y:auto;scrollbar-width:thin}
+@media(max-height:760px){#modal[data-pane=pause] .gdg-section h3{font-size:clamp(16px,2.7dvh,23px);margin-bottom:7px;padding-bottom:6px}#modal[data-pane=pause] .panel .row{font-size:clamp(12px,2.1dvh,16px)}}
