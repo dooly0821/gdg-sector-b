@@ -80,8 +80,8 @@ export function buildAnnex(w){
  }
  // A low inspection deck gives the west hall an alternate path above the floor.
  solid(-34,0,6,8,.86,2.35,steel,'climb');
- for(let i=0;i<5;i++)solid(-29.85+i*.39,0,6,.4,.86-i*.17,2.12,rib);
- for(let i=0;i<5;i++)solid(-38.15-i*.39,0,6,.4,.86-i*.17,2.12,rib);
+ for(let i=0;i<5;i++){solid(-29.85+i*.39,0,6,.4,.86-i*.17,2.12,rib);w.blocks.at(-1)[8]={id:'inspection-east',axis:0,low:-27.87,high:-29.745,top:.86};}
+ for(let i=0;i<5;i++){solid(-38.15-i*.39,0,6,.4,.86-i*.17,2.12,rib);w.blocks.at(-1)[8]={id:'inspection-west',axis:0,low:-40.13,high:-38.255,top:.86};}
  for(const z of [4.84,7.16]){
   for(let x=-37.94;x<-30;x+=1.3)w.cyl(x,1.35,z,.04,.98,.04,amber);
   for(const y of [1.31,1.85])w.box(-34,y,z,8,.055,.055,amber);

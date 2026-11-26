@@ -1,6 +1,6 @@
 import {DIFFICULTIES,effectiveDifficulty,missionTotal} from './difficulty.js';
 import {updateClimber} from './climber.js';
-import {HUNT_PROFILE,clearObservation,observePlayer,pursueVisible,lostTrail,searchBearing,searchExpired,alreadyChecked} from './haunt-tactics.js';
+import {HUNT_PROFILE,clearObservation,observePlayer,pursueVisible,lostTrail,searchBearing,searchExpired,alreadyChecked,sweepVisited,rememberSweep,hidingScore} from './haunt-tactics.js';
 import {DRESSING_HIDE} from './dressing.js';
 import {parcelBlocks} from './mission.js';
 import {closedLocker,lockerDoorBlocks,lockerEntry} from './lockers.js';
@@ -247,7 +247,7 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
   // Immediately test entry into the close zone or a newly switched-on light.
   const sampledSight=actor.sightDelay<=0||near!==actor.wasNear||torchOn!==actor.wasTorch;
   if(sampledSight){
-   actor.sightDelay=near?.035:.075+i*.009;
+   actor.sightDelay=near?.032:.068+i*.009;
    actor.seenCache=dist<Math.max(range,torchOn?20:0)&&line(local,actor,s);
    actor.beam=lightSense(local,actor,s,forward);
    actor.wasNear=near;actor.wasTorch=torchOn;
@@ -265,7 +265,7 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
   }
   if(seen){
    if(sampledSight||!actor.observedPoint)observePlayer(actor,s);
-   actor.lastKnown=(actor.observedPoint??[s.x,s.z]).slice();actor.lost=0;actor.pursuit=true;actor.searchPoint=null;actor.inspect=null;actor.checked=[];actor.fakeDone=false;
+   actor.lastKnown=(actor.observedPoint??[s.x,s.z]).slice();actor.lost=0;actor.pursuit=true;actor.searchPoint=null;actor.inspect=null;actor.checked=[];actor.sweepChecked=[];actor.inspectRetry=0;actor.fakeDone=false;
    if(acquired||['fakeLeave','ambush','inspect','guard','patrol'].includes(actor.state)){
     actor.state='alert';actor.timer=0;actor.navDelay=0;actor.navDirect=false;actor.navPath=null;actor.navJob=null;actor.recoverPoint=null;
     actor.speed=Math.max(actor.speed??0,2.6);actor.aggression=Math.max(actor.aggression??0,.65);
@@ -345,8 +345,10 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
    const nearLast=Math.hypot(actor.x-actor.lastKnown[0],actor.z-actor.lastKnown[1])<2.5;
    if(nearLast||actor.inspect){
     actor.checked??=[];
-    if(!actor.inspect){
-     actor.inspect=[...HIDING_POINTS,...DRESSING_HIDE].filter(p=>!alreadyChecked(actor,p)&&Math.hypot(p[0]-actor.lastKnown[0],p[1]-actor.lastKnown[1])<7&&clear(blocks,p[0],p[1],sizes[i],type.float,bodyHeights[i])).sort((a,b)=>Math.hypot(a[0]-actor.x,a[1]-actor.z)-Math.hypot(b[0]-actor.x,b[1]-actor.z))[0]??null;
+    actor.inspectRetry=Math.max(0,(actor.inspectRetry??0)-dt);
+    if(!actor.inspect&&!actor.inspectRetry){
+     actor.inspectRetry=.35;
+     actor.inspect=[...HIDING_POINTS,...DRESSING_HIDE].filter(p=>!alreadyChecked(actor,p)&&Math.hypot(p[0]-actor.lastKnown[0],p[1]-actor.lastKnown[1])<7&&clear(blocks,p[0],p[1],sizes[i],type.float,bodyHeights[i])).sort((a,b)=>hidingScore(actor,a)-hidingScore(actor,b))[0]??null;
     }
     if(actor.inspect&&Math.hypot(actor.x-actor.inspect[0],actor.z-actor.inspect[1])<.85){actor.checked.push(actor.inspect);actor.state='inspect';actor.timer=.65+i*.13;}
     else if(!actor.inspect&&!actor.fakeDone&&(actor.lost??0)>2.1){
@@ -360,11 +362,12 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
   if(actor.state==='search'&&!actor.inspect&&actor.lastKnown&&(actor.searchPoint||Math.hypot(actor.x-actor.lastKnown[0],actor.z-actor.lastKnown[1])<.75)){
    actor.searchDelay=(actor.searchDelay??0)-dt;
    if(!actor.searchPoint||actor.searchDelay<=0||Math.hypot(actor.x-actor.searchPoint[0],actor.z-actor.searchPoint[1])<.65){
-    actor.searchDelay=1.4;
+    if(actor.searchPoint&&Math.hypot(actor.x-actor.searchPoint[0],actor.z-actor.searchPoint[1])<.9)rememberSweep(actor,actor.searchPoint);
+    actor.searchDelay=1.2;
     const phase=(actor.scanPhase??0)+2.40;actor.scanPhase=phase;
     const center=actor.lastKnown;
     for(let k=0;k<8;k++){const angle=searchBearing(actor,phase)+k*Math.PI/4,r=1.5+(k%3)*.85,x=center[0]+Math.sin(angle)*r,z=center[1]+Math.cos(angle)*r;
-     if(inMap(x,z)&&clear(blocks,x,z,sizes[i],type.float,bodyHeights[i])){actor.searchPoint=[x,z];break;}}
+     if(inMap(x,z)&&!sweepVisited(actor,[x,z])&&clear(blocks,x,z,sizes[i],type.float,bodyHeights[i])){actor.searchPoint=[x,z];break;}}
    }
   }
   const path=actor.path;

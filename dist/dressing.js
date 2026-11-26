@@ -22,7 +22,7 @@ export function buildDressing(w){
  const crate=(x,y,z,a,h,d,m=wood)=>{solid(x,y,z,a,h,d,m,'climb');for(const k of [-1,1]){w.box(x+k*(a*.39),y+h/2,z,a*.065,h+.01,d+.018,strap);w.box(x,y+h-.04,z+k*(d*.48),a,.08,.035,wood);}w.box(x,y+.07,z,a+.02,.08,d+.02,wood);};
  for(const [i,{zone,stairs:[x,z],rack:[rx,rz],stack:[sx,sz]}] of DRESSING.entries()){
   // Six actual .24m treads, a raised loading platform and an open crouch bay.
-  for(let j=0;j<6;j++){const h=(j+1)*STEP_H,p=z-2.675+j*TREAD;solid(x,0,p,1.84,h,TREAD,steel,'climb');w.box(x,h+.004,p-TREAD*.5+.045,1.78,.008,.075,amber);for(const side of [-1,1])w.box(x+side*.89,h*.50,p,.055,h,.51,dark);}
+  for(let j=0;j<6;j++){const h=(j+1)*STEP_H,p=z-2.675+j*TREAD;solid(x,0,p,1.84,h,TREAD,steel,'climb');w.blocks.at(-1)[8]={id:'service:'+zone,axis:2,low:z-2.95-.22,high:z+.35-.255,top:DECK_Y};w.box(x,h+.004,p-TREAD*.5+.045,1.78,.008,.075,amber);for(const side of [-1,1])w.box(x+side*.89,h*.50,p,.055,h,.51,dark);}
   solid(x,DECK_Y-.13,z+1.50,2.4,.13,2.30,metal,'climb');
   for(const side of [-1,1])for(const dz of [.48,2.47])solid(x+side*1.13,0,z+dz,.12,DECK_Y-.13,.12,metal);
   // Rear half guard, side exit remains open for a jump. Below remains crawlable.
