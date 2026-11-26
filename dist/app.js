@@ -241,7 +241,7 @@ $('#start').onclick=async()=>{
    renderer.gl.finish();renderer.hauntPrimed=true;pose.actors=[];
   }
   pose.actors=[...hauntLayers(session),...lockerLayers(session,LOCKER_DOOR_GROUP)];
-  renderer.render(eye,facing,parcelPositions(session,pose.hidden),pose,settings.scale);
+  renderer.render(eye,facing,parcelPositions(session,pose.hidden,true),pose,settings.scale);
   reportProgress(1,'출근 준비 완료');await painted();
   $('#loading').hidden=true;if(coopStarting&&coop){await coop.action('ready');}resume();say(coopStarting?'팀원 준비 확인 중 · 공동 배송 근무':'GDG 표식이 있는 상자를 02번 출고대로 운반하세요.',4);
  }catch(error){
@@ -343,7 +343,7 @@ function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/10
  if((s.slowFrames??0)>=(coopStarting?6:10)&&now-(s.lastScaleChange??-1000)>450){s.adaptiveScale=Math.max(coopStarting?.50:.65,(s.adaptiveScale??1)-.10);s.slowFrames=0;s.lastScaleChange=now;}
  if((s.fastFrames??0)>=240&&now-(s.lastScaleChange??-1000)>2500){s.adaptiveScale=Math.min(1,(s.adaptiveScale??1)+.05);s.fastFrames=0;s.lastScaleChange=now;}
  pose.lowCostShadow=coopStarting&&(s.adaptiveScale??1)<.85;
- renderer.render(eye,view,parcelPositions(s,pose.hidden),pose,settings.scale*(s.adaptiveScale??1));
+ renderer.render(eye,view,parcelPositions(s,pose.hidden,true),pose,settings.scale*(s.adaptiveScale??1));
  if(s.showTraversal||document.querySelector('#traversal-debug'))drawTraversalDebug(s,worlds[0].blocks,renderer,pose,eye,view);
  const mark=$('#waypoint'),p=$('#prompt'),brackets=$('#target-brackets');
  let msg=s.climbHint>s.elapsed?'높은 선반에 오르려면 E로 상자를 내려놓으세요.':'';brackets.hidden=true;mark.hidden=true;

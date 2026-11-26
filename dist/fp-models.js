@@ -1,3 +1,4 @@
+import {isParcelNode} from './cargo-glow.js';
 // First-person GLB viewmodels. Original gameplay choreography remains authoritative.
 import {multiply} from './world.js';
 const names=['empty','flashlight','boxcarry','boxflashlight'];
@@ -102,7 +103,7 @@ export class FPModels{
    progress((i+1)/names.length,'1인칭 손 모델 준비 중');
   }
  }
- draw(u,pose){
+ draw(u,pose,setGlow=()=>{}){
   const plan=fpPlan(pose,this.models.has('boxflashlight'));if(!plan)return false;const model=this.models.get(plan.name);if(!model)return false;
   const torch=plan.combined?this.models.get('flashlight'):null;
   if(plan.combined&&!torch?.meshes.some(mesh=>mesh.some(p=>p.rightCount>0)))return false;
@@ -126,6 +127,7 @@ export class FPModels{
    if(plan.combined&&asset===model&&n.name==='RightArm'){tr[0]+=.16*plan.lift;tr[1]-=.30*plan.lift;tr[2]+=.16*plan.lift;}
    const m=multiply(parent,mat(tr,p.rotation));
    if(n.mesh!==undefined){
+    setGlow(!rightOnly&&asset===model&&isParcelNode(n.name)?pose.cargoGlow:0);
     gl.uniformMatrix4fv(u.objectMatrix,false,m);
     for(const b of asset.meshes[n.mesh]){
      if(rightOnly&&!b.rightCount)continue;
@@ -142,6 +144,6 @@ export class FPModels{
   };
   for(const root of model.roots)visit(model,nodes,root,plan.matrix);
   if(plan.combined&&plan.tool){const rest=nodePoses(torch,null,0);for(const root of torch.roots)visit(torch,rest,root,plan.torchMatrix,true);}
-  gl.uniform1i(u.fpActive,0);gl.uniform1i(u.worldObject,0);gl.activeTexture(gl.TEXTURE0);return true;
+  setGlow();gl.uniform1i(u.fpActive,0);gl.uniform1i(u.worldObject,0);gl.activeTexture(gl.TEXTURE0);return true;
  }
 }

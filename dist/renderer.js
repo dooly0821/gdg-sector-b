@@ -1,3 +1,4 @@
+import {glowPalette,glowDistanceFactor} from './cargo-glow.js';
 import {FPModels} from './fp-models.js';
 import {CharacterSkins} from './character-skins.js';
 import {defaultFingers} from './hand-motion.js';
@@ -62,7 +63,7 @@ void main(){
 const fs=`#version 300 es
 precision highp float;precision highp sampler2DArray;
 in vec3 P,N;in vec2 UV,tile;in vec4 C,Q,shadowPos;
-uniform sampler2DArray atlas;uniform sampler2D shadowMap,floorTex,skinBase,skinEmission;uniform bool skinActive,fpActive;uniform vec2 fpFactors;uniform vec3 eye,lamps[8];uniform float lampRed[8];uniform float shadowStep,hand,clock,torchPower,clay,character,actorOpacity,gridPower,lowCostShadow;uniform vec3 torchPos,torchDir,core;uniform vec4 footprints[2];
+uniform sampler2DArray atlas;uniform sampler2D shadowMap,floorTex,skinBase,skinEmission;uniform bool skinActive,fpActive;uniform vec2 fpFactors;uniform vec3 eye,lamps[8];uniform float lampRed[8];uniform float shadowStep,hand,clock,torchPower,clay,character,actorOpacity,gridPower,lowCostShadow;uniform vec3 torchPos,torchDir,core;uniform vec4 footprints[2],cargoGlow;
 out vec4 outColor;
 float visibility(vec3 n){
  if(hand>.5||shadowStep==0.)return 1.;vec3 s=shadowPos.xyz/shadowPos.w*.5+.5;
@@ -139,6 +140,12 @@ void main(){
   sheen=0.;mist=0.;
  }
  vec3 col=base*lit+vec3(1.,.80,.55)*sheen+base*e;
+ // Subtle surface-only aura, evaluated exclusively for marked cargo draws.
+ // No extra sampling, blending, geometry or screen-space post-processing.
+ if(cargoGlow.a>0.&&clay<.5){
+  float seam=1.-smoothstep(0.,.12,edge),rim=1.-abs(dot(n,v));
+  col+=cargoGlow.rgb*cargoGlow.a*(.11+.58*seam+.31*rim*rim);
+ }
  if(skinActive&&clay<.5)col+=texture(skinEmission,UV).rgb*1.45;
  if(Q.w==4.&&clay<.5){
   float rim=pow(1.-abs(dot(n,v)),2.3);
@@ -167,7 +174,7 @@ export class Renderer{
  constructor(canvas){
   this.canvas=canvas;this.gl=canvas.getContext('webgl2',{alpha:false,antialias:true,powerPreference:'high-performance'});if(!this.gl)throw Error('WebGL 2 is unavailable. Enable graphics acceleration in desktop Chrome, then reload.');
   const gl=this.gl;this.program=compile(gl,vs,fs);this.depthProgram=compile(gl,vs,depthFS);
-  this.loc={};for(let p of [this.program,this.depthProgram]){let u={};for(let k of ['VP','offset','lightVP','worldObject','objectMatrix','clock','core','clay','character','actorOpacity','atlas','shadowMap','floorTex','eye','lamps','lampRed[0]','shadowStep','hand','torchPower','torchPos','torchDir','flexPivot','flexForward','flexNormal','flexWidth','flexAmount','digitWidths','knuckles','digitLengths','fingerAmounts','footprints[0]','skinActive','skinBones[0]','skinBase','skinEmission','fpActive','fpFactors','gridPower','lowCostShadow'])u[k]=gl.getUniformLocation(p,k);u.skinBones=u['skinBones[0]'];this.loc[p===this.program?'main':'depth']=u;}
+  this.loc={};for(let p of [this.program,this.depthProgram]){let u={};for(let k of ['VP','offset','lightVP','worldObject','objectMatrix','clock','core','clay','character','actorOpacity','atlas','shadowMap','floorTex','eye','lamps','lampRed[0]','shadowStep','hand','torchPower','torchPos','torchDir','flexPivot','flexForward','flexNormal','flexWidth','flexAmount','digitWidths','knuckles','digitLengths','fingerAmounts','footprints[0]','skinActive','skinBones[0]','skinBase','skinEmission','fpActive','fpFactors','gridPower','lowCostShadow','cargoGlow'])u[k]=gl.getUniformLocation(p,k);u.skinBones=u['skinBones[0]'];this.loc[p===this.program?'main':'depth']=u;}
   this.buffers={};
   const lv=cameraView([-8,88,25],[-10,-88,5]);const ortho=new Float32Array([1/50,0,0,0,0,1/70,0,0,0,0,-2/180,0,0,0,-1,1]);this.lightVP=multiply(ortho,lv);
  }
@@ -269,7 +276,17 @@ export class Renderer{
   const width=Math.max(2,Math.round(c.clientWidth*ratio)),height=Math.max(2,Math.round(c.clientHeight*ratio));if(c.width!==width||c.height!==height){c.width=width;c.height=height;}
   const aspect=width/height,proj=perspective(78*Math.PI/180,aspect,.045,95),vp=multiply(proj,cameraView(eye,forward));this.vp=vp;
   gl.viewport(0,0,width,height);gl.clearColor(.025,.032,.046,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.useProgram(this.program);
-  const u=this.loc.main;gl.uniform1f(u.gridPower,pose.gridPower??1);gl.uniform1f(u.lowCostShadow,pose.lowCostShadow?1:0);gl.uniform1i(u.fpActive,0);gl.uniform1i(u.skinActive,0);gl.uniform1f(u.character,0);gl.uniform1f(u.clay,0);gl.uniformMatrix4fv(u.VP,false,vp);gl.uniformMatrix4fv(u.lightVP,false,this.lightVP);gl.uniform3fv(u.eye,eye);const right=unit(cross(forward,[0,1,0])),up=cross(right,forward),off=pose.torchOffset??[0,0,0];
+  const u=this.loc.main,glows=glowPalette(pose.clock??0);
+  let lastGlow=-1,lastGlowStrength=-1;
+  const setGlow=(code=0,dist2=0)=>{
+   const c=glows[code]??glows[0],a=code?c[3]*glowDistanceFactor(dist2):0;
+   if(!a)code=0;
+   if(code===lastGlow&&a===lastGlowStrength)return;
+   lastGlow=code;lastGlowStrength=a;
+   gl.uniform4f(u.cargoGlow,c[0],c[1],c[2],a);
+  };
+  setGlow();
+  gl.uniform1f(u.gridPower,pose.gridPower??1);gl.uniform1f(u.lowCostShadow,pose.lowCostShadow?1:0);gl.uniform1i(u.fpActive,0);gl.uniform1i(u.skinActive,0);gl.uniform1f(u.character,0);gl.uniform1f(u.clay,0);gl.uniformMatrix4fv(u.VP,false,vp);gl.uniformMatrix4fv(u.lightVP,false,this.lightVP);gl.uniform3fv(u.eye,eye);const right=unit(cross(forward,[0,1,0])),up=cross(right,forward),off=pose.torchOffset??[0,0,0];
   // A viewmodel can overlap nearby geometry; the light origin stays near the eye
   // to avoid placing a light source on the far side of a wall.
   const local=pose.torchLocal?.position??[.325,-.283,-.887],dir=pose.torchLocal?.direction??[-.045,-.025,-1];
@@ -287,7 +304,8 @@ export class Renderer{
   gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,this.floorTex);gl.uniform1i(u.skinEmission,4);gl.activeTexture(gl.TEXTURE0);
   const planes=[];for(let i=0;i<3;i++)for(let s of [-1,1]){let pl=[0,1,2,3].map(j=>vp[4*j+3]+s*vp[4*j+i]);planes.push(pl.map(v=>v/Math.hypot(...pl.slice(0,3))));}
   for(const b of this.groups[0])if(planes.every(p=>dot(p.slice(0,3),b.center)+p[3]>-b.radius))this.draw(b);
-  for(const xyz of items){if(!planes.every(p=>p[0]*xyz[0]+p[1]*(xyz[1]+.24)+p[2]*xyz[2]+p[3]>-.65))continue;gl.uniform3fv(u.offset,xyz);for(const b of this.groups[1])this.draw(b);}
+  for(const xyz of items){if(!planes.every(p=>p[0]*xyz[0]+p[1]*(xyz[1]+.24)+p[2]*xyz[2]+p[3]>-.65))continue;setGlow(xyz[3]??0,xyz[3]?(xyz[0]-eye[0])**2+(xyz[1]+.24-eye[1])**2+(xyz[2]-eye[2])**2:0);gl.uniform3f(u.offset,xyz[0],xyz[1],xyz[2]);for(const b of this.groups[1])this.draw(b);}
+  setGlow();
   if(pose.actors?.length){
    gl.uniform3f(u.offset,0,0,0);
    gl.uniform1i(u.worldObject,1);
@@ -295,6 +313,7 @@ export class Renderer{
    const transparent=[];
    for(const actor of pose.actors){
     if(actor.root&&!planes.every(p=>p[0]*actor.root[0]+p[1]*actor.root[1]+p[2]*actor.root[2]+p[3]>-3.1))continue;
+    const r=actor.root;setGlow(actor.prop&&actor.group===1?actor.cargoGlow??0:0,r?(r[0]-eye[0])**2+(r[1]-eye[1])**2+(r[2]-eye[2])**2:0);
     if(actor.skinName&&this.skins?.has(actor.skinName)){if(actor.skin)this.skins.draw(u,actor.skin,actor.opacity,pose.clay);continue;}
     gl.uniform1f(u.character,actor.prop?0:1);
     gl.uniform1f(u.actorOpacity,actor.opacity??1);
@@ -308,7 +327,7 @@ export class Renderer{
      }else this.draw(b);
     }
    }
-   gl.uniform1f(u.flexAmount,0);
+   setGlow();gl.uniform1f(u.flexAmount,0);
    if(transparent.length){
     transparent.sort((a,b)=>b.depth-a.depth);gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
@@ -317,11 +336,12 @@ export class Renderer{
    }
    gl.uniform1i(u.worldObject,0);gl.uniform1f(u.character,0);gl.uniform1f(u.clay,0);
   }
-  if(pose.flight&&!pose.assembly){gl.uniformMatrix4fv(u.VP,false,multiply(vp,pose.flight));gl.uniform3f(u.offset,0,0,0);gl.uniform1f(u.hand,1);for(const b of this.groups[1])this.draw(b);}
-  gl.uniformMatrix4fv(u.VP,false,proj);
+  if(pose.flight&&!pose.assembly){setGlow(pose.cargoGlow);gl.uniformMatrix4fv(u.VP,false,multiply(vp,pose.flight));gl.uniform3f(u.offset,0,0,0);gl.uniform1f(u.hand,1);for(const b of this.groups[1])this.draw(b);}
+  setGlow();gl.uniformMatrix4fv(u.VP,false,proj);
   gl.uniform1f(u.hand,1);gl.uniform3f(u.eye,0,0,0);
-  if(this.fpModels?.draw(u,pose))return;
+  if(this.fpModels?.draw(u,pose,setGlow)){setGlow();return;}
   for(const layer of pose.hands){
+   setGlow(layer.group===6?pose.cargoGlow:0);
    gl.uniform1i(u.worldObject,Boolean(layer.matrix));
    if(layer.matrix)gl.uniformMatrix4fv(u.objectMatrix,false,layer.matrix);
    gl.uniform3fv(u.offset,layer.offset);
@@ -336,7 +356,7 @@ export class Renderer{
     gl.uniform1f(u.flexAmount,flex&&b.shape.includes('_glove_')?flex.amount:0);this.draw(b);
    }
   }
-  gl.uniform1i(u.worldObject,0);
+  setGlow();gl.uniform1i(u.worldObject,0);
  }
  project(pt){let v=this.vp;if(!v)return null;const p=[...pt,1],c=[0,1,2,3].map(i=>p.reduce((s,x,j)=>s+x*v[j*4+i],0));return c[3]>.05?[c[0]/c[3],c[1]/c[3]]:null;}
 }

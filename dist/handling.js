@@ -1,3 +1,4 @@
+import {cargoGlowCode} from './cargo-glow.js';
 import {dropTarget} from './mission.js';
 import {buildLockerDoor} from './lockers.js';
 import {buildLegs,buildWorker} from './worker.js';
@@ -271,5 +272,6 @@ export function choreography(s,eye,near,moving,sprinting,t,view=forward(s)){
   torchOffset[2]+=.06*brace;
   hands[torchIndex]=torchLayer(hands[torchIndex]);
  }
- return {hands,flight,assembly,fp:{holding,flash,action:!!a,vault:!!s.vault,t,speed:s.motionSpeed??Math.hypot(s.vx??0,s.vz??0),bob},flashlight:flash>(holding?.82:.65)?smooth((flash-(holding?.82:.65))/(holding?.18:.35)):0,torchOffset,torchLocal:torchAim,hidden};
+ const cargoGlow=cargoGlowCode(s.cargo?.[a?.index??s.carried]?.special);
+ return {hands,flight,assembly,cargoGlow,fp:{holding,flash,action:!!a,vault:!!s.vault,t,speed:s.motionSpeed??Math.hypot(s.vx??0,s.vz??0),bob},flashlight:flash>(holding?.82:.65)?smooth((flash-(holding?.82:.65))/(holding?.18:.35)):0,torchOffset,torchLocal:torchAim,hidden};
 }

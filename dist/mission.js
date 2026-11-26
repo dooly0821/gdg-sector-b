@@ -1,3 +1,4 @@
+import {cargoGlowCode} from './cargo-glow.js';
 import {COOP_POOLS,COOP_COUNTS} from './coop-cargo.js';
 import {normalizeDifficulty,DIFFICULTIES} from './difficulty.js';
 import {buildDenseDressing} from './density.js';
@@ -230,9 +231,16 @@ export function interact(s,target,blocks,locked=false){
  return null;
 }
 export function baySlot(n){return [DOCK[0]+((n%3)-1)*.65,DOCK[1]+Math.floor(n/6)*.484,DOCK[2]+(Math.floor((n%6)/3)-.5)*.60];}
-export function parcelPositions(s,hidden=-1){
+export function parcelPositions(s,hidden=-1,visual=false){
  const order=s.deliveryOrder??s.states.flatMap((v,i)=>v==='DELIVERED'?[i]:[]);
  const offset=s.states.length>30?Math.max(0,Math.floor((order.length-1)/24)*24):0;
  const slots=new Map(order.slice(offset).map((i,n)=>[i,n]));
- return s.states.flatMap((p,i)=>i===hidden?[]:p==='AVAILABLE'?[parcelPos(s,i)]:p==='DELIVERED'&&slots.has(i)?[baySlot(slots.get(i))]:[]);
+ return s.states.flatMap((p,i)=>{
+  if(i===hidden)return [];
+  if(p==='AVAILABLE'){
+   const pos=parcelPos(s,i),code=visual?cargoGlowCode(s.cargo?.[i]?.special):0;
+   return [code?[pos[0],pos[1],pos[2],code]:pos];
+  }
+  return p==='DELIVERED'&&slots.has(i)?[baySlot(slots.get(i))]:[];
+ });
 }
