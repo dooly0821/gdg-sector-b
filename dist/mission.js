@@ -1,3 +1,4 @@
+import {buildFacilityPanels} from './facility-actions.js';
 import {expandedLayout,EXTENSION_CARGO} from './map-layout.js';
 import {buildExpansion} from './expansion.js';
 import {cargoGlowCode} from './cargo-glow.js';
@@ -80,7 +81,7 @@ export function createScene(level='normal'){
  }
  const parcel=new World(),empty=new World(),carry=new World();buildParcel(parcel,0,0,0,CONFIG.parcelWidth);buildHands(empty,false);buildHands(carry,true);
  const flashlight=new World();buildFlashlight(flashlight);
- buildDressing(w);buildDenseDressing(w);markRunLanes(w);
+ buildDressing(w);buildDenseDressing(w);markRunLanes(w);buildFacilityPanels(w,level);
  sceneBlocks.add(w.blocks);
  return [w,parcel,empty,carry,flashlight];
 }

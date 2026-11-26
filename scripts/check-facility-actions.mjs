@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {createScene,newShift,step} from '../dist/mission.js';
+import {move} from '../dist/movement.js';
+import {ventsFor,panelsFor,powerTarget,toggleZone,zonePower,emitSignal,signalReady,signalForActor} from '../dist/facility-actions.js';
+import {indexBlocks,freeAt} from '../dist/haunt-navigation.js';
+import {createRoom,operateRoom,tickRoom,snapshot} from '../server/room-core.js';
+const w=new Set(['KeyW']),dt=1/60;
+for(const hz of [60,120]){const d=1/hz;const s=Object.assign(newShift(),{x:0,z:10,vz:-7,yaw:0});move(s,new Set(['KeyC']),[],d,false,()=>0);assert(!s.slideTime);
+ Object.assign(s,{vz:-7,grounded:true,slideRequested:true});const z=s.z;move(s,w,[],d,false,()=>0);assert(s.slideTime>.79&&s.slideCooldown>1.49);assert(Math.abs(s.z-z)<.15);let max=0;for(let i=0;i<hz;i++){move(s,w,[],d,false,()=>0);max=Math.max(max,Math.abs(s.vz));}assert(!s.slideTime&&max<=13.4);s.slideRequested=true;move(s,w,[],d,false,()=>0);assert(!s.slideTime);}
+for(const level of ['normal','hard']){const [world]=createScene(level);for(const v of ventsFor(level)){const s=Object.assign(newShift(undefined,level),{x:-13.8,z:v.z,yaw:Math.PI/2});for(let i=0;i<110;i++)step(s,new Set(['KeyW','KeyC']),world.blocks,dt);assert(s.x<-15.5,'crouch vent '+v.z+' '+s.x);const q=Object.assign(newShift(undefined,level),{x:-13.8,z:v.z,yaw:Math.PI/2});for(let i=0;i<60;i++)step(q,w,world.blocks,dt);assert(q.x>-15,'standing blocked '+v.z);}
+ for(const p of panelsFor(level)){const s=Object.assign(newShift(undefined,level),{x:p.x+(p.x>-15?1:-1),z:p.z,yaw:p.x>-15?Math.PI/2:-Math.PI/2,pitch:-.2});assert.equal(powerTarget(s,world.blocks)?.id,p.id,'panel '+p.id);toggleZone(s,p);assert.equal(zonePower(s,s.x,s.z),.16);toggleZone(s,p);assert.equal(zonePower(s,s.x,s.z),1);}}
+const s=Object.assign(newShift(),{x:0,z:12,yaw:0,pitch:0,flashlight:true,elapsed:5});const wall=[[-2,5,2,5.2,0,3]];const sig=emitSignal(s,s,wall);assert(sig&&sig.z>5.2);assert.equal(signalReady(s),12);assert.equal(emitSignal(s,s,wall),null);const nav=indexBlocks(wall);for(let kind=0;kind<4;kind++)assert(signalForActor(s,{kind,x:0,z:10},nav,freeAt,{r:.32,y:0,h:1.6}));s.elapsed=7.1;assert(!signalForActor(s,{kind:0,x:0,z:10},nav,freeAt,{r:.32,y:0,h:1.6}));
+for(const count of [2,3,4]){let t=100000;const {room,player}=createRoom('SLIDE'+count,t),tokens=[player.token];for(let i=1;i<count;i++)tokens.push(operateRoom(room,{op:'join'},t).token);operateRoom(room,{op:'start',token:tokens[0],level:'hard'},t);for(const token of tokens)operateRoom(room,{op:'ready',token},t);
+ for(const p of Object.values(room.players)){p.state.vz=-7;p.state.yaw=0;p.input.yaw=0;p.input.keys=['KeyW'];p.state.slideRequested=true;}t+=100;tickRoom(room,t);assert(Object.values(room.players).every(p=>p.state.slideTime>0));assert(snapshot(room,player).self.slideTime>0);}
+console.log('PASS V slide, crouch vents, per-zone controls, bounded signal, 2/3/4-player slide authority');

@@ -1,3 +1,4 @@
+import {signalForActor,zonePower} from './facility-actions.js';
 import {expandedLayout,EXTENSION_ROUTES,EXTENSION_HIDE} from './map-layout.js';
 import {DIFFICULTIES,effectiveDifficulty,missionTotal} from './difficulty.js';
 import {updateClimber} from './climber.js';
@@ -243,7 +244,7 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
   if(climb?.handled){if(actor.state==='disappear')return;if(climb.hit&&!s.netHitProtected&&(s.hitProtectedUntil??0)<=root.elapsed){actor.speed=0;captured=type.name;s.handAction=null;s.pendingUse=null;s.vault=null;s.jumpBuffer=0;s.vx=s.vz=s.vy=0;s.failed=true;s.capturedBy=i;}return;}
   const safe=s.grounded&&REFUGES.some(([x,y,z,r])=>Math.abs(s.y-y)<.09&&Math.hypot(s.x-x,s.z-z)<r);
   const pursuit=actor.pursuit??false,torchOn=(s.flashAmount??0)>.25;
-  const detectRange=type.range*difficulty.range*1.04*(s.bodyHeight<1.2&&!torchOn?.67:1);
+  const detectRange=type.range*difficulty.range*1.04*(zonePower(root,s.x,s.z)<.5&&!torchOn?.76:1)*(s.bodyHeight<1.2&&!torchOn?.67:1);
   const near=dist<5.5,range=pursuit?24+(difficulty.count-1)*2:Math.max(5.5,detectRange);
   actor.sightDelay=(actor.sightDelay??0)-dt;
   // Immediately test entry into the close zone or a newly switched-on light.
@@ -380,7 +381,11 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
   const retreat=actor.state==='retreat';
   const still=actor.state==='inspect'||actor.state==='ambush';
   if(actor.navState!==actor.state){actor.navState=actor.state;actor.navDelay=0;actor.navDirect=false;if(still||retreat){actor.navPath=null;actor.navJob=null;actor.recoverPoint=null;}}
-  const seek=retreat?[actor.x-delta[0]/Math.max(.01,dist)*2,actor.z-delta[1]/Math.max(.01,dist)*2]:target;
+  const incoming=!hiding&&!safe&&!still&&!retreat&&!['charge','windup','lockerSearch','lockerWait','lockerLeave','lockerAway'].includes(actor.state)&&!(seen&&dist<5.5)?signalForActor(root,actor,nav,freeAt,body):null;
+  if(incoming){actor.lastSignal=incoming.id;actor.signalPoint=[incoming.x,incoming.z];actor.signalUntil=root.elapsed+4;actor.navDelay=0;actor.navPath=null;actor.navJob=null;actor.recoverPoint=null;}
+  if(actor.signalPoint&&(root.elapsed>=actor.signalUntil||seen&&dist<5.5||Math.hypot(actor.x-actor.signalPoint[0],actor.z-actor.signalPoint[1])<.65)){actor.signalPoint=null;actor.navDelay=0;}
+  const investigating=!!actor.signalPoint&&!hiding&&!safe&&!still&&!retreat&&!['charge','windup','lockerSearch','lockerWait','lockerLeave','lockerAway'].includes(actor.state);
+  const seek=investigating?actor.signalPoint:retreat?[actor.x-delta[0]/Math.max(.01,dist)*2,actor.z-delta[1]/Math.max(.01,dist)*2]:target;
   const resolved=!still&&recover(actor,nav,body,seek,dt);
   const aim=still||resolved?null:navigate(actor,seek,nav,body,dt,difficulty.budget*(root.stateless?4:1));
   actor.corner=aim;
@@ -391,7 +396,7 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
   const rage=lit&&(i===1||i===2)?1.14:1;
   // Different chase rhythms; the telegraphed charge is faster than sprinting.
   const pulse=i===0?.88+.22*Math.sin(actor.phase*.73):i===1?.91+.18*Math.sin(actor.phase*.46):i===2?.94+.10*Math.sin(actor.phase*.31):.87+.26*Math.pow(.5+.5*Math.sin(actor.phase*.69),3);
-  const goalSpeed=.95*(actor.state==='lockerWait'?.70:actor.state==='lockerSearch'?3.0:['lockerLeave','lockerAway'].includes(actor.state)?2.8:actor.state==='ambush'||actor.state==='inspect'?0:actor.state==='fakeLeave'?2.3:actor.state==='guard'?Math.hypot(actor.x-target[0],actor.z-target[1])>1.3?2.5:0:retreat?3.3:actor.state==='windup'?type.speed*.38:actor.state==='charge'?Math.min(11.05,type.speed*1.32*pressure):actor.state==='recovery'?type.speed*.72:chasing?Math.min(10.9,type.speed*profile.speed*pressure*pulse*rage*(actor.state==='search'?.88*profile.search:1)):actor.state==='search'?2.8:1.35);
+  const goalSpeed=.95*(investigating?Math.min(5.2,type.speed):actor.state==='lockerWait'?.70:actor.state==='lockerSearch'?3.0:['lockerLeave','lockerAway'].includes(actor.state)?2.8:actor.state==='ambush'||actor.state==='inspect'?0:actor.state==='fakeLeave'?2.3:actor.state==='guard'?Math.hypot(actor.x-target[0],actor.z-target[1])>1.3?2.5:0:retreat?3.3:actor.state==='windup'?type.speed*.38:actor.state==='charge'?Math.min(11.05,type.speed*1.32*pressure):actor.state==='recovery'?type.speed*.72:chasing?Math.min(10.9,type.speed*profile.speed*pressure*pulse*rage*(actor.state==='search'?.88*profile.search:1)):actor.state==='search'?2.8:1.35);
   actor.speed=approach(actor.speed,aim?goalSpeed:0,dt*(actor.state==='charge'?18:chasing?[23,22,20,25][i]:7));
   const before=[actor.x,actor.z],distance=aim?Math.hypot(aim[0]-actor.x,aim[1]-actor.z):0;
   const stride=Math.min(actor.speed*dt,distance);

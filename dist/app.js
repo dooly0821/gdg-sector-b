@@ -1,3 +1,4 @@
+import {powerTarget,toggleZone,emitSignal,signalReady,zonePowers,zonePower} from './facility-actions.js';
 import {expandedLayout} from './map-layout.js';
 import {cargoGuide,anomalyGuide,resultMarkup,teamGoals,mapLegendArt} from './shift-ui.js';
 import {DIFFICULTIES,normalizeDifficulty,difficultyLabel,missionTotal,cargoQuota} from './difficulty.js';
@@ -38,7 +39,7 @@ let sound,master,hum;
 function audioOn(){try{if(!sound){sound=new AudioContext();master=sound.createGain();master.gain.value=0;master.connect(sound.destination);hum=sound.createOscillator();hum.frequency.value=56;hum.type='sine';hum.connect(master);hum.start();}sound.resume().catch(()=>{});master.gain.setTargetAtTime(settings.audio&&mode==='game'?.026*(settings.volume??1):0,sound.currentTime,.4);}catch{}}
 function beep(hz,time=.12,type='sine',gain=.1){if(!sound||!settings.audio||settings.volume<=0)return;let o=sound.createOscillator(),g=sound.createGain(),now=sound.currentTime;o.type=type;o.frequency.setValueAtTime(hz,now);o.frequency.exponentialRampToValueAtTime(hz*.68,now+time);g.gain.setValueAtTime(Math.max(.0001,gain*(settings.volume??1)),now);g.gain.exponentialRampToValueAtTime(.0001,now+time);o.connect(g);g.connect(sound.destination);o.start();o.stop(now+time+.02);}
 function say(line,duration=5){$('#radio').innerHTML='<strong>관제실</strong>'+line;radioUntil=performance.now()+duration*1000;}
-const rows=[['W A S D','이동'],['MOUSE','시점 회전'],['SHIFT','달리기'],['C (누르고 유지)','앉기 / 은신'],['C + W A S D','앉은 채 이동 / 낮은 은신처 진입'],['W + SPACE','난간 · 선반 · 상자 위 자유 점프'],['SHIFT + W + SPACE','달리면서 난간 점프'],['C + SPACE + A/D','공중 버니합 방향 전환'],['SPACE / WHEEL','기본 점프 (약 1.2m) · 연속 점프'],['C + SPACE','앉기 점프 (약 1m) · 버니합 가속 시 최대 1.35m'],['Q','손전등 들기 / 내리기'],['E','상자 들기 · 내려놓기 / 쓰러진 팀원 근처 2.5초 유지해 구조'],['M','전체 지도 확대 / 축소'],['ESC','일시 정지']];
+const rows=[['W A S D','이동'],['MOUSE','시점 회전'],['SHIFT','달리기'],['C (누르고 유지)','앉기 / 은신'],['V','달리기 중 슬라이딩 · 1.5초 재사용 대기'],['F','손전등 유인 신호 · 12초 재사용 대기'],['C + W A S D','앉은 채 이동 / 낮은 은신처 진입'],['W + SPACE','난간 · 선반 · 상자 위 자유 점프'],['SHIFT + W + SPACE','달리면서 난간 점프'],['C + SPACE + A/D','공중 버니합 방향 전환'],['SPACE / WHEEL','기본 점프 (약 1.2m) · 연속 점프'],['C + SPACE','앉기 점프 (약 1m) · 버니합 가속 시 최대 1.35m'],['Q','손전등 들기 / 내리기'],['E','상자 들기 · 내려놓기 / 쓰러진 팀원 근처 2.5초 유지해 구조'],['M','전체 지도 확대 / 축소'],['ESC','일시 정지']];
 const links='<a class="doc" href="characters.html" target="_blank" rel="noopener">캐릭터 검수실 ↗</a><div class="panel-actions"><a class="doc" href="unity-migration.html" target="_blank" rel="noopener">Unity 이식 가이드 ↗</a></div>';
 function action(name,label,primary=false){return '<button class="'+(primary?'primary':'secondary')+'" data-action="'+name+'">'+label+'</button>';}
 const emptyMapBlocks=[],sceneCache=new Map();let renderLayout=null;
@@ -134,6 +135,8 @@ function onCoopState(snap){
   else if(event.type==='revive'){beep(520,.22,'sine',.1);say(event.player===snap.you?'부활 완료 · 3초 보호':'팀원 구조 완료',3);}
   else if(event.type==='anomaly'){beep(event.phase==='start'?58:180,.35,'triangle',.12);say(event.message,4);}
   else if(event.type==='notice'&&(!event.player||event.player===snap.you))say(event.message,3);
+  else if(event.type==='power'){beep(180,.12,'triangle',.06);say(event.message,3);}
+  else if(event.type==='signal'&&event.player===snap.you){beep(240,.3,'triangle',.07);say('유인 신호 전송 · 12초 대기',2.5);}
   else if(event.type==='door'&&event.player===snap.you)beep(112,.19,'triangle',.08);
   else if(event.type==='cargo'&&event.player===snap.you){beep(event.result==='delivered'?620:235,.12);say(event.id+' · '+(event.result==='delivered'?'팀 배송 완료':event.result==='picked'?'집화 완료':'임시 적치 완료'),2.5);}
  }
@@ -234,7 +237,7 @@ function spectateFrame(now,dt){
  const {eye,view}=spectateCamera;interpolateCoopHaunt({...s,x:observed.x,z:observed.z},dt,now);
  s.coopVisualClock=(s.coopVisualClock??s.elapsed)+dt;
  const lighting=eventLighting(s),actors=peerLayers(coop,observed,dt,TEAM_WORKER_GROUP,p.id);
- const pose={hands:[],actors:[...hauntLayers(s,name=>renderer?.skins?.has(name)),...lockerLayers(s,LOCKER_DOOR_GROUP),...actors],rescueActors:rescueLayers(snap.players,snap.you,TEAM_WORKER_GROUP),spectating:true,clock:s.coopVisualClock,gridPower:lighting.power,flashlight:0,lowCostShadow:true};
+ const pose={hands:[],actors:[...hauntLayers(s,name=>renderer?.skins?.has(name)),...lockerLayers(s,LOCKER_DOOR_GROUP),...actors],rescueActors:rescueLayers(snap.players,snap.you,TEAM_WORKER_GROUP),spectating:true,clock:s.coopVisualClock,gridPower:lighting.power,zonePowers:zonePowers(s),localPower:zonePower(s,observed.x,observed.z),flashlight:0,lowCostShadow:true};
  renderer.render(eye,view,parcelPositions(s,-1,Boolean(renderer.gl)),pose,settings.scale*Math.min(.85,s.adaptiveScale??1));
  updateRescueMarkers(s,eye);textIfChanged($('#spectator-name'),p.name+(p.hidden?' · 은신 중':''));textIfChanged($('#delivered'),deliveryCount(s)+' / '+missionTotal(s));textIfChanged($('#taskLine'),'팀원 구조 대기 · 3인칭 관전');textIfChanged($('#hud-sector'),sectorName(observed));
  if(now-(s.lastCoopHud??-1000)>=150){s.lastCoopHud=now;updateHud({...s,...observed,failed:false},false,deliveryCount(s),missionTotal(s),plan,now,settings.hints,mapMarkersNow,worlds[0].blocks);}
@@ -309,6 +312,7 @@ let receiptUntil=0;
 function use(target=null,locked=false){
  if(coopStarting&&coop){coop.command('use');return;}
  const staticBlocks=worlds[0].blocks,blocks=staticBlocks.concat(lockerDoorBlocks(session));
+ if(!locked&&!closedLocker(session)){const panel=powerTarget(session,blocks);if(panel){const e=toggleZone(session,panel);say(e.message,3);beep(180,.12,'triangle',.06);return;}}
  if(!locked&&!session.handAction&&!session.pendingUse){const l=lockerTarget(session,staticBlocks);if(l&&session.carried<0){const result=useLocker(session,l);if(result==='opening'||result==='closing'){beep(112,.19,'triangle',.08);if(result==='closing')session.lockerLook={yaw:session.yaw,pitch:session.pitch,t:0};}else if(result==='step-back')say('문이 열릴 공간이 필요합니다. 한 걸음 물러서서 E를 누르세요.',2.5);else if(result==='enter-first')say('문이 열린 상태입니다. 내부 중앙으로 들어가 E를 누르세요.',2.5);return;}}
  target??=handlingTarget(session,blocks);
  if(session.handAction||session.pendingUse||!canUse(session,target,blocks,locked))return;
@@ -382,7 +386,7 @@ function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/10
  const view=facing;
  const visualTime=coopStarting?(s.coopVisualClock??s.elapsed):s.elapsed;
  const pose=choreography(s,eye,available,moving,keys.has('ShiftLeft')||keys.has('ShiftRight'),visualTime,view);
- pose.actors=[...hauntLayers(s,name=>renderer?.skins?.has(name)),...lockerLayers(s,LOCKER_DOOR_GROUP),...(hiddenLocker?[]:workerLegLayers(s)),...peerLayers(coop,s,dt,TEAM_WORKER_GROUP)];pose.rescueActors=coopStarting?rescueLayers(coop?.snapshot?.players,coop?.snapshot?.you,TEAM_WORKER_GROUP):[];pose.clock=visualTime;const lighting=eventLighting(s);pose.gridPower=lighting.power;
+ pose.actors=[...hauntLayers(s,name=>renderer?.skins?.has(name)),...lockerLayers(s,LOCKER_DOOR_GROUP),...(hiddenLocker?[]:workerLegLayers(s)),...peerLayers(coop,s,dt,TEAM_WORKER_GROUP)];pose.rescueActors=coopStarting?rescueLayers(coop?.snapshot?.players,coop?.snapshot?.you,TEAM_WORKER_GROUP):[];pose.clock=visualTime;const lighting=eventLighting(s);pose.gridPower=lighting.power;pose.zonePowers=zonePowers(s);pose.localPower=zonePower(s,s.x,s.z);if(s.flashlight&&s.elapsed<(s.signalPulseUntil??0))pose.flashlight=(pose.flashlight??0)*(1.25+.25*Math.sin(s.elapsed*5));
  if(hiddenLocker){pose.hands=[];if(Math.floor(s.elapsed*1.6)>Math.floor((s.elapsed-dt)*1.6)&&s.haunt.some(a=>Math.hypot(a.x-s.x,a.z-s.z)<8))beep(43,.15,'sine',.055);}
  // Hysteresis: lower render resolution only after sustained slow frames.
  const frameMs=Math.min(150,rawDt*1000);s.frameAverage=(s.frameAverage??16.7)*.90+frameMs*.10;
@@ -409,9 +413,10 @@ function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/10
  }
  if(s.handAction)msg=s.handAction.placing?'상자 내려놓는 중':'상자 드는 중';
  if(l&&!s.handAction&&s.carried<0){msg=lockerPrompt(s,l);brackets.hidden=true;if(hiddenLocker){msg='은신 중 · 문틈 관찰 / Q 소등 / E 열기';mark.hidden=true;}}
+ const powerPanel=hiddenLocker?null:powerTarget(s,interactionBlocks);if(powerPanel){msg='<kbd>E</kbd> '+powerPanel.name+' 전력 '+(s.powerZones?.[powerPanel.id]===false?'복구':'차단');brackets.hidden=true;}
  if(coopStarting&&coop?.snapshot){const me=coop.snapshot.players.find(a=>a.id===coop.snapshot.you),down=findReviveTarget(s,coop.snapshot.players,interactionBlocks,coop.snapshot.you,me?.reviveTarget);if(down&&!hiddenLocker){const percent=Math.min(100,Math.floor((me?.reviveProgress??0)/REVIVE_SECONDS*100));msg='<kbd>E</kbd> 2.5초 유지 · '+escapeNickname(down.name)+' 구조 '+percent+'%<span style="display:block;height:4px;background:#48392a;margin-top:5px"><i style="display:block;height:100%;width:'+percent+'%;background:#ffbb54"></i></span>';brackets.hidden=true;}}
  if(document.pointerLockElement!==canvas&&!drag&&!s.failed)msg='화면 클릭 · 마우스 고정 재개'+(msg?' | '+msg:'');
- textIfChanged($('#torch-status'),'Q · 손전등 '+(s.flashlight?'ON':'OFF')+(s.shiftEvents?.active?' · '+(s.shiftEvents.active.kind==='blackout'?'정전':'전파 간섭'):''));if(p.innerHTML!==msg)p.innerHTML=msg;textIfChanged($('#delivered'),deliveryCount(s)+' / '+missionTotal(s));
+ textIfChanged($('#torch-status'),'Q · 손전등 '+(s.flashlight?'ON':'OFF')+' · F '+(signalReady(s)>0?Math.ceil(signalReady(s))+'초':'신호')+(s.shiftEvents?.active?' · '+(s.shiftEvents.active.kind==='blackout'?'정전':'전파 간섭'):''));if(p.innerHTML!==msg)p.innerHTML=msg;textIfChanged($('#delivered'),deliveryCount(s)+' / '+missionTotal(s));
  textIfChanged($('#carry-status span'),s.handAction?(s.handAction.placing?'내려놓는 중':'드는 중'):s.carried>=0?(s.flashlight?'한 손 운반 중':'운반 중'):'빈손');
  const special=specialLabel(s,s.carried>=0?s.carried:target?.index??-1);
  textIfChanged($('#taskLine'),(target?(target.dock?shiftParcel(s,s.carried).id+' → '+target.id+' 출고대':target.id+' · '+(areaNames[target.area]??'')):'전체 배송 완료')+(special?' · '+special:''));
@@ -430,6 +435,8 @@ document.addEventListener('keydown',e=>{
  if(mode!=='game')return;if(coopStarting&&session?.failed){if(['ArrowLeft','ArrowRight','KeyA','KeyD','KeyQ','KeyE','Space'].includes(e.code)){e.preventDefault();if(!e.repeat)switchSpectator(['ArrowLeft','KeyA','KeyQ'].includes(e.code)?-1:1);}else if(e.code==='KeyM'&&!e.repeat){session.mapExpanded=!session.mapExpanded;$('#play').classList.toggle('map-expanded',session.mapExpanded);}return;}if(['Space','KeyW','KeyA','KeyS','KeyD','KeyE','KeyQ','KeyC','ShiftLeft','ShiftRight','ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();
  if(e.code==='KeyM'){e.preventDefault();if(!e.repeat){session.mapExpanded=!session.mapExpanded;$('#play').classList.toggle('map-expanded',session.mapExpanded);}return;}
  if(e.code==='F3'){e.preventDefault();if(!e.repeat)session.showTraversal=!session.showTraversal;return;}
+ if(e.code==='KeyV'){e.preventDefault();if(!e.repeat){session.slideRequested=true;if(coopStarting&&coop)coop.command('slide');}return;}
+ if(e.code==='KeyF'){e.preventDefault();if(!e.repeat){if(coopStarting&&coop)coop.command('signal');else if(!closedLocker(session)&&emitSignal(session,session,worlds[0].blocks.concat(lockerDoorBlocks(session)))){beep(240,.3,'triangle',.07);say('유인 신호 전송 · 12초 대기',2.5);}else say(signalReady(session)>0?'유인 신호 재사용 대기 중':'손전등을 켜고 열린 공간을 조준하세요.',2);}return;}
  if(e.code==='KeyQ'&&!e.repeat){if(coopStarting&&coop){coop.command('torch');return;}if(session.handAction){session.restoreTorch=!session.restoreTorch;return;}if(toggleFlashlight(session)){session.pendingUse=false;session.restoreTorch=false;beep(180,.055,'triangle',.025);}else say('상자를 집거나 내려놓는 동안에는 장비 전환을 할 수 없습니다.',2);return;}if(e.code==='KeyE'&&!e.repeat){if(coopStarting&&coop){keys.add('KeyE');coop.inputChanged();}use();return;}if(e.code==='Space'&&!e.repeat){jump=true;if(coopStarting&&coop)coop.command('jump');}const changed=!keys.has(e.code);keys.add(e.code);if(changed&&coopStarting&&coop&&['KeyW','KeyA','KeyS','KeyD','KeyC','ShiftLeft','ShiftRight','Space'].includes(e.code))coop.inputChanged();
 });document.addEventListener('keyup',e=>{const changed=keys.delete(e.code);if(changed&&coopStarting&&coop)coop.inputChanged();});
 canvas.addEventListener('wheel',e=>{if(mode==='game'){e.preventDefault();if(session?.failed){switchSpectator(e.deltaY>0?1:-1);return;}jump=true;if(coopStarting&&coop)coop.command('jump');}},{passive:false});

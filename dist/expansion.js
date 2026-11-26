@@ -1,3 +1,4 @@
+import {buildVent} from './facility-actions.js';
 import {EXTENSION_END,EXTENSION_STAIRS} from './map-layout.js';
 export function buildExpansion(w){
  const slab=w.mat('extension-slab','#625e58','concrete'),wall=w.mat('extension-wall','#424a52','concrete'),steel=w.mat('extension-frame','#454d51','metal'),tread=w.mat('extension-tread','#626760','metal'),amber=w.mat('extension-safety','#bd984a','paint'),wood=w.mat('extension-pallet','#765e43','wood'),cargo=w.mat('extension-cargo','#92816b','carton'),black=w.mat('extension-dark','#252a2d','rubber'),red=w.mat('extension-light','#e13b2e','plain',1.4);
@@ -5,7 +6,8 @@ export function buildExpansion(w){
  w.box(-14,-.16,90,58,.32,24,slab);
  for(const x of [-43,15])solid(x,0,90,.34,11,24,wall);
  solid(-14,0,EXTENSION_END,58,11,.34,wall,'extension-boundary');
- for(const [a,b] of [[78,84],[90,96],[100,102]])solid(-15,0,(a+b)/2,.25,10.5,b-a,wall);
+ for(const [a,b] of [[78,84],[90,92.25],[93.75,96],[100,102]])solid(-15,0,(a+b)/2,.25,10.5,b-a,wall);
+ solid(-15,1.18,93,.25,9.32,1.5,wall);buildVent(w,93);
  for(const z of [81,87,93,99]){w.box(-14,11.1,z,58,.20,6.1,steel);w.beam([-43,10.6,z],[15,10.6,z],.22,.24,steel);for(const x of [-41,-16,14])solid(x,0,z,.22,10.5,.22,steel);}
  for(const [x,z] of [[-37,86],[-24,83],[-20,93],[-37,97],[-7,86],[6,83],[10,93],[-7,97]]){
   for(const dx of [-1.5,1.5])for(const dz of [-.65,.65])solid(x+dx,0,z+dz,.10,3.8,.10,steel);

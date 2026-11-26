@@ -138,13 +138,15 @@ export function applyCoopSnapshot(s,snap,first=false){
  }else s.netCorrection=[0,0];
  s.netGrounded=!!v.grounded&&!v.vault;s.netOnRail=!!v.onRail;
  if(first||revived){s.yaw=v.yaw;s.pitch=v.pitch;s.coopVisualClock=snap.elapsed??0;}else if(hidden&&!oldHidden){s.yaw=0;s.pitch=0;}
- for(const k of ['cargo','states','parked','deliveryOrder','deliveryBays','lockers','lockerRevision','elapsed','cargoDeadlines','shiftEvents'])s[k]=snap[k];
+ for(const k of ['cargo','states','parked','deliveryOrder','deliveryBays','lockers','lockerRevision','elapsed','cargoDeadlines','shiftEvents','powerZones','signals'])s[k]=snap[k];
  s.difficultyLevel=snap.difficulty?.level??'normal';s.startCount=snap.startCount??1;
  const prevAction=s.handAction;
  for(const k of ['carried','flashlight','handAction','failed','capturedBy','noise','horrorEvent','cargoSignalAt'])s[k]=v[k]??(k==='carried'?-1:k==='flashlight'||k==='failed'?false:null);
  if(s.handAction&&prevAction&&s.handAction.index===prevAction.index&&s.handAction.placing===prevAction.placing)
   s.handAction={...s.handAction,time:Math.max(s.handAction.time,prevAction.time)};
  if(first)s.flashAmount=v.flashAmount??0;
+ s.signalCooldownUntil=v.signalCooldownUntil??0;s.signalPulseUntil=v.signalPulseUntil??0;
+ if(hard){s.slideTime=v.slideTime??0;s.slideCooldown=v.slideCooldown??0;s.slideRequested=false;}
  s.skipLockerAdvance=true;s.coopPrediction=true;s.coopHidden=hidden;s.id=snap.you;
  s.haunt=(snap.haunt??[]).map(a=>{
   const old=s.haunt?.find(p=>p.kind===a.kind),elapsed=snap.elapsed??0;
