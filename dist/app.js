@@ -6,6 +6,8 @@ import {sectorName,clock,telemetry,progressBar,decorateManual,updateHud} from '.
 import {normalizeNickname,escapeNickname} from './nickname.js';
 import {PUBLIC_SERVERS,serverName} from './public-servers.js';
 import {CoopClient,peerLayers,applyCoopSnapshot,interpolateCoopHaunt,advanceCoopPrediction} from './multiplayer.js';
+import {spectatorTarget,spectatorCamera,rescueLayers} from './spectator.js';
+import {remoteAt} from './net-smoothing.js';
 import {drawTraversalDebug} from './traversal-debug.js';
 import {equipmentClearance} from './contact.js';
 import {vaultPose} from './hand-motion.js';
@@ -20,6 +22,7 @@ import {LOCKER_DOOR_GROUP,TEAM_WORKER_GROUP,workerLegLayers,rigs,beginHandling,a
 import {Renderer} from './renderer.js';
 const $=s=>document.querySelector(s),canvas=$('#world'),keys=new Set(),icon=i=>'<svg aria-hidden="true"><use href="#i-'+i+'"/></svg>';
 let coop=null,soloSession=null,coopStarting=false,coopEnding=false,coopEventSeq=0,coopError='',coopBusy=false;
+let spectateId=null,spectateCamera=null;
 let coopListTimer=null,coopListGeneration=0,coopListBusy=false,coopNickname='',selectedServer=null,visibleServers=[];
 try{coopNickname=localStorage.getItem('gdg.nickname')??'';}catch{}
 let mode='menu',pane='',session=null,renderer,worlds,setupPromise,raf,last=0,drag=false,grabbing=false,lookReady=0,radioUntil=0,jump=false,accumulator=0;
@@ -107,8 +110,9 @@ async function coopConnect(id){
  catch(e){if(coop===client){coop=null;coopMessage(e);}}
  finally{coopBusy=false;if(pane==='coop'&&!coop)refreshServers();}
 }
-function disconnectCoop(){stopServerList();if(!coop)return;const client=coop;coop=null;client.leave();if(coopStarting)session=soloSession;soloSession=null;coopStarting=false;coopEnding=false;coopEventSeq=0;coopError='';const badge=$('#coop-team');if(badge)badge.hidden=true;}
+function disconnectCoop(){clearSpectator();stopServerList();if(!coop)return;const client=coop;coop=null;client.leave();if(coopStarting)session=soloSession;soloSession=null;coopStarting=false;coopEnding=false;coopEventSeq=0;coopError='';const badge=$('#coop-team');if(badge)badge.hidden=true;}
 function teamResult(snap){
+ clearSpectator();
  if(coopEnding&&pane==='coopresult')return;coopEnding=true;if(mode==='game')pauseShift(false);
  const won=snap.phase==='complete',done=snap.states.filter(x=>x==='DELIVERED').length;
  panel('coopresult',resultMarkup(snap,won,snap.players.filter(p=>!p.failed).length)+'<div class="panel-actions">'+action('coop-leave','메인으로',true)+'</div>',won?'팀 근무 완료':'팀 근무 실패','GDG / COOPERATIVE RESULT');
@@ -121,7 +125,7 @@ function onCoopState(snap){
  }else if(coopStarting&&session){applyCoopSnapshot(session,snap);if(pane==='map'&&$('#live-map')){const markers=$('#live-map .gdg-map-markers');if(markers)markers.innerHTML=mapMarkersNow();else $('#live-map').innerHTML=plan();textIfChanged($('#facility-progress'),'배송 '+deliveryCount(session)+' / '+missionTotal(session)+' · '+sectorName(session));}}
  if(!coopStarting||!session)return;
  const me=snap.players.find(p=>p.id===snap.you),team=$('#coop-team');
- if(team){team.hidden=false;team.textContent='CO-OP '+serverName(snap.room)+' · '+difficultyLabel(snap.difficulty?.level)+' · 생존 '+snap.players.filter(p=>!p.failed).length+'/'+snap.players.length+' · 개체 '+snap.haunt.length+'/'+snap.difficulty.maxActive+'\n'+snap.players.map(p=>p.name+(p.id===snap.you?' (나)':'')+(p.failed?' · 구조 대기':p.hidden?' · 은신':' · 생존')).join('\n');}
+ if(team){team.hidden=false;textIfChanged(team,'CO-OP '+serverName(snap.room)+' · '+difficultyLabel(snap.difficulty?.level)+' · 생존 '+snap.players.filter(p=>!p.failed).length+'/'+snap.players.length+' · 개체 '+snap.haunt.length+'/'+snap.difficulty.maxActive+'\n'+snap.players.map(p=>p.name+(p.id===snap.you?' (나)':'')+(p.failed?' · 구조 대기':p.hidden?' · 은신':' · 생존')).join('\n'));}
  for(const event of snap.events??[]){if(event.seq<=coopEventSeq)continue;coopEventSeq=event.seq;
   if(event.type==='haunt'){(session.hauntSounds??=[]).push(event);}
   else if(event.type==='revive'){beep(520,.22,'sine',.1);say(event.player===snap.you?'부활 완료 · 3초 보호':'팀원 구조 완료',3);}
@@ -131,9 +135,8 @@ function onCoopState(snap){
   else if(event.type==='cargo'&&event.player===snap.you){beep(event.result==='delivered'?620:235,.12);say(event.id+' · '+(event.result==='delivered'?'팀 배송 완료':event.result==='picked'?'집화 완료':'임시 적치 완료'),2.5);}
  }
  if(['complete','failed'].includes(snap.phase)&&['game','paused'].includes(mode)){teamResult(snap);return;}
- if(wasDown&&!me?.failed&&mode==='paused'){resume();say('부활 완료 · 3초 보호',3);}
- if(me?.failed&&mode==='game'){pauseShift(false);panel('coopdead','<p>구조 대기 중입니다. 팀원이 가까이에서 E를 3초 누르면 부활합니다.</p><div class="panel-actions">'+action('map','팀 지도')+action('coop-leave','방 나가기',true)+'</div>','작업자 구조 대기','GDG / CO-OP');}
- if(me?.failed&&pane==='coopdead'&&$('#paneBody')){const p=$('#paneBody').querySelector('p');if(p)p.textContent='팀원에게 구조 요청 · E 3초 · 생존 '+snap.players.filter(p=>!p.failed).length+'명 · 공동 배송 '+snap.states.filter(v=>v==='DELIVERED').length+' / '+snap.states.length;}
+ if(wasDown&&!me?.failed){clearSpectator();if(mode==='paused')resume();else if(mode==='game'){canvas.focus();lock();}say('부활 완료 · 3초 보호',3);}
+ if(me?.failed&&!wasDown&&['game','paused'].includes(mode)){keys.clear();jump=false;coop?.inputChanged();beginSpectator();}
 }
 function panel(name,body,title,eyebrow='GDG / 근무 안내'){
  pane=name;const modal=$('#modal'),nav=$('#paneNav');modal.dataset.pane=name;modal.dataset.context=mode==='menu'?'menu':'game';$('#eyebrow').textContent=eyebrow;$('#paneTitle').textContent=title;$('#paneBody').innerHTML=body;
@@ -168,7 +171,7 @@ function openPane(name){
  '<article class="creature-guide"><h4>함귀 <small>소음 추적형</small></h4><p>네 개체 중 소음 감도가 가장 높습니다. 가까이 있을 때 달리기와 상자 조작을 피하고 C로 천천히 이동하세요. 직접 비춘 빛에 더 빨라지므로 손전등을 끄고 구조물 뒤로 시야를 끊으세요. 한 번 숨었다고 안심하지 마세요.</p></article>'+
  '<article class="creature-guide"><h4>적재귀 <small>고속 돌진형</small></h4><p>기본 추격 속도가 가장 빠르고 공격 준비 거리도 깁니다. 정면에서 맞서거나 직선으로만 도망치지 말고 선반과 기둥을 돌아 거리를 벌리세요. 손전등은 오히려 자극합니다. 적재귀는 낮은 상자·작업 발판과 폐기물동·격리동의 ESCAPE DECK까지 느리게 따라 올라옵니다. 높은 곳은 시간을 버는 수단입니다. 올라오는 동안 반대편으로 내려가거나 철제 사물함에 숨으세요.</p></article>'+
  '<article class="creature-guide"><h4>표찰귀 <small>화물 반응형</small></h4><p>직접 비춘 손전등 빛으로 일시적으로 물러나게 할 수 있습니다. 표찰귀가 약 4m 이내에 있을 때 운반 중인 상자를 E로 정상적으로 내려놓으면 사라집니다. 배송 완료가 아닌 임시 적치이며, 내려놓을 공간이 필요합니다. 너무 가까워지기 전에 행동하세요. 격리동에서는 천장 이동 및 하강도 주의하세요.</p></article>'+
- '<h3>05 / 협동 근무</h3><p>메인 메뉴에서 멀티플레이를 선택하고 닉네임(2~12자)을 입력한 뒤 공개 서버 01~03 중 원하는 서버에 참가합니다. 초대 코드는 필요하지 않습니다. 2명 이상 입장하면 방장이 시작할 수 있습니다. 2인 40개, 3인 50개, 4인 70개의 화물을 나눠 배송합니다. 방장은 모든 인원에서 대기실 난이도를 선택합니다. 근무 시작 이후 목표량은 변경되지 않고, 한 명이 사망해도 생존 팀원이 임무를 계속할 수 있습니다. 인원이 늘면 동시에 활동하는 개체 수, 감지 범위, 소음 추적, 수색 지속 시간이 증가합니다. 협동 중 ESC는 개인 메뉴만 열며 서버 시간은 계속 흐릅니다.</p><h3>06 / 지도 및 이동 팁</h3><p>구역 지도의 파란 사각형은 낮은 은신처 입구, 금색 사각형은 철제 사물함, 초록 원은 지정 피신 지점입니다. ESC → 구역 지도로 확인할 수 있습니다. 마우스가 고정되지 않으면 왼쪽 버튼을 누른 채 드래그하거나 방향키로 시점을 돌리세요.</p></div>'+
+ '<h3>05 / 협동 근무</h3><p>메인 메뉴에서 멀티플레이를 선택하고 닉네임(2~12자)을 입력한 뒤 공개 서버 01~03 중 원하는 서버에 참가합니다. 초대 코드는 필요하지 않습니다. 2명 이상 입장하면 방장이 시작할 수 있습니다. 2인 40개, 3인 50개, 4인 70개의 화물을 나눠 배송합니다. 방장은 모든 인원에서 대기실 난이도를 선택합니다. 근무 시작 이후 목표량은 변경되지 않고, 한 명이 사망하면 생존 팀원을 3인칭 관전하며 Q/E 또는 좌우 방향키로 전환합니다. 생존 팀원은 벽을 투과하는 구조 실루엣을 따라가 E를 3초 유지해 부활시킬 수 있습니다. 인원이 늘면 동시에 활동하는 개체 수, 감지 범위, 소음 추적, 수색 지속 시간이 증가합니다. 협동 중 ESC는 개인 메뉴만 열며 서버 시간은 계속 흐릅니다.</p><h3>06 / 지도 및 이동 팁</h3><p>구역 지도의 파란 사각형은 낮은 은신처 입구, 금색 사각형은 철제 사물함, 초록 원은 지정 피신 지점입니다. ESC → 구역 지도로 확인할 수 있습니다. 마우스가 고정되지 않으면 왼쪽 버튼을 누른 채 드래그하거나 방향키로 시점을 돌리세요.</p></div>'+
  '<div class="panel-actions">'+action('cargo','특수 화물 안내')+action('anomalies','이상 현상 안내')+action('map','구역 지도')+'</div>'+links,'조작 방법 및 공략','WORK 모드 / 근무자 생존 매뉴얼');
  if(name==='map'){
  const n=session?deliveryCount(session):0;
@@ -184,7 +187,7 @@ function openPane(name){
  panel(name,'<section class="gdg-section"><h3>현재 상황</h3><div class="row"><span>현재 섹터</span><b>'+sectorName(session)+'</b></div><div class="row"><span>임무 진행도</span><b>'+n+' / ' +missionTotal(session)+'</b></div>'+progressBar(n,missionTotal(session))+'<div class="row"><span>플레이 시간</span><b>'+clock(session.elapsed)+'</b></div><div class="row"><span>난이도</span><b>'+difficultyLabel(session.difficultyLevel)+'</b></div><div class="row"><span>근무 모드</span><b>'+(coopStarting?'협동 · '+(coop?.snapshot?.players?.filter(p=>!p.failed).length??0)+'명 생존':'싱글')+'</b></div><div class="row"><span>위협 상태</span><b>'+t.danger+'</b></div></section><section class="gdg-section paper-note"><h3>주요 목표</h3><p>□ 지정 화물 찾기</p><p>□ 가까운 출고대에 배송 · '+n+' / ' +missionTotal(session)+'</p><p>□ 괴물을 피하며 생존</p>'+(coopStarting?'<p>※ 협동 근무는 메뉴에서도 계속 진행됩니다.</p>':'')+'</section>','일시 정지','GDG / 대기 중');
  }
 }
-function closePane(){if(mode==='menu'&&['cargo','anomalies'].includes(pane)){soloDifficulty();return;}if(pane==='coop'&&!coopStarting){disconnectCoop();$('#modal').hidden=true;pane='';$('#start').focus();return;}if(pane==='coopdead'||pane==='coopresult'){return;}if(mode==='paused'&&session?.failed&&coopStarting){panel('coopdead','<p>구조 대기 중 · 팀원에게 E 3초 구조 요청</p><div class="panel-actions">'+action('map','팀 지도')+action('coop-leave','방 나가기',true)+'</div>','작업자 사망','GDG / CO-OP');return;}if(mode==='paused'&&pane!=='pause'&&pane!=='complete'){openPane('pause');return;}if(mode==='paused'&&pane==='pause'){resume();return;}if(pane==='complete'||pane==='failed'){toMenu();return;}$('#modal').hidden=true;pane='';$('#start').focus();}
+function closePane(){if(mode==='menu'&&['cargo','anomalies'].includes(pane)){soloDifficulty();return;}if(pane==='coop'&&!coopStarting){disconnectCoop();$('#modal').hidden=true;pane='';$('#start').focus();return;}if(pane==='coopresult'){return;}if(mode==='paused'&&session?.failed&&coopStarting){beginSpectator();return;}if(mode==='paused'&&pane!=='pause'&&pane!=='complete'){openPane('pause');return;}if(mode==='paused'&&pane==='pause'){resume();return;}if(pane==='complete'||pane==='failed'){toMenu();return;}$('#modal').hidden=true;pane='';$('#start').focus();}
 function toMenu(){
  if(coop)disconnectCoop();
  canvas.classList.remove('captured');
@@ -204,7 +207,36 @@ function clockOut(){
 }
 function pauseShift(show=true){if(mode!=='game')return;mode='paused';keys.clear();jump=false;drag=false;cancelAnimationFrame(raf);if(document.pointerLockElement===canvas)document.exitPointerLock();audioOn();if(show)openPane('pause');}
 async function lock(){if(grabbing||document.pointerLockElement===canvas)return;grabbing=true;try{await canvas.requestPointerLock();}catch{}finally{grabbing=false;}}
-function resume(){if(!renderer||session?.failed)return;canvas.classList.remove('captured');mode='game';pane='';$('#modal').hidden=true;$('#briefing').hidden=true;$('#play').hidden=false;canvas.focus();lock();audioOn();last=performance.now();accumulator=0;cancelAnimationFrame(raf);frame(last);}
+function resume(){if(session?.failed&&coopStarting){beginSpectator();return;}if(!renderer||session?.failed)return;canvas.classList.remove('captured');mode='game';pane='';$('#modal').hidden=true;$('#briefing').hidden=true;$('#play').hidden=false;canvas.focus();lock();audioOn();last=performance.now();accumulator=0;cancelAnimationFrame(raf);frame(last);}
+function clearSpectator(){spectateId=null;spectateCamera=null;$('#play')?.classList.remove('spectating');const h=$('#spectator-hud');if(h)h.hidden=true;const m=$('#rescue-markers');if(m)m.replaceChildren();}
+function beginSpectator(){
+ if(!renderer||!session?.failed||!coopStarting)return;
+ mode='game';pane='';keys.clear();jump=false;accumulator=0;$('#modal').hidden=true;$('#play').hidden=false;$('#play').classList.add('spectating');$('#spectator-hud').hidden=false;$('#target-brackets').hidden=true;$('#waypoint').hidden=true;$('#hud-locker').hidden=true;$('#play').classList.remove('locker-ui','threat-ui');canvas.classList.remove('captured');
+ if(document.pointerLockElement===canvas)document.exitPointerLock();audioOn();last=performance.now();cancelAnimationFrame(raf);raf=requestAnimationFrame(frame);
+}
+function switchSpectator(direction){const p=spectatorTarget(coop?.snapshot?.players,coop?.snapshot?.you,spectateId,direction);if(p){spectateId=p.id;spectateCamera=null;}}
+function updateRescueMarkers(s,eye){
+ const host=$('#rescue-markers');if(!host)return;
+ const players=coopStarting?coop?.snapshot?.players??[]:[],seen=new Set();
+ for(const p of players){if(!p.failed||p.id===coop?.snapshot?.you)continue;seen.add(p.id);let el=[...host.children].find(n=>n.dataset.player===p.id);if(!el){el=document.createElement('div');el.dataset.player=p.id;el.className='rescue-marker';const icon=document.createElement('b');icon.textContent='✚';const label=document.createElement('span');el.append(icon,label);host.append(el);}
+  const d=Math.round(Math.hypot(p.x-eye[0],p.y-eye[1],p.z-eye[2])),clip=renderer.project([p.x,p.y+.85,p.z]);el.hidden=!clip||Math.abs(clip[0])>1.02||Math.abs(clip[1])>1.02;if(!el.hidden){el.style.transform='translate('+((clip[0]+1)*50/100*host.clientWidth)+'px,'+((1-clip[1])*50/100*host.clientHeight)+'px) translate(-50%,-100%)';textIfChanged(el.lastElementChild,p.name+' · 구조 '+d+'m');}
+ }
+ for(const el of [...host.children])if(!seen.has(el.dataset.player))el.remove();
+}
+function spectateFrame(now,dt){
+ const s=session,snap=coop?.snapshot,p=spectatorTarget(snap?.players,snap?.you,spectateId);if(!p){raf=requestAnimationFrame(frame);return;}
+ spectateId=p.id;const visual=remoteAt(coop.remoteTracks.get(p.id),now,true)??p;
+ const observed={...visual,id:p.id,hidden:p.hidden};spectateCamera=spectatorCamera(observed,worlds[0].blocks,spectateCamera,dt,lockerDoorBlocks(s));
+ const {eye,view}=spectateCamera;interpolateCoopHaunt({...s,x:observed.x,z:observed.z},dt,now);
+ s.coopVisualClock=(s.coopVisualClock??s.elapsed)+dt;
+ const lighting=eventLighting(s),actors=peerLayers(coop,observed,dt,TEAM_WORKER_GROUP,p.id);
+ const pose={hands:[],actors:[...hauntLayers(s,name=>renderer?.skins?.has(name)),...lockerLayers(s,LOCKER_DOOR_GROUP),...actors],rescueActors:rescueLayers(snap.players,snap.you,TEAM_WORKER_GROUP),spectating:true,clock:s.coopVisualClock,gridPower:lighting.power,flashlight:0,lowCostShadow:true};
+ renderer.render(eye,view,parcelPositions(s,-1,Boolean(renderer.gl)),pose,settings.scale*Math.min(.85,s.adaptiveScale??1));
+ updateRescueMarkers(s,eye);textIfChanged($('#spectator-name'),p.name+(p.hidden?' · 은신 중':''));textIfChanged($('#delivered'),deliveryCount(s)+' / '+missionTotal(s));textIfChanged($('#taskLine'),'팀원 구조 대기 · 3인칭 관전');textIfChanged($('#hud-sector'),sectorName(observed));
+ if(now-(s.lastCoopHud??-1000)>=150){s.lastCoopHud=now;updateHud({...s,...observed,failed:false},false,deliveryCount(s),missionTotal(s),plan,now,settings.hints,mapMarkersNow,worlds[0].blocks);}
+ if(s.hauntSounds)s.hauntSounds.length=0;
+ raf=requestAnimationFrame(frame);
+}
 const painted=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
 function reportProgress(value,label){
  const percent=Math.round(value*100);
@@ -299,7 +331,7 @@ function targetCorners(pos,dock){
  return [Math.min(...xx),Math.min(...yy),Math.max(...xx)-Math.min(...xx),Math.max(...yy)-Math.min(...yy)];
 }
 const textIfChanged=(el,value)=>{if(el&&el.textContent!==value)el.textContent=value;};
-function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/1000),dt=Math.min(.067,rawDt);last=now;const s=session;
+function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/1000),dt=Math.min(.067,rawDt);last=now;const s=session;if(coopStarting&&s.failed){spectateFrame(now,dt);return;}
  if(keys.has('ArrowLeft'))s.yaw+=dt*1.65;if(keys.has('ArrowRight'))s.yaw-=dt*1.65;if(keys.has('ArrowUp'))s.pitch=Math.min(CONFIG.pitchLimit,s.pitch+dt);if(keys.has('ArrowDown'))s.pitch=Math.max(-CONFIG.pitchLimit,s.pitch-dt);
  const was=s.steps;const tick=1/(coopStarting?60:PHYSICS.hz);if(coopStarting&&coop?.snapshot?.phase!=='playing'){accumulator=0;s.vx=s.vz=s.vy=0;}else if(s.encounterHit){keys.clear();jump=false;s.vx=s.vz=s.vy=0;accumulator=0;}else accumulator+=dt;while(accumulator>=tick){step(s,keys,worlds[0].blocks,tick,jump);jump=false;accumulator-=tick;}const doors=lockerDoorBlocks(s),dynamic=parcelBlocks(s).concat(doors);const interactionBlocks=worlds[0].blocks.concat(doors);
  if(coopStarting&&coop?.snapshot?.phase==='playing')advanceCoopPrediction(s,worlds[0].blocks,dynamic,dt,now);
@@ -342,7 +374,7 @@ function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/10
  const view=brace?forward({...s,pitch:s.pitch-.070*reach}):facing;
  const visualTime=coopStarting?(s.coopVisualClock??s.elapsed):s.elapsed;
  const pose=choreography(s,eye,available,moving,keys.has('ShiftLeft')||keys.has('ShiftRight'),visualTime,view);
- pose.actors=[...hauntLayers(s,name=>renderer?.skins?.has(name)),...lockerLayers(s,LOCKER_DOOR_GROUP),...(hiddenLocker?[]:workerLegLayers(s)),...peerLayers(coop,s,dt,TEAM_WORKER_GROUP)];pose.clock=visualTime;const lighting=eventLighting(s);pose.gridPower=lighting.power;
+ pose.actors=[...hauntLayers(s,name=>renderer?.skins?.has(name)),...lockerLayers(s,LOCKER_DOOR_GROUP),...(hiddenLocker?[]:workerLegLayers(s)),...peerLayers(coop,s,dt,TEAM_WORKER_GROUP)];pose.rescueActors=coopStarting?rescueLayers(coop?.snapshot?.players,coop?.snapshot?.you,TEAM_WORKER_GROUP):[];pose.clock=visualTime;const lighting=eventLighting(s);pose.gridPower=lighting.power;
  if(hiddenLocker){pose.hands=[];if(Math.floor(s.elapsed*1.6)>Math.floor((s.elapsed-dt)*1.6)&&s.haunt.some(a=>Math.hypot(a.x-s.x,a.z-s.z)<8))beep(43,.15,'sine',.055);}
  // Hysteresis: lower render resolution only after sustained slow frames.
  const frameMs=Math.min(150,rawDt*1000);s.frameAverage=(s.frameAverage??16.7)*.90+frameMs*.10;
@@ -351,6 +383,7 @@ function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/10
  if((s.fastFrames??0)>=240&&now-(s.lastScaleChange??-1000)>2500){s.adaptiveScale=Math.min(1,(s.adaptiveScale??1)+.05);s.fastFrames=0;s.lastScaleChange=now;}
  pose.lowCostShadow=coopStarting&&(s.adaptiveScale??1)<.85;
  renderer.render(eye,view,parcelPositions(s,pose.hidden,Boolean(renderer.gl)),pose,settings.scale*(s.adaptiveScale??1));
+ updateRescueMarkers(s,eye);
  if(s.showTraversal||document.querySelector('#traversal-debug'))drawTraversalDebug(s,worlds[0].blocks,renderer,pose,eye,view);
  const mark=$('#waypoint'),p=$('#prompt'),brackets=$('#target-brackets');
  let msg=s.climbHint>s.elapsed?'높은 선반에 오르려면 E로 상자를 내려놓으세요.':'';brackets.hidden=true;mark.hidden=true;
@@ -385,15 +418,15 @@ function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/10
 document.addEventListener('keydown',e=>{
  if(e.code==='Enter'&&!$('#modal').hidden&&pane==='coop'&&!coop&&document.activeElement?.id==='coop-nickname'){e.preventDefault();if(selectedServer)coopConnect(selectedServer);return;}
  if(e.code==='Escape'){if(mode==='game'){pauseShift();}else if(!$('#modal').hidden){closePane();}return;}
- if(mode!=='game')return;if(['Space','KeyW','KeyA','KeyS','KeyD','KeyE','KeyQ','KeyC','ShiftLeft','ShiftRight','ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();
+ if(mode!=='game')return;if(coopStarting&&session?.failed){if(['ArrowLeft','ArrowRight','KeyA','KeyD','KeyQ','KeyE','Space'].includes(e.code)){e.preventDefault();if(!e.repeat)switchSpectator(['ArrowLeft','KeyA','KeyQ'].includes(e.code)?-1:1);}else if(e.code==='KeyM'&&!e.repeat){session.mapExpanded=!session.mapExpanded;$('#play').classList.toggle('map-expanded',session.mapExpanded);}return;}if(['Space','KeyW','KeyA','KeyS','KeyD','KeyE','KeyQ','KeyC','ShiftLeft','ShiftRight','ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();
  if(e.code==='KeyM'){e.preventDefault();if(!e.repeat){session.mapExpanded=!session.mapExpanded;$('#play').classList.toggle('map-expanded',session.mapExpanded);}return;}
  if(e.code==='F3'){e.preventDefault();if(!e.repeat)session.showTraversal=!session.showTraversal;return;}
  if(e.code==='KeyQ'&&!e.repeat){if(coopStarting&&coop){coop.command('torch');return;}if(session.handAction){session.restoreTorch=!session.restoreTorch;return;}if(toggleFlashlight(session)){session.pendingUse=false;session.restoreTorch=false;beep(180,.055,'triangle',.025);}else say('상자를 집거나 내려놓는 동안에는 장비 전환을 할 수 없습니다.',2);return;}if(e.code==='KeyE'&&!e.repeat){if(coopStarting&&coop){keys.add('KeyE');coop.inputChanged();}use();return;}if(e.code==='Space'&&!e.repeat){jump=true;if(coopStarting&&coop)coop.command('jump');}const changed=!keys.has(e.code);keys.add(e.code);if(changed&&coopStarting&&coop&&['KeyW','KeyA','KeyS','KeyD','KeyC','ShiftLeft','ShiftRight','Space'].includes(e.code))coop.inputChanged();
 });document.addEventListener('keyup',e=>{const changed=keys.delete(e.code);if(changed&&coopStarting&&coop)coop.inputChanged();});
-canvas.addEventListener('wheel',e=>{if(mode==='game'){e.preventDefault();jump=true;if(coopStarting&&coop)coop.command('jump');}},{passive:false});
-function pointer(e){if(mode!=='game'||(!document.pointerLockElement&&!drag)||performance.now()<lookReady||Math.abs(e.movementX)>220||Math.abs(e.movementY)>220)return;session.yaw-=e.movementX*CONFIG.sensitivity*settings.sensitivity;session.pitch=Math.max(-CONFIG.pitchLimit,Math.min(CONFIG.pitchLimit,session.pitch-e.movementY*CONFIG.sensitivity*settings.sensitivity*(settings.invert?-1:1)));}
-document.addEventListener('mousemove',pointer);canvas.addEventListener('mousedown',()=>{if(mode==='game'){drag=true;lock();}});document.addEventListener('mouseup',()=>drag=false);
-document.addEventListener('pointerlockchange',()=>{lookReady=performance.now()+200;if(!document.pointerLockElement&&mode==='game')pauseShift();});window.addEventListener('blur',()=>pauseShift());document.addEventListener('visibilitychange',()=>{if(document.hidden)pauseShift();});
+canvas.addEventListener('wheel',e=>{if(mode==='game'){e.preventDefault();if(session?.failed){switchSpectator(e.deltaY>0?1:-1);return;}jump=true;if(coopStarting&&coop)coop.command('jump');}},{passive:false});
+function pointer(e){if(mode!=='game'||session?.failed||(!document.pointerLockElement&&!drag)||performance.now()<lookReady||Math.abs(e.movementX)>220||Math.abs(e.movementY)>220)return;session.yaw-=e.movementX*CONFIG.sensitivity*settings.sensitivity;session.pitch=Math.max(-CONFIG.pitchLimit,Math.min(CONFIG.pitchLimit,session.pitch-e.movementY*CONFIG.sensitivity*settings.sensitivity*(settings.invert?-1:1)));}
+document.addEventListener('mousemove',pointer);canvas.addEventListener('mousedown',()=>{if(mode==='game'&&!session?.failed){drag=true;lock();}});document.addEventListener('mouseup',()=>drag=false);
+document.addEventListener('pointerlockchange',()=>{lookReady=performance.now()+200;if(!document.pointerLockElement&&mode==='game'&&!session?.failed)pauseShift();});window.addEventListener('blur',()=>pauseShift());document.addEventListener('visibilitychange',()=>{if(document.hidden)pauseShift();});
 canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();pauseShift(false);panel('error','<p>그래픽 연결이 끊어졌습니다. 새로 열어 창고에 다시 접속하세요.</p><div class="panel-actions">'+action('reload','다시 열기',true)+'</div>','그래픽 연결 중단');});
 $('#close').onclick=closePane;$('#pause').onclick=()=>pauseShift();
 document.addEventListener('keydown',e=>{
@@ -405,7 +438,7 @@ document.addEventListener('keydown',e=>{
 document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.pane)openPane(b.dataset.pane);if(b.classList.contains('audio')){settings.audio=!settings.audio;persist();audioOn();if(settings.audio)beep(325,.1);}
  if(b.dataset.quality){settings.quality=b.dataset.quality;renderer?.setQuality(settings.quality);persist();openPane('settings');}
  if(b.dataset.toggle){const k=b.dataset.toggle;settings[k]=!settings[k];persist();audioOn();openPane('settings');}
- const a=b.dataset.action;if(a?.startsWith('solo-difficulty-')){settings.difficulty=normalizeDifficulty(a.slice(16));persist();soloDifficulty();return;}if(a?.startsWith('coop-difficulty-')){if(coop){coop.chosenDifficulty=normalizeDifficulty(a.slice(16));coop.action('difficulty',{level:coop.chosenDifficulty});}return;}if(a==='solo-confirm'||a==='solo-continue'){if(a==='solo-confirm')session=null;soloConfirmed=true;$('#modal').hidden=true;$('#start').click();return;}if(a?.startsWith('coop-select-')){selectedServer=a.slice(12);drawServerList(visibleServers);return;}if(a==='coop-join-selected'){if(selectedServer)coopConnect(selectedServer);return;}if(a==='coop-quick'){const s=visibleServers.filter(v=>v.joinable).sort((a,b)=>b.count-a.count)[0];if(s)coopConnect(s.id);return;}if(a==='back'){closePane();return;}if(a==='solo-start'){disconnectCoop();$('#modal').hidden=true;pane='';$('#start').click();return;}if(a==='coop-refresh'){refreshServers();return;}if(a==='coop-start'){coop?.action('start',{level:coop.chosenDifficulty??coop.snapshot?.requestedDifficulty??'normal'});return;}if(a==='coop-leave'){const was=coopStarting;disconnectCoop();if(was)toMenu();else coopLobby();return;}if(a==='quit')clockOut();else if(a==='retry'){toMenu();$('#start').click();}else if(a==='reload')location.reload();else if(a==='resume'){if(!session?.failed)resume();}else if(a==='brief')toMenu();else if(a)openPane(a);
+ const a=b.dataset.action;if(a==='spectate-prev'||a==='spectate-next'){switchSpectator(a==='spectate-prev'?-1:1);return;}if(a?.startsWith('solo-difficulty-')){settings.difficulty=normalizeDifficulty(a.slice(16));persist();soloDifficulty();return;}if(a?.startsWith('coop-difficulty-')){if(coop){coop.chosenDifficulty=normalizeDifficulty(a.slice(16));coop.action('difficulty',{level:coop.chosenDifficulty});}return;}if(a==='solo-confirm'||a==='solo-continue'){if(a==='solo-confirm')session=null;soloConfirmed=true;$('#modal').hidden=true;$('#start').click();return;}if(a?.startsWith('coop-select-')){selectedServer=a.slice(12);drawServerList(visibleServers);return;}if(a==='coop-join-selected'){if(selectedServer)coopConnect(selectedServer);return;}if(a==='coop-quick'){const s=visibleServers.filter(v=>v.joinable).sort((a,b)=>b.count-a.count)[0];if(s)coopConnect(s.id);return;}if(a==='back'){closePane();return;}if(a==='solo-start'){disconnectCoop();$('#modal').hidden=true;pane='';$('#start').click();return;}if(a==='coop-refresh'){refreshServers();return;}if(a==='coop-start'){coop?.action('start',{level:coop.chosenDifficulty??coop.snapshot?.requestedDifficulty??'normal'});return;}if(a==='coop-leave'){const was=coopStarting;disconnectCoop();if(was)toMenu();else coopLobby();return;}if(a==='quit')clockOut();else if(a==='retry'){toMenu();$('#start').click();}else if(a==='reload')location.reload();else if(a==='resume'){resume();}else if(a==='brief')toMenu();else if(a)openPane(a);
 });
 $('#modal').addEventListener('input',e=>{if(e.target.id==='coop-nickname'){coopNickname=e.target.value;return;}if(e.target.id==='brightness'||e.target.id==='volume'){settings[e.target.id]=Number(e.target.value);$('#'+e.target.id+'Val').textContent=Math.round(settings[e.target.id]*100)+'%';audioOn();}else if(e.target.id==='scale'){settings.scale=Number(e.target.value);$('#scaleVal').textContent=Math.round(settings.scale*100)+'%';}else if(e.target.id==='sens'){settings.sensitivity=Number(e.target.value);$('#sensVal').textContent=settings.sensitivity.toFixed(1)+'×';}persist();});
 
