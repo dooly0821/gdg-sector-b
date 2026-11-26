@@ -1,3 +1,4 @@
+import {roomConnectionTimeout} from '../dist/public-servers.js';
 import {DIFFICULTIES,normalizeDifficulty,effectiveDifficulty,cargoQuota,difficultyLabel} from '../dist/difficulty.js';
 // Authoritative room simulation. All clients share one cargo list, one ghost
 // director and one door state. Clients send controls, never claimed deliveries.
@@ -36,7 +37,7 @@ function addPlayer(room,now,nickname){
  check(!Object.values(room.players).some(p=>p.name.toLowerCase()===name.toLowerCase()),'같은 서버에 이미 사용 중인 닉네임입니다.',409);
  const id=rand(6),token=rand(24),state=newShift();
  const [x,z]=spawns[slot];Object.assign(state,{x,z,bodyHeight:1.7,carried:-1,id,elapsed:0});
- const p={id,token,slot,name,state,ready:false,lastSeen:now,lastInputAt:now,input:{keys:[],yaw:state.yaw,pitch:state.pitch},commandSeq:0,jump:false};
+ const p={id,token,slot,name,state,ready:false,lastSeen:now,lastInputAt:now,lastInputSeq:0,input:{keys:[],yaw:state.yaw,pitch:state.pitch},commandSeq:0,jump:false};
  detach(p);room.players[id]=p;if(!room.host)room.host=id;return p;
 }
 export function createRoom(code,now=Date.now(),nickname){
@@ -53,7 +54,7 @@ function removePlayer(room,p){
  if(room.phase==='loading'&&Object.values(room.players).length<2){room.phase='lobby';for(const a of Object.values(room.players))a.ready=false;}
 }
 function prune(room,now){
- for(const p of Object.values(room.players))if(now-p.lastSeen>(room.phase==='loading'?180000:35000))removePlayer(room,p);
+ for(const p of Object.values(room.players))if(now-p.lastSeen>roomConnectionTimeout(room.phase))removePlayer(room,p);
 }
 function canStart(room,now){
  if(room.phase==='loading'&&Object.keys(room.players).length>=2&&Object.values(room.players).every(p=>p.ready)){
@@ -144,7 +145,7 @@ function ghostPublic(a){return Object.fromEntries(ghostFields.filter(k=>a[k]!==u
 function selfState(room,p){const s=attach(room,p),out={};for(const k of ['x','y','z','yaw','pitch','vx','vy','vz','grounded','bodyHeight','steps','onRail','carried','flashlight','flashAmount','handAction','vault','failed','capturedBy','noise','horrorEvent','cargoSignalAt'])if(s[k]!==undefined)out[k]=s[k];detach(p);return out;}
 export function snapshot(room,p){
  const q=room.shared;const count=Object.keys(room.players).length,startCount=room.phase==='lobby'?count:q.startCount??count,level=room.phase==='lobby'?effectiveDifficulty(room.requestedDifficulty,count):q.difficultyLevel??'normal';const players=Object.values(room.players).map(a=>{attach(room,a);const pub=publicPlayer(a);detach(a);return pub;});
- return {room:room.code,phase:room.phase,serverTime:room.lastTick,simLagMs:Math.round(((room.simDebt??0)+(room.fraction??0)/60)*1000),host:room.host,you:p.id,ack:p.commandSeq,players,self:selfState(room,p),cargo:q.cargo,cargoDeadlines:q.cargoDeadlines??{},shiftEvents:q.shiftEvents??null,states:q.states,parked:q.parked,deliveryOrder:q.deliveryOrder,deliveryBays:q.deliveryBays??{},lockers:q.lockers,lockerRevision:q.lockerRevision,elapsed:q.elapsed,haunt:q.haunt.map(ghostPublic),events:room.events,quota:room.phase==='lobby'?cargoQuota(count):q.states.length,startCount,requestedDifficulty:normalizeDifficulty(room.requestedDifficulty),difficulty:teamDifficulty(Math.max(1,live(room).length),level,room.phase==='lobby'?count:q.startCount??1)};
+ return {room:room.code,phase:room.phase,serverTime:room.lastTick,simLagMs:Math.round(((room.simDebt??0)+(room.fraction??0)/60)*1000),host:room.host,you:p.id,ack:p.commandSeq,inputAck:p.lastInputSeq??0,players,self:selfState(room,p),cargo:q.cargo,cargoDeadlines:q.cargoDeadlines??{},shiftEvents:q.shiftEvents??null,states:q.states,parked:q.parked,deliveryOrder:q.deliveryOrder,deliveryBays:q.deliveryBays??{},lockers:q.lockers,lockerRevision:q.lockerRevision,elapsed:q.elapsed,haunt:q.haunt.map(ghostPublic),events:room.events,quota:room.phase==='lobby'?cargoQuota(count):q.states.length,startCount,requestedDifficulty:normalizeDifficulty(room.requestedDifficulty),difficulty:teamDifficulty(Math.max(1,live(room).length),level,room.phase==='lobby'?count:q.startCount??1)};
 }
 export function operateRoom(room,body,now=Date.now()){
  check(room&&room.phase!=='closed','방을 찾을 수 없습니다.',404);
@@ -161,7 +162,10 @@ export function operateRoom(room,body,now=Date.now()){
  else if(op==='ready'){check(['loading','playing'].includes(room.phase),'아직 근무를 시작하지 않았습니다.',409);p.ready=true;canStart(room,now);}
  else if(op==='sync'){
   if(room.phase==='playing'&&!p.state.failed){
-   const input=body.input??{};const gap=now-(p.lastInputAt??now);p.lastInputAt=now;if(gap>500)p.state.hitProtectedUntil=Math.max(p.state.hitProtectedUntil??0,room.shared.elapsed+.55);p.input={keys:Array.isArray(input.keys)?[...new Set(input.keys.filter(k=>keysAllowed.has(k)))].slice(0,9):[],yaw:clamp(finite(input.yaw,p.input.yaw),-1e4,1e4),pitch:clamp(finite(input.pitch,p.input.pitch),-1.3,1.3)};
+   const incoming=body.inputSeq,sequenced=Number.isSafeInteger(incoming)&&incoming>0;
+   if(sequenced&&incoming<=(p.lastInputSeq??0))return {snapshot:snapshot(room,p)};
+   if(sequenced)p.lastInputSeq=incoming;
+   const input=body.input??{};const gap=now-(p.lastInputAt??now);p.lastInputAt=now;if(gap>500)p.state.hitProtectedUntil=Math.max(p.state.hitProtectedUntil??0,room.shared.elapsed+Math.min(1.2,.55+gap/4000));p.input={keys:Array.isArray(input.keys)?[...new Set(input.keys.filter(k=>keysAllowed.has(k)))].slice(0,9):[],yaw:clamp(finite(input.yaw,p.input.yaw),-1e4,1e4),pitch:clamp(finite(input.pitch,p.input.pitch),-1.3,1.3)};
    p.reviveHeld=p.input.keys.includes('KeyE');p.state.yaw=p.input.yaw;p.state.pitch=p.input.pitch;
    for(const cmd of (Array.isArray(body.commands)?body.commands.slice(0,16):[]))command(room,p,cmd);
   }

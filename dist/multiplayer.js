@@ -7,7 +7,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),finite=(v,d=0)=>Number.isFinite(v
 export function sampleTiming(snap,sent,received){const rtt=Math.max(0,received-sent);if(![snap.serverReceived,snap.serverSent,snap.serverTime].every(Number.isFinite))return {sample:received-Math.min(rtt*.5,500),rtt};const processing=clamp(snap.serverSent-snap.serverReceived,0,rtt),transit=(rtt-processing)*.5,age=clamp(snap.serverSent-snap.serverTime+clamp(finite(snap.simLagMs),0,350),0,1300);return {sample:received-clamp(transit+age,0,1200),rtt};}
 export function pollDelay({rtt=120,players=2,collided=false,contention=0,dirty=false,playing=true,spectating=false,gap=0,random=Math.random()}){if(!playing)return 850+random*80;if(collided)return Math.min(220,35+24*contention)+random*45;if(spectating)return clamp(260-rtt,45,210)+random*22;const pressure=players>2&&gap>250?Math.min(65,(gap-250)*.18):0,target=(players>2?145:120)+pressure;return dirty?Math.max(12,30-rtt)+random*5:clamp(target-rtt,16,100)+random*18;}
 export class CoopClient{
- constructor(onState,onError,input){this.onState=onState;this.onError=onError;this.input=input;this.room=null;this.token=null;this.snapshot=null;this.seq=0;this.queue=[];this.running=false;this.busy=false;this.peers=new Map();this.remoteTracks=new Map();}
+ constructor(onState,onError,input){this.onState=onState;this.onError=onError;this.input=input;this.room=null;this.token=null;this.snapshot=null;this.seq=0;this.inputSeq=0;this.queue=[];this.running=false;this.busy=false;this.peers=new Map();this.remoteTracks=new Map();}
  async request(op,extra={}){
   const sent=performance.now();this.lastRequestAt=sent;
   const res=await fetch('/api/room',{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify({op,room:this.room,token:this.token,...extra}),signal:AbortSignal.timeout(op==='sync'?3000:10000)});
@@ -23,6 +23,8 @@ export class CoopClient{
   if(!data.snapshot)return;
   if(this.snapshot?.room===data.snapshot.room&&Number.isFinite(data.snapshot.serverTime)&&data.snapshot.serverTime<(this.snapshot.serverTime??0))return;
   const prev=this.snapshot,next=data.snapshot;
+  if(prev?.room===next.room&&Number.isFinite(next.inputAck)&&Number.isFinite(prev.inputAck)&&next.inputAck<prev.inputAck)return;
+  if(prev?.room===next.room&&prev.phase===next.phase){for(const k of ['states','parked','deliveryOrder','deliveryBays','lockers'])if(prev[k]&&next[k]&&JSON.stringify(prev[k])===JSON.stringify(next[k]))next[k]=prev[k];}
   if(prev?.room===next.room&&prev.phase===next.phase&&prev.cargo?.length===next.cargo?.length&&JSON.stringify(prev.cargo)===JSON.stringify(next.cargo))next.cargo=prev.cargo;
   this.snapshot=next;this.room=next.room;
   if(prev?.room===next.room&&Number.isFinite(next.netReceived)&&Number.isFinite(prev.netReceived))this.snapshotGap=Math.max(0,next.netReceived-prev.netReceived);
@@ -34,7 +36,7 @@ export class CoopClient{
  }
  async connect(op,room=null,nickname){
   if(this.running)return;
-  this.room=room;this.seq=0;this.queue=[];this.peers.clear();this.remoteTracks.clear();this.rtt=null;this.contention=0;this.dirty=false;
+  this.room=room;this.seq=0;this.inputSeq=0;this.failures=0;this.authFailures=0;this.connectionState='connected';this.queue=[];this.peers.clear();this.remoteTracks.clear();this.rtt=null;this.contention=0;this.dirty=false;
   this.accept(await this.request(op,{nickname}));this.running=true;this.poll();
  }
  async action(op,extra={}){
@@ -55,10 +57,10 @@ export class CoopClient{
     const pending=this.pendingAction;this.pendingAction=null;
     try{
      const input=this.input?.()??{keys:[],yaw:0,pitch:0};this.dirty=false;
-     const data=await this.request(pending?.op||'sync',pending?pending.extra:{input,commands:this.queue.slice(0,16)});
-     if(this.running){this.accept(data);this.failures=0;this.contention=Math.max(0,(this.contention??0)-1);}
+     const data=await this.request(pending?.op||'sync',pending?pending.extra:{input,inputSeq:++this.inputSeq,commands:this.queue.slice(0,16)});
+     if(this.running){this.accept(data);this.failures=0;this.authFailures=0;this.connectionState='connected';this.contention=Math.max(0,(this.contention??0)-1);}
     }catch(e){
-     if(this.running&&e.status!==423){this.dirty=true;this.failures=(this.failures??0)+1;if(this.failures>=3||e.status===401||e.status===404)this.onError?.(e);if(e.status===401||e.status===404){this.running=false;return;}}
+     if(this.running&&e.status!==423){this.dirty=true;this.failures=(this.failures??0)+1;this.connectionState='recovering';if(pending)this.pendingAction=pending;this.authFailures=(e.status===401||e.status===404)?(this.authFailures??0)+1:0;if(this.authFailures>=3){this.connectionState='expired';this.running=false;this.onError?.(new Error('방 연결이 만료되었습니다. 메인 메뉴에서 다시 참가하세요.'));return;}if(this.failures===3)this.onError?.(new Error('서버 연결 복구 중 · 잠시 안전한 위치에서 대기하세요.'));}
      else if(this.running){collided=true;this.contention=Math.min(5,(this.contention??0)+1);if(pending)this.pendingAction=pending;}
     }finally{this.busy=false;}
    }
@@ -115,16 +117,18 @@ export function applyCoopSnapshot(s,snap,first=false){
  const dz=history?v.z-history.z-((s.netAppliedZ??0)-history.cz):v.z+finite(v.vz)*age-s.z;
  const err=Math.hypot(dx,dz),vertical=Math.abs((history?.y??s.y)-v.y);
  const sampleAge=Math.max(0,now-sampleAt),sameLocalFloor=Math.abs((history?.y??s.y)-s.y)<.24;
- const verticalConflict=sampleAge<300&&sameLocalFloor&&(history?.grounded??s.grounded)&&v.grounded&&s.grounded&&vertical>.55;
+ const reliable=sampleAge<230&&finite(snap.netRtt)<360&&finite(snap.simLagMs)<100;
+ const speed=Math.hypot(finite(s.vx),finite(s.vz));
+ const verticalConflict=reliable&&sameLocalFloor&&(history?.grounded??s.grounded)&&v.grounded&&s.grounded&&vertical>.55;
  s.netFloorSince=verticalConflict?(s.netFloorSince??now):null;
- s.netDivergenceSince=err>4.25?(s.netDivergenceSince??now):null;
+ s.netDivergenceSince=reliable&&err>4.25?(s.netDivergenceSince??now):null;
  const mismatch=!!(history?.grounded??s.grounded)!==!!v.grounded||!!(history?.vault??s.vault)!==!!v.vault;
- s.netMismatchAt=mismatch?(s.netMismatchAt??now):null;
+ s.netMismatchAt=reliable&&mismatch?(s.netMismatchAt??now):null;
  // Ordinary delayed snapshots must not cause a multi-meter teleport.
  // Snap only on authoritative transitions or sustained, genuinely divergent collision state.
  const revived=!!s.failed&&!v.failed;
-  const reliable=sampleAge<260&&finite(snap.netRtt)<420&&finite(snap.simLagMs)<130;
-  const hard=first||revived||hidden!==oldHidden||v.failed||(reliable&&err>9&&now-(s.netDivergenceSince??now)>650)||(reliable&&err>4.25&&now-(s.netDivergenceSince??now)>1400&&now-(s.netBlockedSince??now)>650)||(verticalConflict&&now-s.netFloorSince>450)||(mismatch&&sameLocalFloor&&sampleAge<300&&now-s.netMismatchAt>1400&&vertical>.85);
+  const stationary=speed<.45&&Math.hypot(finite(v.vx),finite(v.vz))<.45&&!s.vault&&!v.vault;
+  const hard=first||revived||hidden!==oldHidden||v.failed||(reliable&&stationary&&err>4.25&&now-(s.netDivergenceSince??now)>1800)||(verticalConflict&&stationary&&now-s.netFloorSince>900)||(reliable&&stationary&&mismatch&&sameLocalFloor&&now-(s.netMismatchAt??now)>1800&&vertical>.85);
  if(hard){
   for(const k of ['x','y','z','vx','vy','vz','grounded','bodyHeight','steps','vault','onRail'])s[k]=v[k]??(k==='vault'?null:s[k]);
   s.netHistory=[];s.netAppliedX=s.netAppliedZ=0;s.netCorrection=[0,0];s.netMismatchAt=null;s.netDivergenceSince=null;s.netBlockedSince=null;s.netFloorSince=null;s.netHardCorrections=(s.netHardCorrections??0)+(first||revived||v.failed||hidden!==oldHidden?0:1);
@@ -153,10 +157,10 @@ export function applyCoopSnapshot(s,snap,first=false){
 export function advanceCoopPrediction(s,blocks,dynamic,dt,now){
  if(!s.coopHidden&&!!s.grounded===!!s.netGrounded&&!s.vault&&s.netCorrection){
   const [dx,dz]=s.netCorrection,len=Math.hypot(dx,dz),speed=Math.hypot(finite(s.vx),finite(s.vz));
-  const maxRate=s.grounded?(speed<.5?2.8:2.2):.85,limit=Math.min(1-Math.exp(-dt*6),len>0?maxRate*dt/len:0),x=s.x,z=s.z;
+  const maxRate=s.grounded?(speed<.5?2.8:1.45):.70,limit=Math.min(1-Math.exp(-dt*6),len>0?maxRate*dt/len:0),x=s.x,z=s.z;
   let cx=dx*limit,cz=dz*limit;
   // While sprinting, bound the backwards component so a normal correction cannot reverse motion.
-  if(speed>.5){const ux=s.vx/speed,uz=s.vz/speed,back=cx*ux+cz*uz,floor=-Math.min(maxRate,speed*.18)*dt;if(back<floor){cx+=(floor-back)*ux;cz+=(floor-back)*uz;}}
+  if(speed>.5){const ux=s.vx/speed,uz=s.vz/speed,back=cx*ux+cz*uz,floor=-Math.min(maxRate,speed*.08)*dt;if(back<floor){cx+=(floor-back)*ux;cz+=(floor-back)*uz;}}
   nudgeCoopPosition(s,blocks,cx,cz,dynamic);
   const mx=s.x-x,mz=s.z-z;s.netAppliedX=(s.netAppliedX??0)+mx;s.netAppliedZ=(s.netAppliedZ??0)+mz;
   s.netCorrection=[dx-mx,dz-mz];
