@@ -1,5 +1,5 @@
 import {chromium} from 'playwright';
-import {CoopClient} from '../dist/multiplayer.js';
+import {CoopClient,retryLeave} from '../dist/multiplayer.js';
 const origin='https://gdg-sector-b.vercel.app',room='GDGS24',native=globalThis.fetch,sleep=ms=>new Promise(r=>setTimeout(r,ms));
 globalThis.fetch=(u,o)=>native(new URL(u,origin),o);
 const status=async()=>(await new CoopClient().request('list')).servers.find(s=>s.id===room);
@@ -13,7 +13,7 @@ try{
  await page.route('**/app.js',async route=>{const res=await route.fetch();const body=await res.text();await route.fulfill({response:res,body:body+'\n;window.__gdgQA=()=>({mode,session,coop,renderer,worlds});'});});
  await page.goto(origin,{waitUntil:'domcontentloaded'});await page.getByRole('button',{name:'멀티플레이'}).click();await page.locator('#coop-nickname').fill('QAVisual');await page.locator('[data-action="coop-select-GDGS24"]').click();await page.locator('#server-join').click();await page.waitForFunction(()=>window.__gdgQA?.().coop?.snapshot?.phase==='lobby');
  for(let i=0;i<3;i++){const input={keys:[],yaw:0,pitch:0},c=new CoopClient(null,null,()=>input);bots.push({c,input});await c.connect('enter',room,'QABrowser'+(i+1));}
- await page.waitForFunction(()=>window.__gdgQA?.().coop?.snapshot?.players?.length===4);const safe=await page.evaluate(()=>{const c=window.__gdgQA().coop;return c.snapshot.host===c.snapshot.you&&c.snapshot.players.every(p=>p.name.startsWith('QA'));});if(!safe)throw Error('non-test participant');
+ await page.waitForFunction(()=>window.__gdgQA?.().coop?.snapshot?.players?.length===4);const safe=await page.evaluate(()=>{const c=window.__gdgQA().coop;return c.snapshot.host===c.snapshot.you&&c.snapshot.players.every(p=>['QAVisual','QABrowser1','QABrowser2','QABrowser3'].includes(p.name));});if(!safe)throw Error('non-test participant');
  await page.locator('[data-action="coop-difficulty-easy"]').click();await page.locator('[data-action="coop-start"]').click();
  for(let i=0;i<120&&!bots.every(b=>b.c.snapshot?.phase==='loading'||b.c.snapshot?.phase==='playing');i++)await sleep(100);
  await Promise.all(bots.map(b=>b.c.action('ready')));
@@ -25,4 +25,4 @@ try{
  await page.keyboard.up('w');await page.keyboard.up('Shift');
  const result=await page.evaluate(()=>{const a=window.__qaSamples,q=window.__gdgQA(),p=v=>{const b=v.filter(Number.isFinite).sort((x,y)=>x-y);return b.length?{n:b.length,p50:b[Math.floor((b.length-1)*.5)],p95:b[Math.floor((b.length-1)*.95)],max:b.at(-1)}:null;};return {renderer:q.renderer.gl?'WebGL':'software',frames:a.length,frameMs:p(a.map(s=>s.ms)),deltaM:p(a.map(s=>s.delta)),speed:p(a.map(s=>s.v)),rttMs:p(a.map(s=>s.rtt)),gapMs:p(a.map(s=>s.gap)),lagMs:p(a.map(s=>s.lag)),hardSnaps:Math.max(0,...a.map(s=>s.hard)),failed:q.session.failed,phase:q.coop.snapshot.phase};});
  console.log('BROWSER_RESULT',JSON.stringify({...result,errors}));
-}finally{await Promise.allSettled(bots.map(b=>b.c.leave()));if(browserToken)await fetch('/api/room',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'leave',room,token:browserToken})}).catch(()=>{});await browser.close();console.log('BROWSER_AFTER',JSON.stringify(await status()));}
+}finally{await browser.close();for(const b of bots)await b.c.leave();if(browserToken)await retryLeave(new CoopClient().request.bind(new CoopClient()),room,browserToken);console.log('BROWSER_AFTER',JSON.stringify(await status()));}

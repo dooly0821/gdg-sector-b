@@ -8,7 +8,8 @@ const stats=a=>{let v=a.filter(Number.isFinite).sort((a,b)=>a-b);return v.length
 const [world]=createScene('normal');
 const status=async()=>(await new CoopClient().request('list')).servers.find(s=>s.id===room);
 const health=await fetch('/api/room').then(r=>r.json());console.log('LIVE_HEALTH',JSON.stringify(health));
-for(const count of [2,3,4]){
+for(let i=0;i<16&&(await status())?.count!==0;i++)await sleep(2500);
+for(const count of [4]){
  const before=await status();console.log('SERVER03_BEFORE',JSON.stringify(before));if(before?.count!==0){console.log('SKIP_OCCUPIED');break;}
  const bots=[],names=Array.from({length:count},(_,i)=>'QA'+count+'BOT'+(i+1));
  try{
@@ -39,5 +40,5 @@ for(const count of [2,3,4]){
    acc-=Math.floor(acc*60)/60;
   }
   console.log('LIVE_RESULT',JSON.stringify({count,phase:bots[0].c.snapshot.phase,bots:bots.map(({m,c})=>({rttMs:stats(m.rtt),gapMs:stats(m.gap),simLagMs:stats(m.lag),correctionM:stats(m.correction),reverseM:stats(m.reverse),speed:stats(m.speed),hardSnaps:m.snap,maxRawPoseGap:+m.maxDrift.toFixed(2),errors:m.errors,steps:m.steps,phase:c.snapshot.phase}))}));
- }finally{await Promise.allSettled(bots.map(b=>b.c.leave()));await sleep(800);console.log('SERVER03_AFTER',JSON.stringify(await status()));}
+ }finally{for(const b of bots)await b.c.leave();await sleep(800);console.log('SERVER03_AFTER',JSON.stringify(await status()));}
 }
