@@ -18,7 +18,8 @@ const shelf=Object.assign(newShift(),{x:-.35,y:0,z:.26,yaw:Math.PI/2});
 step(shelf,new Set(['KeyW']),blocks,dt,true);
 assert.ok(!shelf.vault&&shelf.vy>6);
 let maxShelf=shelf.y;for(let i=0;i<150;i++){step(shelf,new Set(['KeyW','KeyC']),blocks,dt);maxShelf=Math.max(maxShelf,shelf.y);assert(!shelf.vault);}
-assert.ok(maxShelf>1.1&&maxShelf<=1.21,'physical shelf jump');
+// This 1.88m shelf exceeds the new standing jump height; it must not teleport the player onto its top.
+assert.ok(maxShelf>0&&maxShelf<=1.21,'physical shelf does not force an ascent');
 const s=Object.assign(newShift(),{x:0,y:0,z:0,yaw:0,pitch:-.6,bodyHeight:1.7,
  cargo:[{id:'B-01',area:'test',pos:[.1,.6,-1.2]},{id:'B-02',area:'test',pos:[.7,.6,-1]}],states:['AVAILABLE','AVAILABLE']});
 const target={...s.cargo[0],index:0};

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createScene,newShift,step,surface} from '../dist/mission.js';
-import {PHYSICS as P} from '../dist/movement.js';
+import {PHYSICS as P,jumpHeightFor} from '../dist/movement.js';
 const dt=1/P.hz,none=new Set(),w=new Set(['KeyW']);
 let s=newShift();s.yaw=0;for(let i=0;i<120;i++)step(s,w,[],dt);assert.ok(Math.abs(Math.hypot(s.vx,s.vz)-P.walk)<.01);
 const speed=Math.hypot(s.vx,s.vz);step(s,none,[],dt,true);assert.ok(!s.grounded);assert.ok(Math.abs(Math.hypot(s.vx,s.vz)-speed)<1e-6);
@@ -26,6 +26,13 @@ for(const hz of [60,120]){
   const q=make({z:3});let peak=0;for(let i=0;i<hz;i++){step(q,held,[],dt,i===0);peak=Math.max(peak,q.y);assert(!q.vault);}
   assert(Math.abs(peak-height)<.003,'jump apex '+height+' at '+hz+' Hz: '+peak);
  }
+ for(const duck of [false,true])for(const speed of [7,10.2,13.4]){
+  const q=make({z:10,vx:speed});let peak=0;const held=new Set(duck?['KeyC']:[]);
+  for(let i=0;i<hz;i++){step(q,held,[],dt,i===0);peak=Math.max(peak,q.y);assert(!q.vault);}
+  const expected=(duck?1:1.2)+.35*(speed-7)/6.4;
+  assert(Math.abs(peak-expected)<.003,'momentum apex '+speed+' '+duck+' '+hz+'Hz: '+peak);assert(Math.abs(jumpHeightFor(speed,duck)-expected)<1e-9);
+ }
+ assert.equal(jumpHeightFor(0,true),1);assert.equal(jumpHeightFor(100,true),1.35);
  for(let i=0;i<hz*2;i++){step(s,go,[rail],dt,i===0);assert(!s.vault);if(s.z<-.32)crossed=true;}
  assert(crossed,'physical rail crossing '+hz);
  s=make({z:0,y:1.04});step(s,idle,[rail],dt,true);assert(s.vy>6&&s.y>1.04&&!s.vault,'jump from rail');
