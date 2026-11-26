@@ -130,7 +130,7 @@ export function tickRoom(room,now=Date.now()){
   updateHaunt(q,blocks,forward(anchor),dt);
   for(const e of q.hauntSounds)pushEvent(room,{type:'haunt',...e});
   delete q.teamPlayers;
-  for(const p of active){if(p.state.failed){p.reviveProgress=0;p.reviveTarget=null;dropOwned(room,p);pushEvent(room,{type:'capture',player:p.id,kind:p.state.capturedBy});}detach(p);}
+  for(const p of active){if(p.state.failed){p.reviveProgress=0;p.reviveTarget=null;p.input.keys=[];p.jump=false;dropOwned(room,p);pushEvent(room,{type:'capture',player:p.id,kind:p.state.capturedBy});}detach(p);}
   if(q.states.every(v=>v==='DELIVERED')){room.phase='complete';break;}
  }
  if(!live(room).length&&room.phase==='playing')room.phase='failed';

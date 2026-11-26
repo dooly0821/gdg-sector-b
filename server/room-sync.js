@@ -2,7 +2,7 @@
 // All simulation results remain private until the exact-state CAS commits.
 // Lifecycle requests use the existing lease; the CAS respects that lease.
 export function createSyncEngine({read,compare,operate,serialize,error,clock=Date.now,sleep=ms=>new Promise(r=>setTimeout(r,ms)),random=Math.random}){
- const cache=new Map(),turns=new Map();
+ const cache=new Map(),turns=new Map(),pressure=new Map();
  function remember(key,raw,room=null){
   cache.delete(key);if(typeof raw!=='string'||!raw)return;
   cache.set(key,{raw,at:clock(),room});while(cache.size>64)cache.delete(cache.keys().next().value);
@@ -37,12 +37,13 @@ export function createSyncEngine({read,compare,operate,serialize,error,clock=Dat
    const response=await compare(ctx,raw,next);
    if(!Array.isArray(response))throw error('협동 저장 서버 처리 오류입니다.',503);
    const status=Number(response[0]);
-   if(status===1){remember(key,next,room);return results;}
+   if(status===1){remember(key,next,room);const n=Math.max(0,(pressure.get(key)??0)-1);if(n)pressure.set(key,n);else pressure.delete(key);return results;}
    if(status===3){remember(key,null);throw error('방을 찾을 수 없습니다.',404);}
-   if(typeof response[1]==='string'&&response[1]){raw=response[1];remember(key,raw);fresh=true;}
+   if(status===2||status===0){pressure.set(key,Math.min(8,(pressure.get(key)??0)+2));if(pressure.size>64)pressure.delete(pressure.keys().next().value);}
+    if(typeof response[1]==='string'&&response[1]){raw=response[1];remember(key,raw);fresh=true;}
    if(clock()-started>=320||attempt===4)break;
    if(status===0)await sleep(12+Math.floor(random()*18)+attempt*10);
-   else if(status===2)await sleep(2+Math.floor(random()*8));
+   else if(status===2)await sleep(3+Math.floor(random()*(10+Math.min(25,(pressure.get(key)??0)*3))));
    else throw error('협동 저장 서버 처리 오류입니다.',503);
   }
   throw error('방 상태 동기화 중입니다. 다시 시도하세요.',423);
@@ -68,7 +69,7 @@ export function createSyncEngine({read,compare,operate,serialize,error,clock=Dat
   if(turn.queue.length>=8)return Promise.reject(error('방 상태 동기화 중입니다.',423));
   const result=new Promise((resolve,reject)=>turn.queue.push({ctx,body,waiting:clock(),resolve,reject}));
   // No artificial batching delay: combine already waiting inputs.
-  if(!turn.running&&!turn.scheduled){turn.scheduled=true;Promise.resolve().then(()=>{turn.scheduled=false;return drain(key,turn);});}
+  if(!turn.running&&!turn.scheduled){turn.scheduled=true;Promise.resolve().then(async()=>{if((pressure.get(key)??0)>=3)await sleep(3+Math.floor(random()*5));turn.scheduled=false;return drain(key,turn);});}
   return result;
  }
  return {sync,remember};

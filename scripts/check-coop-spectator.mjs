@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {spectatorTarget,spectatorCamera,rescueLayers} from '../dist/spectator.js';
+import {pollDelay,applyCoopSnapshot,recordCoopPrediction} from '../dist/multiplayer.js';
+const p=[{id:'dead',failed:true,x:0,y:0,z:0},{id:'a',x:1,y:0,z:0,yaw:0,bodyHeight:1.7},{id:'b',x:3,y:0,z:0,yaw:0}];
+assert.equal(spectatorTarget(p,'dead',null).id,'a');assert.equal(spectatorTarget(p,'dead','a',1).id,'b');assert.equal(spectatorTarget(p,'dead','a',-1).id,'b');p[1].failed=true;assert.equal(spectatorTarget(p,'dead','a').id,'b');
+const wall=[[-2,1,4,1.2,0,5]],camera=spectatorCamera(p[2],wall,null,1/60);assert(camera.eye[2]<1);assert(Math.abs(Math.hypot(...camera.view)-1)<1e-6);
+const layers=rescueLayers(p,'b',42);assert.equal(layers.length,2);assert(layers.every(a=>a.matrix.length===16&&a.skin.floor===null));assert.equal(rescueLayers(p,'dead',42).length,1);
+assert(pollDelay({players:4,rtt:100,spectating:true,random:0})>pollDelay({players:4,rtt:100,random:0}));assert(pollDelay({players:4,rtt:100,gap:500,random:0})>pollDelay({players:4,rtt:100,random:0}));
+const s={x:15,y:0,z:0,bodyHeight:1.7,grounded:true,vx:7,vz:0,vy:0,steps:0,elapsed:0};recordCoopPrediction(s,1000);
+applyCoopSnapshot(s,{self:{...s,x:0},players:[{id:'b'}],you:'b',netSample:1000,netReceived:1750,netRtt:900,simLagMs:300,haunt:[]});
+assert.equal(s.x,15,'stale packet must not hard-snap player');
+console.log('PASS: spectator switch, wall camera collision, downed silhouette pose, adaptive polling and stale snap protection');

@@ -1,10 +1,11 @@
 import {cargoGlowCode} from './cargo-glow.js';
 import {basis} from './world.js';
 import {appendRemote,remoteAt} from './net-smoothing.js';
+import {downedMatrix} from './spectator.js';
 import {nudgeCoopPosition} from './movement.js';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),finite=(v,d=0)=>Number.isFinite(v)?v:d,blend=(a,b,t)=>a+(b-a)*t;
 export function sampleTiming(snap,sent,received){const rtt=Math.max(0,received-sent);if(![snap.serverReceived,snap.serverSent,snap.serverTime].every(Number.isFinite))return {sample:received-Math.min(rtt*.5,500),rtt};const processing=clamp(snap.serverSent-snap.serverReceived,0,rtt),transit=(rtt-processing)*.5,age=clamp(snap.serverSent-snap.serverTime+clamp(finite(snap.simLagMs),0,350),0,1300);return {sample:received-clamp(transit+age,0,1200),rtt};}
-export function pollDelay({rtt=120,players=2,collided=false,contention=0,dirty=false,playing=true,random=Math.random()}){if(!playing)return 850+random*80;if(collided)return Math.min(160,25+15*contention)+random*35;const target=players>2?145:120;return dirty?Math.max(12,30-rtt)+random*5:clamp(target-rtt,16,90)+random*18;}
+export function pollDelay({rtt=120,players=2,collided=false,contention=0,dirty=false,playing=true,spectating=false,gap=0,random=Math.random()}){if(!playing)return 850+random*80;if(collided)return Math.min(220,35+24*contention)+random*45;if(spectating)return clamp(260-rtt,45,210)+random*22;const pressure=players>2&&gap>250?Math.min(65,(gap-250)*.18):0,target=(players>2?145:120)+pressure;return dirty?Math.max(12,30-rtt)+random*5:clamp(target-rtt,16,100)+random*18;}
 export class CoopClient{
  constructor(onState,onError,input){this.onState=onState;this.onError=onError;this.input=input;this.room=null;this.token=null;this.snapshot=null;this.seq=0;this.queue=[];this.running=false;this.busy=false;this.peers=new Map();this.remoteTracks=new Map();}
  async request(op,extra={}){
@@ -26,7 +27,7 @@ export class CoopClient{
   this.snapshot=next;this.room=next.room;
   if(prev?.room===next.room&&Number.isFinite(next.netReceived)&&Number.isFinite(prev.netReceived))this.snapshotGap=Math.max(0,next.netReceived-prev.netReceived);
   const now=data.snapshot.netReceived??performance.now(),seen=new Set();
-  for(const p of data.snapshot.players??[]){if(p.id===data.snapshot.you||p.hidden)continue;seen.add(p.id);this.remoteTracks.set(p.id,appendRemote(this.remoteTracks.get(p.id),p,data.snapshot.netSample,now,data.snapshot.netTickTime??data.snapshot.serverTime));}
+  for(const p of data.snapshot.players??[]){if(p.id===data.snapshot.you||p.hidden||p.failed)continue;seen.add(p.id);const old=prev?.players?.find(v=>v.id===p.id);this.remoteTracks.set(p.id,appendRemote(old?.failed?null:this.remoteTracks.get(p.id),p,data.snapshot.netSample,now,data.snapshot.netTickTime??data.snapshot.serverTime));}
   for(const id of this.remoteTracks.keys())if(!seen.has(id))this.remoteTracks.delete(id);
   this.queue=this.queue.filter(q=>q.seq>data.snapshot.ack);
   this.onState?.(data.snapshot);
@@ -63,19 +64,19 @@ export class CoopClient{
    }
    if(this.running){
     const playing=this.snapshot?.phase==='playing',players=this.snapshot?.players?.length??2;
-    const delay=pollDelay({playing,players,rtt:finite(this.rtt,120),collided,contention:this.contention??0,dirty:this.dirty||this.queue.length>0});
+    const delay=pollDelay({playing,players,rtt:finite(this.rtt,120),collided,contention:this.contention??0,dirty:this.dirty||this.queue.length>0,spectating:!!this.snapshot?.self?.failed,gap:this.snapshotGap??0});
     this.timer=setTimeout(run,Math.max(delay,Math.min(450,(this.failures??0)*60)));
    }
   };this.runPoll=run;this.timer=setTimeout(run,70+Math.random()*70);
  }
  async leave(){const room=this.room,token=this.token;this.running=false;clearTimeout(this.timer);this.room=this.token=null;this.snapshot=null;this.pendingAction=null;this.runPoll=null;this.peers.clear();this.remoteTracks.clear();try{if(room&&token)await this.request('leave',{room,token});}catch{}}
 }
-export function peerLayers(client,s,dt,group){
+export function peerLayers(client,s,dt,group,focusId=null){
  if(!client?.snapshot)return [];
  const layers=[],seen=new Set();
  for(const p of client.snapshot.players){
-  if(p.id===client.snapshot.you||p.hidden)continue;
-  if(Math.hypot(p.x-s.x,p.z-s.z)>35)continue;
+  if(p.id===client.snapshot.you||p.hidden||p.failed)continue;
+  if(p.id!==focusId&&Math.hypot(p.x-s.x,p.z-s.z)>35)continue;
   seen.add(p.id);let old=client.peers.get(p.id);
   if(!old||(Math.hypot(old.x-p.x,old.z-p.z)>16&&(client.remoteTracks?.get(p.id)?.samples?.length??0)<=1)){old={...p};client.peers.set(p.id,old);}
   const alpha=1-Math.exp(-dt*20),visual=remoteAt(client.remoteTracks?.get(p.id),performance.now(),true)??p;
@@ -122,16 +123,17 @@ export function applyCoopSnapshot(s,snap,first=false){
  // Ordinary delayed snapshots must not cause a multi-meter teleport.
  // Snap only on authoritative transitions or sustained, genuinely divergent collision state.
  const revived=!!s.failed&&!v.failed;
-  const hard=first||revived||hidden!==oldHidden||v.failed||err>9||(err>4.25&&now-(s.netDivergenceSince??now)>1400&&now-(s.netBlockedSince??now)>650)||(verticalConflict&&now-s.netFloorSince>450)||(mismatch&&sameLocalFloor&&sampleAge<300&&now-s.netMismatchAt>1400&&vertical>.85);
+  const reliable=sampleAge<260&&finite(snap.netRtt)<420&&finite(snap.simLagMs)<130;
+  const hard=first||revived||hidden!==oldHidden||v.failed||(reliable&&err>9&&now-(s.netDivergenceSince??now)>650)||(reliable&&err>4.25&&now-(s.netDivergenceSince??now)>1400&&now-(s.netBlockedSince??now)>650)||(verticalConflict&&now-s.netFloorSince>450)||(mismatch&&sameLocalFloor&&sampleAge<300&&now-s.netMismatchAt>1400&&vertical>.85);
  if(hard){
   for(const k of ['x','y','z','vx','vy','vz','grounded','bodyHeight','steps','vault','onRail'])s[k]=v[k]??(k==='vault'?null:s[k]);
-  s.netHistory=[];s.netAppliedX=s.netAppliedZ=0;s.netCorrection=[0,0];s.netMismatchAt=null;s.netDivergenceSince=null;s.netBlockedSince=null;s.netFloorSince=null;s.netHardCorrections=(s.netHardCorrections??0)+(first||v.failed||hidden!==oldHidden?0:1);
- }else if(!s.vault&&!v.vault&&!!s.grounded===!!v.grounded&&!hidden){
-  const dead=.07+Math.min(.12,finite(snap.netRtt)*.00025),amount=Math.max(0,err-dead),weight=err>0?Math.min(s.grounded?3.2:1.1,amount)/err:0;
+  s.netHistory=[];s.netAppliedX=s.netAppliedZ=0;s.netCorrection=[0,0];s.netMismatchAt=null;s.netDivergenceSince=null;s.netBlockedSince=null;s.netFloorSince=null;s.netHardCorrections=(s.netHardCorrections??0)+(first||revived||v.failed||hidden!==oldHidden?0:1);
+ }else if(!s.vault&&!v.vault&&!!s.grounded===!!v.grounded&&!hidden&&(history||sampleAge<260)){
+  const dead=.07+Math.min(.24,finite(snap.netRtt)*.00035+finite(snap.simLagMs)*.0005),amount=Math.max(0,err-dead),weight=err>0?Math.min(s.grounded?3.2:1.1,amount)/err:0;
   s.netCorrection=[dx*weight,dz*weight];
  }else s.netCorrection=[0,0];
  s.netGrounded=!!v.grounded&&!v.vault;s.netOnRail=!!v.onRail;
- if(first){s.yaw=v.yaw;s.pitch=v.pitch;s.coopVisualClock=snap.elapsed??0;}else if(hidden&&!oldHidden){s.yaw=0;s.pitch=0;}
+ if(first||revived){s.yaw=v.yaw;s.pitch=v.pitch;s.coopVisualClock=snap.elapsed??0;}else if(hidden&&!oldHidden){s.yaw=0;s.pitch=0;}
  for(const k of ['cargo','states','parked','deliveryOrder','deliveryBays','lockers','lockerRevision','elapsed','cargoDeadlines','shiftEvents'])s[k]=snap[k];
  s.difficultyLevel=snap.difficulty?.level??'normal';s.startCount=snap.startCount??1;
  const prevAction=s.handAction;
@@ -139,7 +141,7 @@ export function applyCoopSnapshot(s,snap,first=false){
  if(s.handAction&&prevAction&&s.handAction.index===prevAction.index&&s.handAction.placing===prevAction.placing)
   s.handAction={...s.handAction,time:Math.max(s.handAction.time,prevAction.time)};
  if(first)s.flashAmount=v.flashAmount??0;
- s.skipLockerAdvance=true;s.coopPrediction=true;s.coopHidden=hidden;
+ s.skipLockerAdvance=true;s.coopPrediction=true;s.coopHidden=hidden;s.id=snap.you;
  s.haunt=(snap.haunt??[]).map(a=>{
   const old=s.haunt?.find(p=>p.kind===a.kind),elapsed=snap.elapsed??0;
   const fresh=!old||Math.hypot(old.x-a.x,old.z-a.z)>5||a.age+.15<(old.netAgeBase??old.age);
