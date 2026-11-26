@@ -103,12 +103,11 @@ export function step(s,keys,blocks,dt,jump=false){
  if(!s.skipLockerAdvance)advanceLockers(s,dt);
  if(sceneBlocks.has(blocks))dynamic.push(...lockerDoorBlocks(s).filter(b=>b[0]<s.x+3&&b[2]>s.x-3&&b[1]<s.z+3&&b[3]>s.z-3));
  if(closedLocker(s)){s.vx=s.vz=s.vy=0;s.jumpBuffer=0;s.elapsed+=dt;return;}
- const grounded=s.grounded,vy=s.vy,previousStep=Math.floor(s.steps/.90),vault=s.vault;
+ const grounded=s.grounded,vy=s.vy,previousStep=Math.floor(s.steps/.90);
  move(s,keys,blocks,dt,jump,surface,dynamic);
  const speed=Math.hypot(s.vx,s.vz);
  let radius=0;
  if(!grounded&&s.grounded)radius=2+Math.min(7,Math.abs(vy));
- else if(!vault&&s.vault)radius=s.vault.rail||s.vault.high?6:4;
  else if(s.grounded&&Math.floor(s.steps/.90)>previousStep)radius=s.bodyHeight<1.3?1.4:speed*1.1;
  if(radius)s.noise={x:s.x,y:s.y+.2,z:s.z,radius,time:s.elapsed};
  if(!s.coopPrediction)cargoSignal(s);

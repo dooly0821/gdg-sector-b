@@ -16,9 +16,9 @@ assert.ok(peak>7.5&&peak<=PHYSICS.bhopCap+.001,'crouch-hop gains bounded momentu
 const [{blocks}]=createScene();
 const shelf=Object.assign(newShift(),{x:-.35,y:0,z:.26,yaw:Math.PI/2});
 step(shelf,new Set(['KeyW']),blocks,dt,true);
-assert.ok(shelf.vault&&shelf.vault.duration<.70);
-for(let i=0;shelf.vault&&i<150;i++)step(shelf,new Set(['KeyW']),blocks,dt);
-assert.ok(shelf.grounded&&Math.abs(shelf.y-1.88)<.01);
+assert.ok(!shelf.vault&&shelf.vy>8);
+let maxShelf=shelf.y;for(let i=0;i<150;i++){step(shelf,new Set(['KeyW','KeyC']),blocks,dt);maxShelf=Math.max(maxShelf,shelf.y);assert(!shelf.vault);}
+assert.ok(maxShelf>1.85,'physical shelf jump');
 const s=Object.assign(newShift(),{x:0,y:0,z:0,yaw:0,pitch:-.6,bodyHeight:1.7,
  cargo:[{id:'B-01',area:'test',pos:[.1,.6,-1.2]},{id:'B-02',area:'test',pos:[.7,.6,-1]}],states:['AVAILABLE','AVAILABLE']});
 const target={...s.cargo[0],index:0};
@@ -46,4 +46,4 @@ assert.ok(q.haunt[0].pursuit&&q.haunt[0].speed>2);
 q.z=49;
 for(let i=0;i<480;i++){q.elapsed+=dt;updateHaunt(q,wall,[0,0,-1],dt,()=>.42);}
 assert.ok(!q.haunt[0]?.pursuit);
-console.log('PASS: bounded crouch-hop, fast shelf, cargo aim/occlusion, immediate capture and persistent pursuit');
+console.log('PASS: bounded crouch-hop, free shelf jump, cargo aim/occlusion, immediate capture and persistent pursuit');
