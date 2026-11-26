@@ -67,7 +67,8 @@ export function navigate(actor,target,nav,body,dt,budget=48){
  const here=[actor.x,actor.z];
  actor.navDelay=Math.max(0,(actor.navDelay??0)-dt);
  if(actor.recoverPoint){
-  if(Math.hypot(actor.x-actor.recoverPoint[0],actor.z-actor.recoverPoint[1])<.18||!segmentFree(nav,here,actor.recoverPoint,body,0))actor.recoverPoint=null;
+  actor.recoverTime=(actor.recoverTime??0)+dt;
+  if(Math.hypot(actor.x-actor.recoverPoint[0],actor.z-actor.recoverPoint[1])<.18||!segmentFree(nav,here,actor.recoverPoint,body,0)||actor.recoverTime>2.0){actor.recoverPoint=null;actor.recoverTime=0;actor.navDelay=0;actor.navDirect=false;}
   else return actor.recoverPoint;
  }
  // Direct movement is only allowed if the full body fits along the segment.
@@ -84,7 +85,7 @@ export function navigate(actor,target,nav,body,dt,budget=48){
  if(actor.navDirect){const d=Math.hypot(target[0]-actor.x,target[1]-actor.z);const next=d>.65?here.map((v,i)=>v+(target[i]-v)*.65/d):target;if(segmentFree(nav,here,next,body))return target;actor.navDirect=false;actor.navDelay=0;}
  if(actor.navJob){
   if(actor.navJob.nav!==nav){actor.navJob=null;actor.navDelay=0;}
-  else {const path=advance(actor.navJob,budget);if(path){actor.navPath=path;actor.navJob=null;actor.navDelay=.24;actor.stuck=0;}}
+  else {const path=advance(actor.navJob,budget);if(path){actor.navPath=path;actor.navJob=null;actor.navDelay=.24;}}
  }
  if(actor.navPath?.length){
   while(actor.navPath.length&&Math.hypot(actor.x-actor.navPath[0][0],actor.z-actor.navPath[0][1])<.21)actor.navPath.shift();
@@ -105,21 +106,31 @@ export function recover(actor,nav,body,target,dt){
   }
   if(best){actor.x=best[0];actor.z=best[1];actor.navDelay=0;return true;}
  }
- if(actor.stuck<.60||actor.recoverPoint)return false;
+ actor.recoverCooldown=Math.max(0,(actor.recoverCooldown??0)-dt);
+ if((actor.stuck??0)<.60||actor.recoverPoint||actor.recoverCooldown>0)return false;
  // Do not discard an actively expanding route just because a large barrier
  // takes several frames to solve. Physical overlap recovery above still runs.
- if(actor.navJob&&!actor.navPath?.length&&actor.navJob.visited>0&&actor.navJob.visited<10000)return false;
+ if(actor.navJob&&!actor.navPath?.length&&actor.navJob.visited>0&&actor.navJob.visited<10000&&(actor.stuck??0)<1.8)return false;
+ actor.recoverCooldown=.4;
  // Backtrack or sidestep to regain clearance, including moving away from target.
- const choices=[];for(const r of [.75,1.25,1.75])for(let k=0;k<16;k++){
+ const choices=[];for(const r of [.30,.65,1.15,1.75])for(let k=0;k<16;k++){
   const a=k*Math.PI/8,p=[here[0]+Math.sin(a)*r,here[1]+Math.cos(a)*r];
-  if(segmentFree(nav,here,p,body,.04)){
+  if(segmentFree(nav,here,p,body,r<.7?0:.015)){
    const progress=Math.hypot(p[0]-target[0],p[1]-target[1]);
-   const visited=(actor.recent??[]).reduce((sum,q)=>sum+(Math.hypot(p[0]-q[0],p[1]-q[1])<.65?3:0),0);
+   const visited=(actor.recent??[]).reduce((sum,q)=>sum+Math.max(0,1-Math.hypot(p[0]-q[0],p[1]-q[1])/1.0)*4,0);
    choices.push({p,score:progress*.18+visited-r*.35});
   }
  }
  choices.sort((a,b)=>a.score-b.score);
- if(choices.length){actor.recoverPoint=choices[0].p;actor.navJob=null;actor.navPath=null;actor.navDirect=false;actor.navDelay=0;actor.stuck=0;actor.recent=[...(actor.recent??[]).slice(-5),here];}
- else {actor.navJob=null;actor.navPath=null;actor.navDelay=0;actor.stuck=.25;}
+ if(choices.length){actor.recoverPoint=choices[0].p;actor.recoverTime=0;actor.navJob=null;actor.navPath=null;actor.navDirect=false;actor.navDelay=0;actor.stuck=0;actor.recent=[...(actor.recent??[]).slice(-9),here,choices[0].p];}
+ else {actor.navJob=null;actor.navPath=null;actor.navDelay=0;actor.navDirect=false;actor.stuck=.6;}
  return false;
+}
+
+// Persistent watchdog independent of transient A* jobs and individual tiny moves.
+// No teleport: impossible traps fade out and return via the normal safe spawn director.
+export function trappedTooLong(actor,wantsMove,dt){
+ if(!wantsMove){actor.trapAnchor=null;actor.trapClock=0;return false;}
+ const p=[actor.x,actor.z];if(!actor.trapAnchor||Math.hypot(p[0]-actor.trapAnchor[0],p[1]-actor.trapAnchor[1])>=.95){actor.trapAnchor=p;actor.trapClock=0;return false;}
+ actor.trapClock=(actor.trapClock??0)+dt;return actor.trapClock>=8;
 }

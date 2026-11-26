@@ -41,7 +41,7 @@ function moveStep(a,p,dt,nav){
   if(!clear(nav,[a.x,y,a.z]))return 'blocked';
   a.surfaceY=y;return 'moving';
  }
- if(d>EPS){if(!toward(a,p,dt,1.35,nav,old))return 'moving';}
+ if(d>EPS){const x=a.x,z=a.z;if(!toward(a,p,dt,1.35,nav,old))return Math.hypot(a.x-x,a.z-z)<.0001?'blocked':'moving';}
  if(dy<-EPS){const y=Math.max(p[1],old-dt*v);if(!clear(nav,[a.x,y,a.z]))return 'blocked';a.surfaceY=y;return 'moving';}
  a.surfaceY=p[1];return 'done';
 }
@@ -71,6 +71,7 @@ export function updateClimber(a,s,nav,blocks,dt,hidden=false){
  if(c.stage==='up'||c.stage==='down'){
   a.state=c.stage==='up'?'climbUp':'climbDown';
   const p=r.nodes[c.index],status=moveStep(a,p,dt,nav);
+  if(status==='blocked'){c.totalBlocked=(c.totalBlocked??0)+dt;if(c.totalBlocked>8){a.state='disappear';a.speed=0;a.climb=null;return {handled:true};}}else if(status==='done')c.totalBlocked=0;
   if(status==='done'){
    if(c.stage==='up'&&!active){c.stage='down';c.index=Math.max(0,c.index-1);}
    else if(c.stage==='up'&&c.index>=r.nodes.length-1){c.stage='top';c.clock=0;}
