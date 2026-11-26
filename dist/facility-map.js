@@ -38,11 +38,12 @@ export function mapMarkers(s,peers=[],you=null){
  for(const [i,p] of (s?(s.cargo??PARCELS):[]).entries()){
   if(s&&s.states[i]!=='AVAILABLE')continue;
   const [x,y,z]=s?.parked?.[i]??p.pos,fill=cargoColor(p.special);
-  out+='<g transform="translate('+n(X(x))+' '+n(Y(z))+')"><rect x="-2.2" y="-2.2" width="4.4" height="4.4" rx=".5" fill="'+fill+'" stroke="#252322" stroke-width=".6"/>'+(y>1.25?'<path d="M-2 -3l2 -2 2 2" stroke="#fff1b8" fill="none" stroke-width=".85"/>':'')+'<title>'+safe(p.id)+(p.special?' · 특수 화물':'')+'</title></g>';
+  const marker=p.special?'<path d="M0 -3.4L3.4 0 0 3.4 -3.4 0Z" fill="'+fill+'" stroke="#fff2ce" stroke-width=".7"/>':'<rect x="-2.2" y="-2.2" width="4.4" height="4.4" rx=".5" fill="'+fill+'" stroke="#252322" stroke-width=".6"/>';
+  out+='<g transform="translate('+n(X(x))+' '+n(Y(z))+')">'+marker+(y>1.25?'<path d="M-2 -4l2 -2 2 2" stroke="#fff1b8" fill="none" stroke-width=".85"/>':'')+'<title>'+safe(p.id)+(p.special?' · 특수 화물':'')+'</title></g>';
  }
  for(const [i,p] of peers.entries())if(p.id!==you&&!p.failed)out+=arrow(p,teamColors[i%4],String(p.name??'팀원').slice(0,12)+(p.hidden?' · 은신':'')+(p.carried>=0?' · 화물':''));
  if(s&&!s.failed)out+=arrow(s,'#fff','나'+(s.carried>=0?' · 화물':''));else if(!s)out+=arrow({x:1.7,z:15,yaw:0},'#fff','시작 위치');
  return out;
 }
-export const MAP_KEY='<div class="map-key"><span style="color:#fff">▲ 나</span><span style="color:#bb9bf5">▲ 팀원</span><span style="color:#f4ca63">■ 화물</span><span style="color:#ebc54b">■ 소음</span><span style="color:#528dff">■ 중량</span><span style="color:#ff3939">■ 긴급</span><span style="color:#ae52e9">■ 격리</span><span style="color:#79c9ec">■ 출고대</span><span style="color:#c3f4d9">▣ 은신함</span><span style="color:#9bb3c4">■ 엄폐</span><span style="color:#a3b7b5">┄ 가속 통로</span></div>';
+export const MAP_KEY='<div class="map-key"><span style="color:#fff">▲ 나</span><span style="color:#bb9bf5">▲ 팀원</span><span style="color:#f4ca63">■ 화물</span><span style="color:#ebc54b">◆ 소음</span><span style="color:#528dff">◆ 중량</span><span style="color:#ff3939">◆ 긴급</span><span style="color:#ae52e9">◆ 격리</span><span style="color:#79c9ec">■ 출고대</span><span style="color:#c3f4d9">▣ 은신함</span><span style="color:#9bb3c4">■ 엄폐</span><span style="color:#a3b7b5">┄ 가속 통로</span></div>';
 export function mapMarkup(blocks,s,peers,you){return '<svg class="map-drawing" viewBox="0 0 306 516" aria-label="GDG 전체 시설 실시간 지도"><g>'+mapBase(blocks)+'</g><g class="gdg-map-markers">'+mapMarkers(s,peers,you)+'</g></svg>'+MAP_KEY;}

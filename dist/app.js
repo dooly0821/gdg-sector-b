@@ -117,7 +117,7 @@ function onCoopState(snap){
  if(snap.phase==='lobby'){if(mode==='menu'&&pane==='coop')coopLobby();return;}
  if(!coopStarting&&mode==='menu'&&['loading','playing'].includes(snap.phase)){
   coopStarting=true;coopEnding=false;coopEventSeq=0;soloSession=session;session=newShift();applyCoopSnapshot(session,snap,true);$('#modal').hidden=true;$('#start').click();
- }else if(coopStarting&&session){applyCoopSnapshot(session,snap);if(pane==='map'&&$('#live-map')){const markers=$('#live-map .gdg-map-markers');if(markers)markers.innerHTML=mapMarkersNow();else $('#live-map').innerHTML=plan();}}
+ }else if(coopStarting&&session){applyCoopSnapshot(session,snap);if(pane==='map'&&$('#live-map')){const markers=$('#live-map .gdg-map-markers');if(markers)markers.innerHTML=mapMarkersNow();else $('#live-map').innerHTML=plan();textIfChanged($('#facility-progress'),'배송 '+deliveryCount(session)+' / '+missionTotal(session)+' · '+sectorName(session));}}
  if(!coopStarting||!session)return;
  const me=snap.players.find(p=>p.id===snap.you),team=$('#coop-team');
  if(team){team.hidden=false;team.textContent='CO-OP '+serverName(snap.room)+' · '+difficultyLabel(snap.difficulty?.level)+' · 생존 '+snap.players.filter(p=>!p.failed).length+'/'+snap.players.length+' · 개체 '+snap.haunt.length+'/'+snap.difficulty.maxActive+'\n'+snap.players.map(p=>p.name+(p.id===snap.you?' (나)':'')+(p.failed?' · 사망':p.hidden?' · 은신':' · 생존')).join('\n');}
@@ -169,7 +169,7 @@ function openPane(name){
  '<div class="panel-actions">'+action('cargo','특수 화물 안내')+action('anomalies','이상 현상 안내')+action('map','구역 지도')+'</div>'+links,'조작 방법 및 공략','WORK 모드 / 근무자 생존 매뉴얼');
  if(name==='map'){
  const n=session?deliveryCount(session):0;
- panel(name,'<p>현재 위치, 실제 창고 구조, 배송 화물과 숨는 공간을 확인하세요.</p><div class="facility-map-layout"><section id="live-map" class="gdg-section">'+plan()+'</section>'+mapLegendArt()+'</div><div class="facility-footer"><span>배송 '+n+' / '+missionTotal(session)+' · '+sectorName(session)+'</span><span>정전 중에는 지도를 더 자주 확인하세요.</span></div><div class="panel-actions">'+action('back','닫기',true)+'</div>','물류창고 전체 지도','GDG / MAP OVERLAY');
+ panel(name,'<p>현재 위치, 실제 창고 구조, 배송 화물과 숨는 공간을 확인하세요.</p><div class="facility-map-layout"><section id="live-map" class="gdg-section">'+plan()+'</section>'+mapLegendArt()+'</div><div class="facility-footer"><span id="facility-progress">배송 '+n+' / '+missionTotal(session)+' · '+sectorName(session)+'</span><span>정전 중에는 지도를 더 자주 확인하세요.</span></div><div class="panel-actions">'+action('back','닫기',true)+'</div>','물류창고 전체 지도','GDG / MAP OVERLAY');
  }
  if(name==='settings'){
  const toggle=(k,l)=>'<div class="row"><span>'+l+'</span><button class="toggle '+(settings[k]?'on':'')+'" data-toggle="'+k+'">'+(settings[k]?'켜기':'끄기')+'</button></div>';

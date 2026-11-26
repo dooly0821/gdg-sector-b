@@ -6,7 +6,7 @@ import {CARGO_UI,cargoColor,resultStats,cargoGuide,anomalyGuide,teamGoals,update
 const [w]=createScene(),s=newShift(()=>.42,'normal');
 assert.equal(FACILITY_REGIONS.length,6);assert.equal(mapX(-43),8);assert.equal(mapZ(-22),8);
 const map=mapMarkup(w.blocks,s,[],null);assert.ok(map.includes('B 메인 창고')&&map.includes('출고 02')&&map.includes('gdg-map-markers'));assert.ok(map.includes('C-02 폐기물동'));
-s.cargo[0].special='heavy';s.parked={0:[3,0,4]};assert.ok(mapMarkers(s).includes('translate('+mapX(3)+' '+mapZ(4)+')'));assert.ok(mapMarkers(s).includes('#528dff'));
+s.cargo[0].special='heavy';s.parked={0:[3,0,4]};assert.ok(mapMarkers(s).includes('translate('+mapX(3)+' '+mapZ(4)+')'));assert.ok(mapMarkers(s).includes('#528dff')&&mapMarkers(s).includes('M0 -3.4L3.4 0 0 3.4 -3.4 0Z'));
 s.states[0]='DELIVERED';assert.equal(resultStats(s).special,1);assert.equal(resultStats(s).done,1);
 assert.equal(cargoColor('noisy'),'#ebc54b');assert.equal(cargoColor('cursed'),'#ae52e9');assert.ok(cargoGuide().includes('70초')&&anomalyGuide().includes('전파 간섭'));assert.ok(teamGoals(4).includes('70개'));
 const host={dataset:{},hidden:true,innerHTML:''};s.elapsed=0;updateShiftNotices(s,host);assert.ok(!host.hidden&&host.innerHTML.includes('특수 화물'));
