@@ -79,7 +79,7 @@ export async function roomRequest(body,{allowMemory=false}={}){
  if(body.op==='enter'&&!normalizeNickname(body.nickname))throw new RoomError('닉네임을 2~12자로 입력하세요.');
  const config=env(),configured=!!(config.url&&config.token);
  if(body.op==='health'){
-  if(configured){try{const pong=await redis(config,['PING']);return {online:pong==='PONG',storage:'redis',maxPlayers:4,netRevision:3,region:process.env.VERCEL_REGION||null};}catch{return {online:false,storage:'redis',maxPlayers:4,netRevision:3,region:process.env.VERCEL_REGION||null};}}
+  if(configured){try{const pong=await redis(config,['PING']);return {online:pong==='PONG',storage:'redis',maxPlayers:4,netRevision:4,region:process.env.VERCEL_REGION||null};}catch{return {online:false,storage:'redis',maxPlayers:4,netRevision:4,region:process.env.VERCEL_REGION||null};}}
   return {online:allowMemory,storage:allowMemory?'memory':'unconfigured',maxPlayers:4,region:process.env.VERCEL_REGION||null};
  }
  if(!configured&&!allowMemory)throw new RoomError('협동 서버의 공유 저장소가 아직 연결되지 않았습니다. 싱글플레이는 정상 이용할 수 있습니다.',503);

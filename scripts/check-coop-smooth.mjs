@@ -13,7 +13,7 @@ for(let i=0;i<6;i++){const t=i*150,arrival=t+80+[0,30,-15,55,-20,10][i];track=ap
 let prior=0;
 for(let t=track.delay;t<850;t+=1000/60){const p=remoteAt(track,t,true);assert.ok(Number.isFinite(p.x)&&p.x>=prior-1e-6);assert.ok(p.x-prior<.14);prior=p.x;}
 const priorTime=track.renderTime;track.delay+=25;remoteAt(track,850,true);assert.ok(track.renderTime>=priorTime,'adaptive delay must not rewind motion');
-const last=track.samples.at(-1).pose;assert.ok(remoteAt(track,9999,true).x<=last.x+1.051);
+const last=track.samples.at(-1).pose;assert.ok(remoteAt(track,9999,true).x<=last.x+1.961);
 const staticBlocks=[[0,0,2,2,0,2]],dynamic=[[1,1,3,3,0,1]],index=indexBlocks(staticBlocks),merged=indexBlocks(dynamic,index);
 assert.equal(queryBlocks(index,0,0,4,4).length,1);assert.equal(queryBlocks(merged,0,0,4,4).length,2);
 const s=newShift(()=>.42);const a=parcelBlocks(s);assert.equal(parcelBlocks(s),a);s.states[0]='CARRIED';assert.equal(parcelBlocks(s).length,a.length-1);s.states[0]='AVAILABLE';s.parked={0:[1,0,1]};assert.ok(parcelBlocks(s).some(b=>Math.abs((b[0]+b[2])/2-1)<.001));

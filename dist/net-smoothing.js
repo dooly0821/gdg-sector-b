@@ -4,12 +4,12 @@ const num=(v,f=0)=>Number.isFinite(v)?v:f;
 const mix=(a,b,t)=>a+(b-a)*t;
 const yawMix=(a,b,t)=>a+Math.atan2(Math.sin(b-a),Math.cos(b-a))*t;
 export function appendRemote(track,pose,sample,received,serverTime){
- const t=track??{samples:[],gap:145,delay:170};const a=t.samples,last=a.at(-1);
+ const t=track??{samples:[],gap:145,jitter:0,delay:170};const a=t.samples,last=a.at(-1);
  if(last&&Number.isFinite(serverTime)&&serverTime===last.serverTime)return t;
  let time=num(sample,received);
  if(last){
-  const gap=clamp(received-last.received,25,600);t.gap=mix(t.gap,gap,.18);
-  const desired=clamp(t.gap*.78+45,140,265);t.delay=mix(t.delay,desired,.15);
+  const gap=clamp(received-last.received,25,900);t.jitter=mix(t.jitter??0,Math.abs(gap-t.gap),.2);t.gap=mix(t.gap,gap,.18);
+  const desired=clamp(t.gap*.78+45+Math.min(110,t.jitter*1.4),140,360);t.delay=mix(t.delay,desired,desired>t.delay?.28:.075);
   const serverDelta=Number.isFinite(serverTime)&&Number.isFinite(last.serverTime)?serverTime-last.serverTime:time-last.time;
   const expected=last.time+clamp(serverDelta,1,800);
   time=Math.max(last.time+1,expected+clamp(time-expected,-12,12));
@@ -35,7 +35,8 @@ export function remoteAt(track,now,extrapolate=false){
  }
  const out={...last.pose};
  if(extrapolate&&out.grounded!==false&&!out.vault){
-  const age=clamp((target-last.time)/1000,0,.15);
+  // Keep teammates moving through short missed snapshots, then ease to a bounded stop.
+  const gap=clamp((target-last.time)/1000,0,.36),tail=clamp(gap-.20,0,.16),age=Math.min(gap,.20)+tail-tail*tail/.32;
   out.x+=num(out.vx)*age;out.z+=num(out.vz)*age;out.steps=num(out.steps)+Math.hypot(num(out.vx),num(out.vz))*age;
  }
  return out;

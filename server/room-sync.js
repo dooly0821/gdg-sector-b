@@ -3,18 +3,24 @@
 // Lifecycle requests use the existing lease; the CAS respects that lease.
 export function createSyncEngine({read,compare,operate,serialize,error,clock=Date.now,sleep=ms=>new Promise(r=>setTimeout(r,ms)),random=Math.random}){
  const cache=new Map(),turns=new Map();
- function remember(key,raw){
+ function remember(key,raw,room=null){
   cache.delete(key);if(typeof raw!=='string'||!raw)return;
-  cache.set(key,{raw,at:clock()});while(cache.size>64)cache.delete(cache.keys().next().value);
+  cache.set(key,{raw,at:clock(),room});while(cache.size>64)cache.delete(cache.keys().next().value);
+  // Keep only a small number of process-local simulation objects (A* jobs, indexes).
+  // Durable Redis state is still the sole authority; every write uses exact-state CAS.
+  let warm=0;for(const entry of [...cache.values()].reverse())if(entry.room&&++warm>8)entry.room=null;
  }
  async function execute(key,ctx,batch){
   const started=clock(),cached=cache.get(key);
   let raw=cached&&started-cached.at<5000?cached.raw:await read(ctx),fresh=!(cached&&started-cached.at<5000);
   for(let attempt=0;attempt<5;attempt++){
    if(!raw)throw error('방을 찾을 수 없습니다.',404);
-   const room=JSON.parse(raw),results=[];
+   const warm=cached?.raw===raw&&cached.room&&attempt===0?cached.room:null;
+   // Take exclusive ownership; never reuse a mutated object after a rejected CAS.
+   if(warm)cached.room=null;
+   const room=warm??JSON.parse(raw),results=[];
    let reread=false;
-   room.shared.stateless=true;
+   room.shared.stateless=!warm;
    const tickAt=Math.max(clock(),room.lastTick??0);
    for(const item of batch){
     try{
@@ -31,7 +37,7 @@ export function createSyncEngine({read,compare,operate,serialize,error,clock=Dat
    const response=await compare(ctx,raw,next);
    if(!Array.isArray(response))throw error('협동 저장 서버 처리 오류입니다.',503);
    const status=Number(response[0]);
-   if(status===1){remember(key,next);return results;}
+   if(status===1){remember(key,next,room);return results;}
    if(status===3){remember(key,null);throw error('방을 찾을 수 없습니다.',404);}
    if(typeof response[1]==='string'&&response[1]){raw=response[1];remember(key,raw);fresh=true;}
    if(clock()-started>=320||attempt===4)break;

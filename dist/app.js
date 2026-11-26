@@ -373,7 +373,7 @@ function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/10
  const directions=['N','NE','E','SE','S','SW','W','NW'];const bearing=((Math.round(-s.yaw*180/Math.PI)%360)+360)%360;
  textIfChanged($('#heading'),directions[Math.round(bearing/45)%8]+'  '+String(bearing).padStart(3,'0')+'°');
  if(!coopStarting||now-(s.lastCoopHud??-1000)>=80){s.lastCoopHud=now;updateHud(s,!!hiddenLocker,deliveryCount(s),missionTotal(s),plan,now,settings.hints,mapMarkersNow,worlds?.[0]?.blocks);}
- if(coopStarting){s.netFrameMs=(s.netFrameMs??frameMs)*.94+frameMs*.06;if(now-(s.lastNetInfo??-1000)>600){s.lastNetInfo=now;const team=$('#coop-team');if(team)team.title='FPS '+Math.round(1000/Math.max(1,s.netFrameMs))+' · 서버 응답 '+Math.round(coop?.rtt??0)+' ms';}}
+ if(coopStarting){s.netFrameMs=(s.netFrameMs??frameMs)*.94+frameMs*.06;if(now-(s.lastNetInfo??-1000)>600){s.lastNetInfo=now;const team=$('#coop-team');if(team)team.title='FPS '+Math.round(1000/Math.max(1,s.netFrameMs))+' · 서버 응답 '+Math.round(coop?.rtt??0)+' ms · 갱신 간격 '+Math.round(coop?.snapshotGap??0)+' ms · 강제 보정 '+(s.netHardCorrections??0)+'회';}}
  if(now>radioUntil)textIfChanged($('#radio'),'');if(now>receiptUntil)$('#receipt').hidden=true;
  if(!coopStarting&&finishAt!==null&&s.elapsed>=finishAt){finishAt=null;complete();return;}
  raf=requestAnimationFrame(frame);

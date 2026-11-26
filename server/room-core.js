@@ -56,7 +56,7 @@ function prune(room,now){
 }
 function canStart(room,now){
  if(room.phase==='loading'&&Object.keys(room.players).length>=2&&Object.values(room.players).every(p=>p.ready)){
-  room.phase='playing';room.lastTick=now;room.shared.elapsed=0;pushEvent(room,{type:'notice',message:difficultyLabel(room.shared.difficultyLevel)+' · 팀 화물 '+room.shared.states.length+'개 배송 시작.'});
+  room.phase='playing';room.lastTick=now;room.fraction=0;room.simDebt=0;room.shared.elapsed=0;pushEvent(room,{type:'notice',message:difficultyLabel(room.shared.difficultyLevel)+' · 팀 화물 '+room.shared.states.length+'개 배송 시작.'});
  }
 }
 function syncShared(room,p){const s=p.state,q=room.shared;if(s.lockerRevision!==q.lockerRevision)q.lockerRevision=s.lockerRevision;if(s.horrorEvent&&s.horrorEvent!==q.horrorEvent)q.horrorEvent=s.horrorEvent;}
@@ -81,8 +81,12 @@ function command(room,p,cmd){
 export function tickRoom(room,now=Date.now()){
  now=Math.max(now,room.lastTick??now);
  prune(room,now);canStart(room,now);
- const delta=Math.min(.40,Math.max(0,(now-room.lastTick)/1000));room.lastTick=now;
- if(room.phase!=='playing'||!delta)return;
+ const wallDelta=Math.max(0,(now-room.lastTick)/1000);room.lastTick=now;
+ if(room.phase!=='playing'){room.simDebt=0;return;}
+ // Carry a bounded short delay forward instead of silently losing simulation time.
+ // Never run an unbounded catch-up loop after a disconnected/backgrounded client.
+ const due=Math.min(.70,wallDelta+Math.max(0,room.simDebt??0)),delta=Math.min(.40,due);
+ room.simDebt=Math.max(0,due-delta);if(!delta)return;
  const q=room.shared,players=live(room);q.cargoDeadlines??={};q.shiftEvents??=createShiftEvents();if(!players.length){room.phase='failed';return;}
  const blocks=world().blocks,dt=1/60,ticks=Math.min(24,Math.floor(delta/dt+(room.fraction??0)));
  room.fraction=Math.min(.99,Math.max(0,delta/dt+(room.fraction??0)-ticks));
@@ -116,7 +120,7 @@ function ghostPublic(a){return Object.fromEntries(ghostFields.filter(k=>a[k]!==u
 function selfState(room,p){const s=attach(room,p),out={};for(const k of ['x','y','z','yaw','pitch','vx','vy','vz','grounded','bodyHeight','steps','onRail','carried','flashlight','flashAmount','handAction','vault','failed','capturedBy','noise','horrorEvent','cargoSignalAt'])if(s[k]!==undefined)out[k]=s[k];detach(p);return out;}
 export function snapshot(room,p){
  const q=room.shared;const count=Object.keys(room.players).length,startCount=room.phase==='lobby'?count:q.startCount??count,level=room.phase==='lobby'?effectiveDifficulty(room.requestedDifficulty,count):q.difficultyLevel??'normal';const players=Object.values(room.players).map(a=>{attach(room,a);const pub=publicPlayer(a);detach(a);return pub;});
- return {room:room.code,phase:room.phase,serverTime:room.lastTick,host:room.host,you:p.id,ack:p.commandSeq,players,self:selfState(room,p),cargo:q.cargo,cargoDeadlines:q.cargoDeadlines??{},shiftEvents:q.shiftEvents??null,states:q.states,parked:q.parked,deliveryOrder:q.deliveryOrder,lockers:q.lockers,lockerRevision:q.lockerRevision,elapsed:q.elapsed,haunt:q.haunt.map(ghostPublic),events:room.events,quota:room.phase==='lobby'?cargoQuota(count):q.states.length,startCount,requestedDifficulty:normalizeDifficulty(room.requestedDifficulty),difficulty:teamDifficulty(Math.max(1,live(room).length),level,room.phase==='lobby'?count:q.startCount??1)};
+ return {room:room.code,phase:room.phase,serverTime:room.lastTick,simLagMs:Math.round(((room.simDebt??0)+(room.fraction??0)/60)*1000),host:room.host,you:p.id,ack:p.commandSeq,players,self:selfState(room,p),cargo:q.cargo,cargoDeadlines:q.cargoDeadlines??{},shiftEvents:q.shiftEvents??null,states:q.states,parked:q.parked,deliveryOrder:q.deliveryOrder,lockers:q.lockers,lockerRevision:q.lockerRevision,elapsed:q.elapsed,haunt:q.haunt.map(ghostPublic),events:room.events,quota:room.phase==='lobby'?cargoQuota(count):q.states.length,startCount,requestedDifficulty:normalizeDifficulty(room.requestedDifficulty),difficulty:teamDifficulty(Math.max(1,live(room).length),level,room.phase==='lobby'?count:q.startCount??1)};
 }
 export function operateRoom(room,body,now=Date.now()){
  check(room&&room.phase!=='closed','방을 찾을 수 없습니다.',404);
@@ -129,7 +133,7 @@ export function operateRoom(room,body,now=Date.now()){
  now=Math.max(now,room.lastTick??now);p.lastSeen=now;tickRoom(room,now);room.updatedAt=now;
  if(op==='leave'){removePlayer(room,p);return {left:true};}
  if(op==='difficulty'){check(p.id===room.host,'방장만 난이도를 변경할 수 있습니다.',403);check(room.phase==='lobby','근무 시작 후에는 난이도를 바꿀 수 없습니다.',409);check(typeof body.level==='string'&&Object.hasOwn(DIFFICULTIES,body.level),'잘못된 난이도입니다.');room.requestedDifficulty=body.level;}
- else if(op==='start'){check(p.id===room.host,'방장만 근무를 시작할 수 있습니다.',403);check(room.phase==='lobby','이미 근무 준비 중입니다.',409);const count=Object.keys(room.players).length;check(count>=2,'최소 2명이 입장해야 합니다.',409);if(body.level!==undefined){check(typeof body.level==='string'&&Object.hasOwn(DIFFICULTIES,body.level),'잘못된 난이도입니다.');room.requestedDifficulty=body.level;}const q=room.shared,level=effectiveDifficulty(room.requestedDifficulty,count),total=cargoQuota(count);q.startCount=count;q.difficultyLevel=level;q.cargo=randomCargo(Math.random,total,level);q.states=Array(total).fill('AVAILABLE');q.cargoDeadlines={};q.parked={};q.deliveryOrder=[];q.shiftEvents=createShiftEvents(Math.random,level);q.hauntDirector={delay:Math.max(5,9*DIFFICULTIES[level].interval),bag:[]};room.phase='loading';room.lastTick=now;}
+ else if(op==='start'){check(p.id===room.host,'방장만 근무를 시작할 수 있습니다.',403);check(room.phase==='lobby','이미 근무 준비 중입니다.',409);const count=Object.keys(room.players).length;check(count>=2,'최소 2명이 입장해야 합니다.',409);if(body.level!==undefined){check(typeof body.level==='string'&&Object.hasOwn(DIFFICULTIES,body.level),'잘못된 난이도입니다.');room.requestedDifficulty=body.level;}const q=room.shared,level=effectiveDifficulty(room.requestedDifficulty,count),total=cargoQuota(count);q.startCount=count;q.difficultyLevel=level;q.cargo=randomCargo(Math.random,total,level);q.states=Array(total).fill('AVAILABLE');q.cargoDeadlines={};q.parked={};q.deliveryOrder=[];q.shiftEvents=createShiftEvents(Math.random,level);q.hauntDirector={delay:Math.max(5,9*DIFFICULTIES[level].interval),bag:[]};room.phase='loading';room.lastTick=now;room.simDebt=0;room.fraction=0;}
  else if(op==='ready'){check(['loading','playing'].includes(room.phase),'아직 근무를 시작하지 않았습니다.',409);p.ready=true;canStart(room,now);}
  else if(op==='sync'){
   if(room.phase==='playing'&&!p.state.failed){
