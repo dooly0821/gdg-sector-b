@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {normalizeChat,requestTeamChat} from '../server/team-chat.js';
+import {TeamChatClient,chatCompositionKey} from '../dist/team-chat.js';
+assert.equal(normalizeChat('  안녕\n 팀원  '),'안녕 팀원');assert.equal(normalizeChat('가'.repeat(101)),null);assert.equal(normalizeChat('🎁'.repeat(100)),'🎁'.repeat(100));assert.equal(normalizeChat('\u202e'),null);
+let called=0;const auth={room:'CHAT23',token:'a'.repeat(48)},deps={redis:async cmd=>{called++;assert.equal(cmd[2],2);assert.equal(cmd[3],'room:CHAT23');assert.equal(cmd[4],'room:CHAT23:team-chat');return [200,'[]','test-message-id-123'];},key:c=>'room:'+c,error:(m,status)=>Object.assign(Error(m),{status}),now:10000};
+await assert.rejects(requestTeamChat({...auth,op:'send',text:'x'.repeat(101),id:'test-message-id-123'},deps),e=>e.status===400);assert.equal(called,0);
+assert.equal((await requestTeamChat({...auth,op:'send',text:'안녕하세요',id:'test-message-id-123'},deps)).ack,'test-message-id-123');
+const sent=[];const client=new TeamChatClient(()=>{},{fetcher:async(url,opt)=>{sent.push({url,body:JSON.parse(opt.body)});return {ok:true,json:async()=>({messages:[{seq:1,name:'A',text:'안녕',player:'me'}],ack:sent.at(-1).body.id})};},visible:()=>true});
+client.start(auth.room,auth.token,'me');assert(await client.send('안녕'));assert.equal(sent[0].url,'/api/chat');assert.equal(client.cursor,1);client.ingest({messages:[{seq:1,name:'A',text:'안녕'}]});assert.equal(client.messages.length,1);client.stop();assert.equal(client.messages.length,0);
+assert(chatCompositionKey({code:'Enter',isComposing:true},false,0,1000));assert(chatCompositionKey({code:'Enter'},false,100,150));assert(!chatCompositionKey({code:'Enter'},false,100,200));
+console.log('PASS isolated chat API validation, Unicode, deduplication, channel teardown and IME guards');

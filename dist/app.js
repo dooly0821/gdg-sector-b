@@ -1,3 +1,4 @@
+import {TeamChatClient,chatCompositionKey} from './team-chat.js';
 import {activeSignal,signalPower,signalRainbow,renderSignalFeedback,clearSignalFeedback} from './signal-feedback.js';
 import {warningList,warningLabel,acknowledgeWarnings} from './threat-warning.js';
 import {powerTarget,toggleZone,emitSignal,signalReady,zonePowers,zonePower,pruneSignals} from './facility-actions.js';
@@ -28,6 +29,8 @@ import {Renderer} from './renderer.js';
 const $=s=>document.querySelector(s),canvas=$('#world'),keys=new Set(),icon=i=>'<svg aria-hidden="true"><use href="#i-'+i+'"/></svg>';
 let coop=null,soloSession=null,coopStarting=false,coopEnding=false,coopEventSeq=0,coopError='',coopBusy=false;
 let spectateId=null,spectateCamera=null;
+let chatOpen=false,chatComposing=false,chatCompositionEnd=-1e6,chatHideTimer=null,chatRecent=false,chatPendingText=null;
+const teamChat=new TeamChatClient((client,fresh)=>{if(fresh){chatRecent=true;clearTimeout(chatHideTimer);chatHideTimer=setTimeout(()=>{chatRecent=false;renderTeamChat();},8000);}renderTeamChat();});
 let coopListTimer=null,coopListGeneration=0,coopListBusy=false,coopNickname='',selectedServer=null,visibleServers=[];
 try{coopNickname=localStorage.getItem('gdg.nickname')??'';}catch{}
 let mode='menu',pane='',session=null,renderer,worlds,setupPromise,raf,last=0,drag=false,grabbing=false,lookReady=0,radioUntil=0,jump=false,accumulator=0;
@@ -43,14 +46,14 @@ function beep(hz,time=.12,type='sine',gain=.1){if(!sound||!settings.audio||setti
 const reducedLureMotion=matchMedia('(prefers-reduced-motion: reduce)');
 function lureJingle(){if(!sound||!settings.audio||settings.volume<=0)return;const o=sound.createOscillator(),g=sound.createGain(),t=sound.currentTime,v=Math.max(.0001,.055*(settings.volume??1));o.type='triangle';for(const [i,hz] of [392,523.25,659.25,783.99,523.25].entries()){o.frequency.setValueAtTime(hz,t+i*.075);g.gain.setValueAtTime(v,t+i*.075);g.gain.exponentialRampToValueAtTime(.0001,t+i*.075+.066);}o.connect(g);g.connect(sound.destination);o.onended=()=>{o.disconnect();g.disconnect();};o.start(t);o.stop(t+.39);}
 function say(line,duration=5){$('#radio').innerHTML='<strong>관제실</strong>'+line;radioUntil=performance.now()+duration*1000;}
-const rows=[['W A S D','이동'],['MOUSE','시점 회전'],['SHIFT','달리기'],['C (누르고 유지)','앉기 / 은신'],['V','달리기 / 공중 슬라이딩 · 종료 후 0.4초 재사용 대기'],['F','손전등 유인 신호 · 12초 재사용 대기'],['위협 경보','화살표 방향으로 귀신 접근 · 즉시 도주'],['C + W A S D','앉은 채 이동 / 낮은 은신처 진입'],['W + SPACE','난간 · 선반 · 상자 위 자유 점프'],['SHIFT + W + SPACE','달리면서 난간 점프'],['W + C + SPACE','전진 버니합 · 도약할 때만 가속'],['A / D','공중 방향 조절 · 추가 가속 없음'],['SPACE / WHEEL','기본 점프 (약 1.2m) · 연속 점프'],['C + SPACE','앉기 점프 (약 1m) · 버니합 가속 시 최대 1.35m'],['Q','손전등 들기 / 내리기'],['E','상자 들기 · 내려놓기 / 쓰러진 팀원 근처 '+REVIVE_SECONDS+'초 유지해 구조'],['M','전체 지도 확대 / 축소'],['ESC','일시 정지']];
+const rows=[['W A S D','이동'],['MOUSE','시점 회전'],['SHIFT','달리기'],['C (누르고 유지)','앉기 / 은신'],['V','달리기 / 공중 슬라이딩 · 종료 후 0.4초 재사용 대기'],['F','손전등 유인 신호 · 12초 재사용 대기'],['위협 경보','화살표 방향으로 귀신 접근 · 즉시 도주'],['C + W A S D','앉은 채 이동 / 낮은 은신처 진입'],['W + SPACE','난간 · 선반 · 상자 위 자유 점프'],['SHIFT + W + SPACE','달리면서 난간 점프'],['W + C + SPACE','전진 버니합 · 도약할 때만 가속'],['A / D','공중 방향 조절 · 추가 가속 없음'],['SPACE / WHEEL','기본 점프 (약 1.2m) · 연속 점프'],['C + SPACE','앉기 점프 (약 1m) · 버니합 가속 시 최대 1.35m'],['Q','손전등 들기 / 내리기'],['E','상자 들기 · 내려놓기 / 쓰러진 팀원 근처 '+REVIVE_SECONDS+'초 유지해 구조'],['M','전체 지도 확대 / 축소'],['ENTER','멀티 팀 채팅 열기 / 전송'],['ESC','채팅 닫기 / 일시 정지']];
 const links='<a class="doc" href="characters.html" target="_blank" rel="noopener">캐릭터 검수실 ↗</a><div class="panel-actions"><a class="doc" href="unity-migration.html" target="_blank" rel="noopener">Unity 이식 가이드 ↗</a></div>';
 function action(name,label,primary=false){return '<button class="'+(primary?'primary':'secondary')+'" data-action="'+name+'">'+label+'</button>';}
 const emptyMapBlocks=[],sceneCache=new Map();let renderLayout=null;
 function sceneFor(level){const k=expandedLayout(level)?'hard':'normal';if(!sceneCache.has(k))sceneCache.set(k,createScene(k));return sceneCache.get(k);}
 function plan(){const scene=sceneFor(session?.difficultyLevel??settings.difficulty);return mapMarkup(scene[0].blocks,session,coop?.snapshot?.players??[],coop?.snapshot?.you);}
 function mapMarkersNow(){return mapMarkers(session,coop?.snapshot?.players??[],coop?.snapshot?.you);}
-function coopInput(){const s=session??{};return {keys:mode==='game'&&!s.failed?[...keys]:[],yaw:s.yaw??0,pitch:s.pitch??0,warningAck:mode==='game'&&!document.hidden&&!s.failed?s.warningShown??[]:[]};}
+function coopInput(){const s=session??{};return {keys:mode==='game'&&!chatOpen&&!s.failed?[...keys]:[],yaw:s.yaw??0,pitch:s.pitch??0,warningAck:mode==='game'&&!document.hidden&&!s.failed?s.warningShown??[]:[]};}
 function stopServerList(){clearTimeout(coopListTimer);coopListGeneration++;coopListBusy=false;}
 function coopSlots(count,players=null,you=null,host=null){
  const n=Math.max(0,Math.min(4,Number(count)||0));
@@ -118,15 +121,15 @@ async function coopConnect(id){
  catch(e){if(coop===client){coop=null;coopMessage(e);}}
  finally{coopBusy=false;if(pane==='coop'&&!coop)refreshServers();}
 }
-function disconnectCoop(){clearSpectator();stopServerList();if(!coop)return;const client=coop;coop=null;client.leave();if(coopStarting)session=soloSession;soloSession=null;coopStarting=false;coopEnding=false;coopEventSeq=0;coopError='';const badge=$('#coop-team');if(badge)badge.hidden=true;}
+function disconnectCoop(){resetTeamChat();clearSpectator();stopServerList();if(!coop)return;const client=coop;coop=null;client.leave();if(coopStarting)session=soloSession;soloSession=null;coopStarting=false;coopEnding=false;coopEventSeq=0;coopError='';const badge=$('#coop-team');if(badge)badge.hidden=true;}
 function teamResult(snap){
- clearSpectator();
+ resetTeamChat();clearSpectator();
  if(coopEnding&&pane==='coopresult')return;coopEnding=true;if(mode==='game')pauseShift(false);
  const won=snap.phase==='complete',done=snap.states.filter(x=>x==='DELIVERED').length;
  panel('coopresult',resultMarkup(snap,won,snap.players.filter(p=>!p.failed).length)+'<div class="panel-actions">'+action('coop-leave','메인으로',true)+'</div>',won?'팀 근무 완료':'팀 근무 실패','GDG / COOPERATIVE RESULT');
 }
 function returnCoopLobby(){
- clearSpectator();cancelAnimationFrame(raf);mode='menu';releaseGameInput();if(document.pointerLockElement===canvas)document.exitPointerLock();session=soloSession;soloSession=null;coopStarting=false;coopEnding=false;coopEventSeq=0;finishAt=null;$('#loading').hidden=true;$('#play').hidden=true;$('#briefing').hidden=false;$('#coop-team').hidden=true;coopError='팀원 이탈로 근무 준비가 취소되었습니다. 다시 시작하세요.';coopLobby();
+ resetTeamChat();clearSpectator();cancelAnimationFrame(raf);mode='menu';releaseGameInput();if(document.pointerLockElement===canvas)document.exitPointerLock();session=soloSession;soloSession=null;coopStarting=false;coopEnding=false;coopEventSeq=0;finishAt=null;$('#loading').hidden=true;$('#play').hidden=true;$('#briefing').hidden=false;$('#coop-team').hidden=true;coopError='팀원 이탈로 근무 준비가 취소되었습니다. 다시 시작하세요.';coopLobby();
 }
 function onCoopState(snap){
  const wasDown=!!session?.failed;
@@ -135,6 +138,7 @@ function onCoopState(snap){
   coopStarting=true;coopEnding=false;coopEventSeq=0;soloSession=session;session=newShift();applyCoopSnapshot(session,snap,true);$('#modal').hidden=true;$('#start').click();
  }else if(coopStarting&&session){const old=posePoint(session),wasHidden=session.coopHidden;applyCoopSnapshot(session,snap);if(wasDown!==!!session.failed||wasHidden!==session.coopHidden||Math.hypot(...posePoint(session).map((v,i)=>v-old[i]))>.45)session.renderPrevious=null;if(pane==='map'&&$('#live-map')){const markers=$('#live-map .gdg-map-markers');if(markers)markers.innerHTML=mapMarkersNow();else $('#live-map').innerHTML=plan();textIfChanged($('#facility-progress'),'배송 '+deliveryCount(session)+' / '+missionTotal(session)+' · '+sectorName(session));}}
  if(!coopStarting||!session)return;
+ if(snap.phase==='playing'&&snap.chatAvailable&&coop?.token)teamChat.start(snap.room,coop.token,snap.you);
  const me=snap.players.find(p=>p.id===snap.you),team=$('#coop-team');
  if(team){team.hidden=false;textIfChanged(team,'CO-OP '+serverName(snap.room)+' · '+difficultyLabel(snap.difficulty?.level)+' · 생존 '+snap.players.filter(p=>!p.failed).length+'/'+snap.players.length+' · 개체 '+snap.haunt.length+'/'+snap.difficulty.maxActive+'\n'+snap.players.map(p=>p.name+(p.id===snap.you?' (나)':'')+(p.failed?' · 구조 대기':p.hidden?' · 은신':' · 생존')).join('\n'));}
  for(const event of snap.events??[]){if(event.seq<=coopEventSeq)continue;coopEventSeq=event.seq;
@@ -148,7 +152,7 @@ function onCoopState(snap){
   else if(event.type==='cargo'&&event.player===snap.you){beep(event.result==='delivered'?620:235,.12);say(event.id+' · '+(event.result==='delivered'?'팀 배송 완료':event.result==='picked'?'집화 완료':'임시 적치 완료'),2.5);}
  }
  if(['complete','failed'].includes(snap.phase)&&['game','paused'].includes(mode)){teamResult(snap);return;}
- if(wasDown&&!me?.failed){clearSpectator();if(mode==='paused')resume();else if(mode==='game'){canvas.focus();lock();}say('부활 완료 · 3초 보호',3);}
+ if(wasDown&&!me?.failed){clearSpectator();if(mode==='paused')resume();else if(mode==='game'&&!chatOpen){canvas.focus();lock();}say('부활 완료 · 3초 보호',3);}
  if(me?.failed&&!wasDown&&['game','paused'].includes(mode)){keys.clear();jump=false;coop?.inputChanged();beginSpectator();}
 }
 function panel(name,body,title,eyebrow='GDG / 근무 안내'){
@@ -215,7 +219,7 @@ function renderThreatHud(s){
  s.warningPaintPending=ids;
 }
 function toMenu(){
- clearThreatHud();clearSignalFeedback($('#signal-markers'),$('#signal-status'));
+ resetTeamChat();clearThreatHud();clearSignalFeedback($('#signal-markers'),$('#signal-status'));
  if(coop)disconnectCoop();
  canvas.classList.remove('captured');
  cancelAnimationFrame(raf);mode='menu';keys.clear();jump=false;drag=false;pane='';
@@ -227,14 +231,14 @@ function toMenu(){
  $('#start').focus();audioOn();
 }
 function clockOut(){
- if(coop)disconnectCoop();
+ resetTeamChat();if(coop)disconnectCoop();
  cancelAnimationFrame(raf);keys.clear();jump=false;drag=false;session=null;finishAt=null;mode='ended';pane='';
  $('#modal').hidden=true;$('#briefing').hidden=true;$('#play').hidden=true;$('#ended').hidden=false;
  $('#ended button').focus();if(document.pointerLockElement===canvas)document.exitPointerLock();audioOn();
 }
 function releaseGameInput(){clearThreatHud();clearSignalFeedback($('#signal-markers'),$('#signal-status'));if(session)session.warningShown=[];keys.clear();jump=false;drag=false;coop?.inputChanged();if(session){session.renderPrevious=null;session.slideRequested=false;}accumulator=0;last=performance.now();}
-function pauseShift(show=true){if(mode!=='game')return;mode='paused';releaseGameInput();cancelAnimationFrame(raf);if(document.pointerLockElement===canvas)document.exitPointerLock();audioOn();if(show)openPane('pause');}
-async function lock(){if(grabbing||document.pointerLockElement===canvas)return;grabbing=true;try{await canvas.requestPointerLock();}catch{}finally{grabbing=false;}}
+function pauseShift(show=true){if(mode!=='game')return;closeTeamChat(false);mode='paused';releaseGameInput();cancelAnimationFrame(raf);if(document.pointerLockElement===canvas)document.exitPointerLock();audioOn();if(show)openPane('pause');}
+async function lock(){if(chatOpen||grabbing||document.pointerLockElement===canvas)return;grabbing=true;try{await canvas.requestPointerLock();}catch{}finally{grabbing=false;}}
 function resume(){if(session?.failed&&coopStarting){beginSpectator();return;}if(!renderer||session?.failed)return;canvas.classList.remove('captured');mode='game';pane='';$('#modal').hidden=true;$('#briefing').hidden=true;$('#play').hidden=false;canvas.focus();lock();audioOn();last=performance.now();accumulator=0;session.renderPrevious=null;cancelAnimationFrame(raf);raf=requestAnimationFrame(frame);}
 function clearSpectator(){spectateId=null;spectateCamera=null;$('#play')?.classList.remove('spectating');const h=$('#spectator-hud');if(h)h.hidden=true;const m=$('#rescue-markers');if(m)m.replaceChildren();}
 function beginSpectator(){
@@ -463,7 +467,47 @@ function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/10
  if(!coopStarting&&finishAt!==null&&s.elapsed>=finishAt){finishAt=null;complete();return;}
  raf=requestAnimationFrame(frame);
 }
+function renderTeamChat(){
+ const panel=$('#team-chat');if(!panel)return;panel.hidden=!teamChat.room;if(panel.hidden)return;
+ panel.classList.toggle('chat-open',chatOpen);panel.classList.toggle('chat-recent',chatRecent&&!chatOpen);
+ const list=$('#team-chat-lines'),form=$('#team-chat-form'),notice=$('#team-chat-notice');
+ form.hidden=!chatOpen;notice.textContent=teamChat.status||'Enter · 팀 채팅';
+ const messages=chatOpen?teamChat.messages:chatRecent?teamChat.messages.slice(-4):[];
+ const signature=messages.map(m=>m.seq).join(',');
+ if(list.dataset.signature!==signature){
+  list.dataset.signature=signature;list.replaceChildren(...messages.map(m=>{const line=document.createElement('div'),name=document.createElement('b'),text=document.createElement('span');name.textContent=m.name+(m.player===teamChat.you?' (나)':'')+' : ';text.textContent=m.text;line.classList.toggle('chat-self',m.player===teamChat.you);line.append(name,text);return line;}));list.scrollTop=list.scrollHeight;
+ }
+ list.hidden=!chatOpen&&!messages.length;$('#team-chat-send').disabled=teamChat.sending;
+}
+function openTeamChat(){
+ if(chatOpen||mode!=='game'||!coopStarting||!teamChat.room)return false;
+ chatOpen=true;chatComposing=false;chatCompositionEnd=-1e6;releaseGameInput();renderTeamChat();
+ if(document.pointerLockElement===canvas)document.exitPointerLock();
+ $('#team-chat-input').focus({preventScroll:true});return true;
+}
+function closeTeamChat(relock=true){
+ if(!chatOpen)return;chatOpen=false;chatComposing=false;renderTeamChat();
+ if(relock&&mode==='game'&&!session?.failed){canvas.focus({preventScroll:true});lock();}
+ else $('#team-chat-input').blur();
+}
+function resetTeamChat(){closeTeamChat(false);chatRecent=false;clearTimeout(chatHideTimer);chatPendingText=null;teamChat.stop();$('#team-chat-input').value='';}
+function submitTeamChat(){
+ const field=$('#team-chat-input'),text=field.value.trim();
+ if(chatComposing||teamChat.sending||!text||Array.from(text).length>100)return;
+ const generation=teamChat.generation;chatPendingText=text;closeTeamChat();
+ teamChat.send(text).then(ok=>{if(generation===teamChat.generation&&ok&&field.value.trim()===text)field.value='';if(generation===teamChat.generation)chatPendingText=null;});
+}
+$('#team-chat-form').addEventListener('submit',e=>{e.preventDefault();submitTeamChat();});
+$('#team-chat-input').addEventListener('compositionstart',()=>chatComposing=true);
+$('#team-chat-input').addEventListener('compositionend',()=>{chatComposing=false;chatCompositionEnd=performance.now();});
 document.addEventListener('keydown',e=>{
+ if(chatOpen){
+  if(chatCompositionKey(e,chatComposing,chatCompositionEnd))return;
+  if(e.code==='Escape'){e.preventDefault();closeTeamChat();return;}
+  if(e.code==='Enter'){e.preventDefault();if(!e.repeat)submitTeamChat();return;}
+  return;
+ }
+ if(mode==='game'&&coopStarting&&e.code==='Enter'&&!e.repeat&&teamChat.room){e.preventDefault();openTeamChat();return;}
  if(e.code==='Enter'&&!$('#modal').hidden&&pane==='coop'&&!coop&&document.activeElement?.id==='coop-nickname'){e.preventDefault();if(selectedServer)coopConnect(selectedServer);return;}
  if(e.code==='Escape'){if(e.repeat)return;e.preventDefault();if(mode==='game'){pauseShift();}else if(!$('#modal').hidden){closePane();}return;}
  if(mode==='game'&&blockGameplayShortcut(e)){e.preventDefault();e.stopPropagation();return;}
@@ -474,11 +518,11 @@ document.addEventListener('keydown',e=>{
  if(e.code==='KeyF'){e.preventDefault();if(!e.repeat){if(coopStarting&&coop)coop.command('signal');else if(!closedLocker(session)&&emitSignal(session,session,worlds[0].blocks.concat(lockerDoorBlocks(session)))){lureJingle();say('디스코 유인 신호 전송 · 12초 대기',2.5);}else say(signalReady(session)>0?'유인 신호 재사용 대기 중':'손전등을 켜고 열린 공간을 조준하세요.',2);}return;}
  if(e.code==='KeyQ'&&!e.repeat){if(coopStarting&&coop){coop.command('torch');return;}if(session.handAction){session.restoreTorch=!session.restoreTorch;return;}if(toggleFlashlight(session)){session.pendingUse=false;session.restoreTorch=false;beep(180,.055,'triangle',.025);}else say('상자를 집거나 내려놓는 동안에는 장비 전환을 할 수 없습니다.',2);return;}if(e.code==='KeyE'&&!e.repeat){if(coopStarting&&coop){keys.add('KeyE');coop.inputChanged();}use();return;}if(e.code==='Space'&&!e.repeat){jump=true;if(coopStarting&&coop)coop.command('jump');}const changed=!keys.has(e.code);keys.add(e.code);if(changed&&coopStarting&&coop&&['KeyW','KeyA','KeyS','KeyD','KeyC','ShiftLeft','ShiftRight','Space'].includes(e.code))coop.inputChanged();
 });document.addEventListener('keyup',e=>{const changed=keys.delete(e.code);if(changed&&coopStarting&&coop)coop.inputChanged();});
-canvas.addEventListener('wheel',e=>{if(mode==='game'){e.preventDefault();if(session?.failed){switchSpectator(e.deltaY>0?1:-1);return;}jump=true;if(coopStarting&&coop)coop.command('jump');}},{passive:false});
-function pointer(e){if(mode!=='game'||session?.failed||(document.pointerLockElement!==canvas&&!drag)||performance.now()<lookReady)return;session.yaw-=mouseDelta(e.movementX,settings.sensitivity);session.yaw=Math.atan2(Math.sin(session.yaw),Math.cos(session.yaw));session.pitch=Math.max(-CONFIG.pitchLimit,Math.min(CONFIG.pitchLimit,session.pitch-mouseDelta(e.movementY,settings.sensitivity)*(settings.invert?-1:1)));if(coopStarting&&coop){const old=session.lastSentLook??[0,0];if(Math.abs(Math.atan2(Math.sin(session.yaw-old[0]),Math.cos(session.yaw-old[0])))>.10||Math.abs(session.pitch-old[1])>.12){session.lastSentLook=[session.yaw,session.pitch];coop.inputChanged();}}}
-document.addEventListener('mousemove',pointer);canvas.addEventListener('mousedown',e=>{if(mode==='game'&&!session?.failed&&e.button===0){e.preventDefault();canvas.focus({preventScroll:true});drag=true;lock();}});document.addEventListener('mouseup',()=>drag=false);
+canvas.addEventListener('wheel',e=>{if(mode==='game'&&!chatOpen){e.preventDefault();if(session?.failed){switchSpectator(e.deltaY>0?1:-1);return;}jump=true;if(coopStarting&&coop)coop.command('jump');}},{passive:false});
+function pointer(e){if(mode!=='game'||chatOpen||session?.failed||(document.pointerLockElement!==canvas&&!drag)||performance.now()<lookReady)return;session.yaw-=mouseDelta(e.movementX,settings.sensitivity);session.yaw=Math.atan2(Math.sin(session.yaw),Math.cos(session.yaw));session.pitch=Math.max(-CONFIG.pitchLimit,Math.min(CONFIG.pitchLimit,session.pitch-mouseDelta(e.movementY,settings.sensitivity)*(settings.invert?-1:1)));if(coopStarting&&coop){const old=session.lastSentLook??[0,0];if(Math.abs(Math.atan2(Math.sin(session.yaw-old[0]),Math.cos(session.yaw-old[0])))>.10||Math.abs(session.pitch-old[1])>.12){session.lastSentLook=[session.yaw,session.pitch];coop.inputChanged();}}}
+document.addEventListener('mousemove',pointer);canvas.addEventListener('mousedown',e=>{if(mode==='game'&&!chatOpen&&!session?.failed&&e.button===0){e.preventDefault();canvas.focus({preventScroll:true});drag=true;lock();}});document.addEventListener('mouseup',()=>drag=false);
 // Browser focus/pointer lock loss is not an intentional menu action.
- document.addEventListener('pointerlockchange',()=>{lookReady=performance.now()+65;if(document.pointerLockElement!==canvas&&mode==='game'&&!session?.failed)releaseGameInput();});window.addEventListener('blur',()=>{if(mode==='game')releaseGameInput();});document.addEventListener('visibilitychange',()=>{if(mode==='game')releaseGameInput();});canvas.addEventListener('contextmenu',e=>e.preventDefault());
+ document.addEventListener('pointerlockchange',()=>{lookReady=performance.now()+65;if(document.pointerLockElement!==canvas&&mode==='game'&&!chatOpen&&!session?.failed)releaseGameInput();});window.addEventListener('blur',()=>{if(mode==='game')releaseGameInput();});document.addEventListener('visibilitychange',()=>{if(mode==='game')releaseGameInput();});canvas.addEventListener('contextmenu',e=>e.preventDefault());
 canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();pauseShift(false);panel('error','<p>그래픽 연결이 끊어졌습니다. 새로 열어 창고에 다시 접속하세요.</p><div class="panel-actions">'+action('reload','다시 열기',true)+'</div>','그래픽 연결 중단');});
 $('#close').onclick=closePane;$('#pause').onclick=()=>pauseShift();
 document.addEventListener('keydown',e=>{
