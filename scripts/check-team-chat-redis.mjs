@@ -4,7 +4,7 @@ import {createRoom,operateRoom,serializeRoom} from '../server/room-core.js';
 import {requestTeamChat} from '../server/team-chat.js';
 const container=process.env.REDIS_CONTAINER,run=(...args)=>execFileSync('docker',['exec',container,'redis-cli','--json',...args.map(String)],{encoding:'utf8',maxBuffer:4*1024*1024});
 const redis=async cmd=>JSON.parse(run(...cmd)),key=code=>'test:room:'+code,error=(m,status)=>Object.assign(Error(m),{status});
-let now=100000;const {room,player}=createRoom('CHAT23',now,'작업자A'),tokens=[player.token];for(let i=1;i<4;i++)tokens.push(operateRoom(room,{op:'join',nickname:'작업자'+i},now).token);
+let now=1795757883000;const {room,player}=createRoom('CHAT23',now,'작업자A'),tokens=[player.token];for(let i=1;i<4;i++)tokens.push(operateRoom(room,{op:'join',nickname:'작업자'+i},now).token);
 operateRoom(room,{op:'start',token:tokens[0]},now);for(const token of tokens)operateRoom(room,{op:'ready',token},now);
 const original=serializeRoom(room);await redis(['SET',key(room.code),original]);
 const chat=(i,op,extra={})=>requestTeamChat({op,room:room.code,token:tokens[i],...extra},{redis,key,error,now});
@@ -14,7 +14,7 @@ await assert.rejects(chat(0,'send',{text:'도배',id:'another-message-123'}),e=>
 await assert.rejects(requestTeamChat({op:'read',room:room.code,token:'x'.repeat(48)},{redis,key,error,now}),e=>e.status===401);
 for(let i=1;i<4;i++)assert.equal((await chat(i,'read')).messages[0].text,'택배 <script> 집었어');
 for(let round=0;round<8;round++){now+=1250;await Promise.all(tokens.map((_,i)=>chat(i,'send',{text:'팀'+i+' '+round,id:'round-message-'+round+'-'+i+'-123'})));}
-r=await chat(2,'read');assert.equal(r.messages.length,30);assert.equal((await chat(2,'read',{after:r.messages.at(-1).seq})).messages.length,0);
+r=await chat(2,'read');assert.equal(r.messages.length,30);assert.equal(new Set(r.messages.map(m=>m.seq)).size,30);assert.equal((await chat(2,'read',{after:r.messages.at(-1).seq})).messages.length,0);
 assert.equal(await redis(['GET',key(room.code)]),original,'chat never mutates game room JSON');
 const newRoom=createRoom(room.code,now,'신규작업자').room;newRoom.phase='playing';const newP=Object.values(newRoom.players)[0];await redis(['SET',key(room.code),serializeRoom(newRoom)]);
 const clean=await requestTeamChat({op:'read',room:room.code,token:newP.token},{redis,key,error,now});assert.equal(clean.messages.length,0);await assert.rejects(chat(0,'read'),e=>e.status===401);

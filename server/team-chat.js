@@ -25,7 +25,7 @@ if ARGV[3]=='send' then
  if last and last.id==ARGV[5] then ack=last.id
  else
   if last and now-last.at<tonumber(ARGV[7]) then return {429,'메시지를 너무 빠르게 보내고 있습니다.'} end
-  chat.seq=math.max(chat.seq+1,now*1000)
+  chat.seq=math.max(chat.seq+1,now*10)
   table.insert(chat.messages,{seq=chat.seq,player=member.id,name=member.name,text=ARGV[4],at=now})
   while #chat.messages>tonumber(ARGV[6]) do table.remove(chat.messages,1) end
   for id,_ in pairs(chat.last) do if not room.players[id] then chat.last[id]=nil end end
