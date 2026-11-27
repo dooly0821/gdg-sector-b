@@ -1,3 +1,4 @@
+import {MOTION_VERSION,MOTION_HZ,MAX_MOTION_BATCH,unpackMotion} from '../dist/motion-input.js';
 import {roomConnectionTimeout} from '../dist/public-servers.js';
 import {DIFFICULTIES,normalizeDifficulty,effectiveDifficulty,cargoQuota,difficultyLabel} from '../dist/difficulty.js';
 // Authoritative room simulation. All clients share one cargo list, one ghost
@@ -8,7 +9,7 @@ import {normalizeNickname} from '../dist/nickname.js';
 import {acknowledgeWarnings} from '../dist/threat-warning.js';
 import {powerTarget,toggleZone,emitSignal,pruneSignals} from '../dist/facility-actions.js';
 import {expandedLayout} from '../dist/map-layout.js';
-import {createScene,newShift,randomCargo,step,forward,handlingTarget,canUse,dropTarget,deliveryCount,MISSION_TOTAL,parcelBlocks} from '../dist/mission.js';
+import {createScene,newShift,randomCargo,step,forward,handlingTarget,pickupTargetByIndex,canUse,dropTarget,deliveryCount,MISSION_TOTAL,parcelBlocks} from '../dist/mission.js';
 import {beginHandling,advanceHandling,toggleFlashlight,updateViewmodel} from '../dist/handling.js';
 import {advanceLockers,lockerDoorBlocks,lockerTarget,useLocker,insideLocker,closedLocker,LOCKERS} from '../dist/lockers.js';
 import {nearbyBlocks,traceBox} from '../dist/contact.js';
@@ -81,7 +82,7 @@ function tickRevives(room,active,now,dt){
   p.reviveProgress=(p.reviveProgress??0)+dt;
   if(p.reviveProgress+1e-8>=REVIVE_SECONDS){
    Object.assign(t.state,{failed:false,capturedBy:null,handAction:null,pendingUse:null,vault:null,vx:0,vy:0,vz:0,jumpBuffer:0,slideTime:0,slideExit:0,slideRequested:false,hopBoosted:false,threatWarnings:{},hitProtectedUntil:room.shared.elapsed+3});
-   t.input.keys=[];t.reviveHeld=false;t.jump=false;t.reviveProgress=0;t.reviveTarget=null;p.reviveProgress=0;p.reviveTarget=null;
+   t.input.keys=[];t.reviveHeld=false;t.jump=false;t.motionEpoch=(t.motionEpoch??1)+1;t.motionAck=0;t.motionCredit=12;t.motionCreditAt=now;t.reviveProgress=0;t.reviveTarget=null;p.reviveProgress=0;p.reviveTarget=null;
    pushEvent(room,{type:'revive',player:t.id,by:p.id});
   }
  }
@@ -92,8 +93,8 @@ function command(room,p,cmd){
  const s=attach(room,p),q=room.shared;
  if(s.failed||room.phase!=='playing'){detach(p);return;}
  const staticBlocks=world(room).blocks,blocks=staticBlocks.concat(lockerDoorBlocks(s));
- if(cmd.type==='jump')p.jump=true;
- if(cmd.type==='slide')s.slideRequested=true;
+ if(cmd.type==='jump'&&!p.motionMode)p.jump=true;
+ if(cmd.type==='slide'&&!p.motionMode)s.slideRequested=true;
  if(cmd.type==='signal'&&!closedLocker(s)){const signal=emitSignal(s,q,blocks);if(signal)pushEvent(room,{type:'signal',player:p.id,x:signal.x,z:signal.z});else pushEvent(room,{type:'notice',player:p.id,message:'F 신호 · 손전등을 켜고 열린 공간을 조준하세요 (12초 재사용 대기).'});}
  if(cmd.type==='torch'){if(!s.handAction)toggleFlashlight(s);}
  if(cmd.type==='use'&&reviveTarget(room,p)){p.reviveHeld=p.input.keys.includes('KeyE');if(s.handAction&&!s.handAction.result){s.handAction=null;s.pendingUse=null;}}
@@ -104,9 +105,42 @@ function command(room,p,cmd){
    const other=live(room).some(a=>a!==p&&insideLocker(a.state,l));
    if(!other){const result=useLocker(s,l);if(result==='closing'){s.yaw=0;s.pitch=0;p.input.yaw=0;p.input.pitch=0;}if(result==='opening'||result==='closing')pushEvent(room,{type:'door',x:l.x,z:l.z,player:p.id});else if(result==='step-back')pushEvent(room,{type:'notice',player:p.id,message:'문이 열릴 공간이 필요합니다. 한 걸음 물러서세요.'});}
    else pushEvent(room,{type:'notice',player:p.id,message:'다른 작업자가 사용하는 사물함입니다.'});
-  }else {s.placementWorkers=live(room).filter(a=>a!==p).map(a=>a.state);const t=handlingTarget(s,blocks);if(canUse(s,t,blocks)){s.restoreTorch=s.flashlight;beginHandling(s,t,blocks);}}
+  }else {s.placementWorkers=live(room).filter(a=>a!==p).map(a=>a.state);const explicit=Number.isSafeInteger(cmd.cargoIndex)&&s.carried<0;const t=explicit?pickupTargetByIndex(s,cmd.cargoIndex):handlingTarget(s,blocks);if(canUse(s,t,blocks)){s.restoreTorch=s.flashlight;beginHandling(s,t,blocks);}else if(explicit)pushEvent(room,{type:'notice',player:p.id,message:'상자 집기 실패 · 상자가 이동했거나 거리/시야가 맞지 않습니다.'});}
  }
  syncShared(room,p);detach(p);
+}
+function simulateWorker(room,p,blocks,dt,keys,jump,active){
+ const s=p.state;
+ step(s,keys,blocks,dt,jump);
+ updateViewmodel(s,dt);
+ if(s.handAction){
+  s.placementWorkers=active.filter(a=>a!==p).map(a=>a.state);const id=s.handAction.target.id,result=advanceHandling(s,blocks.concat(lockerDoorBlocks(s)),dt);delete s.placementWorkers;
+  if(result){if(s.restoreTorch){s.flashlight=true;s.restoreTorch=false;}if(result!=='cancelled')pushEvent(room,{type:'cargo',result,id,player:p.id});else pushEvent(room,{type:'notice',player:p.id,message:'상자 작업 중단 · 다시 조준하고 E를 누르세요.'});}
+ }
+ syncShared(room,p);
+}
+function applyMotionBatch(room,p,motion,commands,now){
+ if(!p.motionMode){p.motionMode=true;p.motionAck=0;p.motionCredit=24;p.motionCreditAt=now;p.jump=false;p.state.slideRequested=false;}
+ p.motionCredit=Math.min(72,(p.motionCredit??0)+Math.max(0,now-(p.motionCreditAt??now))*MOTION_HZ/1000);p.motionCreditAt=now;
+ const frames=Array.isArray(motion.frames)?motion.frames.slice(0,MAX_MOTION_BATCH):[],list=Array.isArray(commands)?commands.slice(0,16):[];
+ let ci=0;const blocks=world(room).blocks,active=live(room);
+ const flush=()=>{while(ci<list.length){
+  const cmd=list[ci];if(!cmd||!Number.isSafeInteger(cmd.seq)||cmd.seq<=p.commandSeq){ci++;continue;}
+  if(Number.isSafeInteger(cmd.motionTick)&&cmd.motionTick>(p.motionAck??0))break;
+  // Use the view sampled when E was pressed, not a later mouse position.
+  if(cmd.type==='use'&&Number.isFinite(cmd.yaw)&&Number.isFinite(cmd.pitch)){p.state.yaw=clamp(cmd.yaw,-1e4,1e4);p.state.pitch=clamp(cmd.pitch,-1.3,1.3);}
+  command(room,p,cmd);ci++;
+ }};
+ flush();
+ for(const raw of frames){
+  const frame=unpackMotion(raw);if(!frame)break;
+  if(frame.seq<=(p.motionAck??0))continue;
+  if(frame.seq!==(p.motionAck??0)+1||p.motionCredit<1-1e-6)break;
+  const s=attach(room,p);s.yaw=frame.yaw;s.pitch=frame.pitch;if(frame.slide)s.slideRequested=true;
+  simulateWorker(room,p,blocks,1/MOTION_HZ,frame.keys,frame.jump,active);detach(p);
+  p.motionAck=frame.seq;p.motionCredit=Math.max(0,p.motionCredit-1);flush();
+ }
+ p.state.yaw=p.input.yaw;p.state.pitch=p.input.pitch;
 }
 export function tickRoom(room,now=Date.now()){
  now=Math.max(now,room.lastTick??now);
@@ -126,12 +160,7 @@ export function tickRoom(room,now=Date.now()){
   for(const p of active){
    const s=attach(room,p);const stale=now-(p.lastInputAt??p.lastSeen);if(stale>650){p.input.keys=[];p.jump=false;s.slideRequested=false;}
    s.netHitProtected=stale>500||wallDelta>.30||due>.50;s.yaw=p.input.yaw;s.pitch=p.input.pitch;
-   step(s,new Set(p.input.keys),blocks,dt,p.jump);p.jump=false;
-   updateViewmodel(s,dt);
-   if(s.handAction){
-    s.placementWorkers=active.filter(a=>a!==p).map(a=>a.state);const id=s.handAction.target.id,result=advanceHandling(s,blocks.concat(lockerDoorBlocks(s)),dt);delete s.placementWorkers;
-    if(result){if(s.restoreTorch){s.flashlight=true;s.restoreTorch=false;}if(result!=='cancelled')pushEvent(room,{type:'cargo',result,id,player:p.id});}
-   }
+   if(!p.motionMode){simulateWorker(room,p,blocks,dt,new Set(p.input.keys),p.jump,active);p.jump=false;}
    syncShared(room,p);
   }
   q.elapsed+=dt;pruneSignals(q);tickRevives(room,active,now,dt);const anomaly=tickShiftEvents(q);if(anomaly)pushEvent(room,anomaly);
@@ -151,7 +180,7 @@ function ghostPublic(a){return Object.fromEntries(ghostFields.filter(k=>a[k]!==u
 function selfState(room,p){const s=attach(room,p),out={};for(const k of ['x','y','z','yaw','pitch','vx','vy','vz','grounded','bodyHeight','steps','onRail','carried','flashlight','flashAmount','handAction','vault','failed','capturedBy','noise','horrorEvent','cargoSignalAt','signalCooldownUntil','signalPulseUntil','slideTime','slideCooldown','slideExit','threatWarnings'])if(s[k]!==undefined)out[k]=s[k];detach(p);return out;}
 export function snapshot(room,p){
  const q=room.shared;const count=Object.keys(room.players).length,startCount=room.phase==='lobby'?count:q.startCount??count,level=room.phase==='lobby'?effectiveDifficulty(room.requestedDifficulty,count):q.difficultyLevel??'normal';const players=Object.values(room.players).map(a=>{attach(room,a);const pub=publicPlayer(a);detach(a);return pub;});
- return {room:room.code,phase:room.phase,serverTime:room.lastTick,simLagMs:Math.round(((room.simDebt??0)+(room.fraction??0)/60)*1000),host:room.host,you:p.id,ack:p.commandSeq,inputAck:p.lastInputSeq??0,players,self:selfState(room,p),cargo:q.cargo,cargoDeadlines:q.cargoDeadlines??{},shiftEvents:q.shiftEvents??null,powerZones:q.powerZones??{},signals:q.signals??{},states:q.states,parked:q.parked,deliveryOrder:q.deliveryOrder,deliveryBays:q.deliveryBays??{},lockers:q.lockers,lockerRevision:q.lockerRevision,elapsed:q.elapsed,haunt:q.haunt.map(ghostPublic),events:room.events,quota:room.phase==='lobby'?cargoQuota(count):q.states.length,startCount,requestedDifficulty:normalizeDifficulty(room.requestedDifficulty),difficulty:teamDifficulty(Math.max(1,live(room).length),level,room.phase==='lobby'?count:q.startCount??1)};
+ return {room:room.code,phase:room.phase,serverTime:room.lastTick,simLagMs:Math.round(((room.simDebt??0)+(room.fraction??0)/60)*1000),host:room.host,you:p.id,ack:p.commandSeq,inputAck:p.lastInputSeq??0,motionProtocol:MOTION_VERSION,motionEpoch:p.motionEpoch??1,motionAck:p.motionAck??0,motionMode:!!p.motionMode,players,self:selfState(room,p),cargo:q.cargo,cargoDeadlines:q.cargoDeadlines??{},shiftEvents:q.shiftEvents??null,powerZones:q.powerZones??{},signals:q.signals??{},states:q.states,parked:q.parked,deliveryOrder:q.deliveryOrder,deliveryBays:q.deliveryBays??{},lockers:q.lockers,lockerRevision:q.lockerRevision,elapsed:q.elapsed,haunt:q.haunt.map(ghostPublic),events:room.events,quota:room.phase==='lobby'?cargoQuota(count):q.states.length,startCount,requestedDifficulty:normalizeDifficulty(room.requestedDifficulty),difficulty:teamDifficulty(Math.max(1,live(room).length),level,room.phase==='lobby'?count:q.startCount??1)};
 }
 export function operateRoom(room,body,now=Date.now()){
  check(room&&room.phase!=='closed','방을 찾을 수 없습니다.',404);
@@ -168,13 +197,16 @@ export function operateRoom(room,body,now=Date.now()){
  else if(op==='ready'){check(['loading','playing'].includes(room.phase),'아직 근무를 시작하지 않았습니다.',409);p.ready=true;canStart(room,now);}
  else if(op==='sync'){
   if(room.phase==='playing'&&!p.state.failed){
+   const motion=body.motion&&body.motion.version===MOTION_VERSION?body.motion:null;
+   if(motion&&motion.epoch!==(p.motionEpoch??1))return {snapshot:snapshot(room,p)};
    const incoming=body.inputSeq,sequenced=Number.isSafeInteger(incoming)&&incoming>0;
    if(sequenced&&incoming<=(p.lastInputSeq??0))return {snapshot:snapshot(room,p)};
    if(sequenced)p.lastInputSeq=incoming;
    const input=body.input??{};const gap=now-(p.lastInputAt??now);p.lastInputAt=now;if(gap>500)p.state.hitProtectedUntil=Math.max(p.state.hitProtectedUntil??0,room.shared.elapsed+Math.min(1.2,.55+gap/4000));p.input={keys:Array.isArray(input.keys)?[...new Set(input.keys.filter(k=>keysAllowed.has(k)))].slice(0,9):[],yaw:clamp(finite(input.yaw,p.input.yaw),-1e4,1e4),pitch:clamp(finite(input.pitch,p.input.pitch),-1.3,1.3)};
    acknowledgeWarnings(p.state,input.warningAck,room.shared.elapsed);
    p.reviveHeld=p.input.keys.includes('KeyE');p.state.yaw=p.input.yaw;p.state.pitch=p.input.pitch;
-   for(const cmd of (Array.isArray(body.commands)?body.commands.slice(0,16):[]))command(room,p,cmd);
+   if(motion)applyMotionBatch(room,p,motion,body.commands,now);
+   else if(!p.motionMode)for(const cmd of (Array.isArray(body.commands)?body.commands.slice(0,16):[]))command(room,p,cmd);
   }
  }else if(op!=='start'&&op!=='ready')throw new RoomError('잘못된 명령입니다.');
  return {snapshot:snapshot(room,p)};

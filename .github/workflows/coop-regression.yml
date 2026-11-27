@@ -18,7 +18,7 @@ jobs:
       - run: node scripts/check-climb-routes.mjs
 
   live-health:
-    if: github.head_ref == 'responsive-bhop-frame-pacing-20261127'
+    if: github.head_ref == 'coop-input-replay-pickup-20261127'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:

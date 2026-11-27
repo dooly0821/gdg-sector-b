@@ -1,3 +1,4 @@
+import {MOTION_VERSION,MAX_MOTION_BATCH,MAX_PENDING_MOTION,packMotion,motionPose} from './motion-input.js';
 import {cargoGlowCode} from './cargo-glow.js';
 import {basis} from './world.js';
 import {appendRemote,remoteAt} from './net-smoothing.js';
@@ -15,7 +16,7 @@ export async function retryLeave(request,room,token,pause=ms=>new Promise(r=>set
 }
 export const retryableAction=e=>!e?.status||[408,423,429,500,502,503,504].includes(e.status);
 export class CoopClient{
- constructor(onState,onError,input){this.onState=onState;this.onError=onError;this.input=input;this.room=null;this.token=null;this.snapshot=null;this.seq=0;this.inputSeq=0;this.queue=[];this.running=false;this.busy=false;this.peers=new Map();this.remoteTracks=new Map();}
+ constructor(onState,onError,input){this.onState=onState;this.onError=onError;this.input=input;this.room=null;this.token=null;this.snapshot=null;this.seq=0;this.inputSeq=0;this.queue=[];this.running=false;this.busy=false;this.peers=new Map();this.remoteTracks=new Map();this.motionFrames=[];this.motionSeq=0;this.motionEpoch=null;this.motionAckPose=null;this.enableMotion=false;}
  async request(op,extra={}){
   const sent=performance.now();this.lastRequestAt=sent;
   const res=await fetch('/api/room',{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify({op,room:this.room,token:this.token,...extra}),signal:AbortSignal.timeout(op==='sync'?3000:10000)});
@@ -34,6 +35,14 @@ export class CoopClient{
   if(prev?.room===next.room&&Number.isFinite(next.inputAck)&&Number.isFinite(prev.inputAck)&&next.inputAck<prev.inputAck)return;
   if(prev?.room===next.room&&prev.phase===next.phase){for(const k of ['states','parked','deliveryOrder','deliveryBays','lockers','powerZones','signals'])if(prev[k]&&next[k]&&JSON.stringify(prev[k])===JSON.stringify(next[k]))next[k]=prev[k];}
   if(prev?.room===next.room&&prev.phase===next.phase&&prev.cargo?.length===next.cargo?.length&&JSON.stringify(prev.cargo)===JSON.stringify(next.cargo))next.cargo=prev.cargo;
+  if(this.enableMotion&&next.motionProtocol===MOTION_VERSION){
+   const ack=next.motionAck??0;
+   if(this.motionEpoch!==next.motionEpoch){this.motionEpoch=next.motionEpoch;this.motionFrames=[];this.motionSeq=ack;this.motionAckPose=null;if(prev?.motionEpoch!=null){this.queue=[];this.seq=next.ack??0;}}
+   const matched=this.motionFrames.find(a=>a.frame[0]===ack);if(matched)this.motionAckPose=matched.pose;
+   this.motionFrames=this.motionFrames.filter(a=>a.frame[0]>ack);
+   if(next.self?.failed){this.motionFrames=[];this.motionSeq=ack;this.motionAckPose=null;}
+   if(next.motionMode&&this.motionAckPose)next.netMotionPose=this.motionAckPose;
+  }
   this.snapshot=next;this.room=next.room;
   if(prev?.room===next.room&&Number.isFinite(next.netReceived)&&Number.isFinite(prev.netReceived))this.snapshotGap=Math.max(0,next.netReceived-prev.netReceived);
   const now=data.snapshot.netReceived??performance.now(),seen=new Set();
@@ -44,7 +53,7 @@ export class CoopClient{
  }
  async connect(op,room=null,nickname){
   if(this.running)return;
-  this.room=room;this.seq=0;this.inputSeq=0;this.failures=0;this.authFailures=0;this.connectionState='connected';this.queue=[];this.peers.clear();this.remoteTracks.clear();this.rtt=null;this.contention=0;this.dirty=false;
+  this.room=room;this.seq=0;this.inputSeq=0;this.failures=0;this.authFailures=0;this.connectionState='connected';this.queue=[];this.peers.clear();this.remoteTracks.clear();this.rtt=null;this.contention=0;this.dirty=false;this.motionFrames=[];this.motionSeq=0;this.motionEpoch=null;this.motionAckPose=null;
   this.accept(await this.request(op,{nickname}));this.running=true;this.poll();
  }
  async action(op,extra={}){
@@ -54,7 +63,10 @@ export class CoopClient{
   this.busy=true;try{const data=await this.request(op,extra);if(this.running)this.accept(data);}catch(e){if(retryableAction(e))this.pendingAction={op,extra};else this.onError?.(e);}finally{this.busy=false;}
  }
  inputChanged(){if(!this.running||this.snapshot?.phase!=='playing')return;this.dirty=true;if(!this.busy&&this.runPoll){clearTimeout(this.timer);this.timer=setTimeout(this.runPoll,Math.max(0,30-(performance.now()-(this.lastRequestAt??0))));}}
- command(type){if(this.running&&this.snapshot?.phase==='playing'&&this.queue.length<64){this.queue.push({seq:++this.seq,type});this.inputChanged();}}
+ usesMotion(){return this.enableMotion&&this.snapshot?.motionProtocol===MOTION_VERSION;}
+ canRecordMotion(){return !this.usesMotion()||this.motionFrames.length<MAX_PENDING_MOTION;}
+ recordMotion(s,keys,jump,slide,now){if(!this.usesMotion()||!this.canRecordMotion())return;this.motionFrames.push({frame:packMotion(++this.motionSeq,keys,s.yaw,s.pitch,jump,slide),pose:motionPose(s,now)});}
+ command(type,details={}){if(this.running&&this.snapshot?.phase==='playing'&&this.queue.length<64){if(this.usesMotion()&&(type==='jump'||type==='slide')){this.inputChanged();return;}this.queue.push({seq:++this.seq,type,...details,...(this.usesMotion()?{motionTick:this.motionSeq}: {})});this.inputChanged();}}
  poll(){
   if(!this.running)return;
   const run=async()=>{
@@ -65,7 +77,7 @@ export class CoopClient{
     const pending=this.pendingAction;this.pendingAction=null;
     try{
      const input=this.input?.()??{keys:[],yaw:0,pitch:0};this.dirty=false;
-     const data=await this.request(pending?.op||'sync',pending?pending.extra:{input,inputSeq:++this.inputSeq,commands:this.queue.slice(0,16)});
+     const data=await this.request(pending?.op||'sync',pending?pending.extra:{input,inputSeq:++this.inputSeq,commands:this.queue.slice(0,16),...(this.usesMotion()?{motion:{version:MOTION_VERSION,epoch:this.motionEpoch,frames:this.motionFrames.slice(0,MAX_MOTION_BATCH).map(a=>a.frame)}}:{})});
      if(this.running){this.accept(data);this.failures=0;this.authFailures=0;this.connectionState='connected';this.contention=Math.max(0,(this.contention??0)-1);}
     }catch(e){
      if(this.running&&e.status!==423){this.dirty=true;this.failures=(this.failures??0)+1;this.connectionState='recovering';if(pending&&retryableAction(e))this.pendingAction=pending;this.authFailures=(e.status===401||e.status===404)?(this.authFailures??0)+1:0;if(this.authFailures>=3){this.connectionState='expired';this.running=false;this.onError?.(new Error('방 연결이 만료되었습니다. 메인 메뉴에서 다시 참가하세요.'));return;}if(this.failures===3)this.onError?.(new Error('서버 연결 복구 중 · 잠시 안전한 위치에서 대기하세요.'));}
@@ -79,7 +91,7 @@ export class CoopClient{
    }
   };this.runPoll=run;this.timer=setTimeout(run,70+Math.random()*70);
  }
- async leave(){const room=this.room,token=this.token;this.running=false;clearTimeout(this.timer);this.room=this.token=null;this.snapshot=null;this.pendingAction=null;this.runPoll=null;this.peers.clear();this.remoteTracks.clear();return retryLeave(this.request.bind(this),room,token);}
+ async leave(){const room=this.room,token=this.token;this.running=false;clearTimeout(this.timer);this.room=this.token=null;this.snapshot=null;this.pendingAction=null;this.runPoll=null;this.peers.clear();this.remoteTracks.clear();this.motionFrames=[];return retryLeave(this.request.bind(this),room,token);}
 }
 export function peerLayers(client,s,dt,group,focusId=null){
  if(!client?.snapshot)return [];
@@ -120,7 +132,7 @@ export function applyCoopSnapshot(s,snap,first=false){
  if(!s||!snap?.self)return;
  const v=snap.self,hidden=!!snap.players.find(p=>p.id===snap.you)?.hidden,oldHidden=!!s.coopHidden;
  const now=finite(snap.netReceived,performance.now()),sampleAt=finite(snap.netSample,now);
- const history=historyAt(s,sampleAt),age=clamp((now-sampleAt)/1000,0,.28);
+ const history=snap.motionMode?snap.netMotionPose??null:historyAt(s,sampleAt),age=clamp((now-sampleAt)/1000,0,.28);
  const dx=history?v.x-history.x-((s.netAppliedX??0)-history.cx):v.x+finite(v.vx)*age-s.x;
  const dz=history?v.z-history.z-((s.netAppliedZ??0)-history.cz):v.z+finite(v.vz)*age-s.z;
  const err=Math.hypot(dx,dz),vertical=Math.abs((history?.y??s.y)-v.y);
@@ -148,7 +160,7 @@ export function applyCoopSnapshot(s,snap,first=false){
  if(hard){
   for(const k of ['x','y','z','vx','vy','vz','grounded','bodyHeight','steps','vault','onRail'])s[k]=v[k]??(k==='vault'?null:s[k]);
   s.netHistory=[];s.netAppliedX=s.netAppliedZ=0;s.netCorrection=[0,0];s.netMismatchAt=null;s.netDivergenceSince=null;s.netBlockedSince=null;s.netFloorSince=null;s.netHardCorrections=(s.netHardCorrections??0)+(first||revived||v.failed||hidden!==oldHidden?0:1);
- }else if(!s.vault&&!v.vault&&!!s.grounded===!!v.grounded&&!hidden&&(history||sampleAge<260)&&sampleAge<350&&finite(snap.netRtt)<650&&finite(snap.simLagMs)<150){
+ }else if(!s.vault&&!v.vault&&!!s.grounded===!!v.grounded&&!hidden&&(snap.motionMode?!!history:(history||sampleAge<260))&&sampleAge<350&&finite(snap.netRtt)<650&&finite(snap.simLagMs)<150){
   const dead=.07+Math.min(.24,finite(snap.netRtt)*.00035+finite(snap.simLagMs)*.0005),amount=Math.max(0,err-dead),weight=err>0?Math.min(s.grounded?3.2:1.1,amount)/err:0;
   s.netCorrection=[dx*weight,dz*weight];
  }else s.netCorrection=[0,0];

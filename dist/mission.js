@@ -120,6 +120,7 @@ export function step(s,keys,blocks,dt,jump=false){
  s.zone=zone;
 }
 const parcelPos=(s,i)=>s.parked?.[i]??shiftParcel(s,i).pos;
+export function pickupTargetByIndex(s,i){if(!Number.isSafeInteger(i)||i<0||i>=s.states.length||s.states[i]!=='AVAILABLE'||s.carried>=0)return null;return {...shiftParcel(s,i),index:i,pos:parcelPos(s,i)};}
 const dockTarget=(i=0)=>({pos:EXPANDED_DOCKS[i],id:'BAY '+String(i+2).padStart(2,'0'),area:'Outbound dispatch',dock:true,bay:i});
 const dockTargets=s=>docksFor(s).map((_,i)=>dockTarget(i)).sort((a,b)=>Math.hypot(s.x-a.pos[0],s.z-a.pos[2])-Math.hypot(s.x-b.pos[0],s.z-b.pos[2]));
 const parcelHalf=[CONFIG.parcelWidth/2,CONFIG.parcelWidth*.88,CONFIG.parcelWidth*.41];
