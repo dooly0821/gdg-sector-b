@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {emitSignal,signalReady,signalForActor} from '../dist/facility-actions.js';
+import {activeSignal,signalPower,visibleSignalPoint} from '../dist/signal-feedback.js';
+const s={x:0,y:0,z:10,yaw:0,pitch:-.1,bodyHeight:1.7,flashlight:true,elapsed:4,id:'worker'};
+const sig=emitSignal(s,s,[]);assert(sig&&Number.isFinite(sig.y));assert.equal(sig.until-sig.start,2);assert.equal(signalReady(s),12);assert.equal(activeSignal(s),sig);
+assert(signalPower(sig,4)>2&&signalPower(sig,4.5)>1&&signalPower(sig,4.5)<signalPower(sig,4));assert.equal(signalPower(sig,6),1);
+const eye=[0,1.58,10],pt=[sig.x,sig.y,sig.z];assert.deepEqual(visibleSignalPoint(sig,eye,[]),pt);
+const mid=(sig.z+10)/2;assert.equal(visibleSignalPoint(sig,eye,[[-1,mid-.1,1,mid+.1,0,4]]),null);
+assert.equal(visibleSignalPoint({...sig,x:40},eye,[]),null);
+s.elapsed=6;assert.equal(activeSignal(s),null);assert.equal(signalReady(s),10);
+console.log('PASS lure feedback: smooth power pulse, original duration and cooldown, marker line-of-sight and expiry');

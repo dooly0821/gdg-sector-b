@@ -39,10 +39,10 @@ export function emitSignal(s,root,blocks){
  if(f[1]<0)hit=Math.min(hit,eye[1]/(-f[1]*SIGNAL_RANGE));
  const reach=Math.max(0,Math.min(SIGNAL_RANGE,hit*SIGNAL_RANGE-.28));
  let point=null;
- for(let d=reach;d>=1.5;d-=.4){const x=eye[0]+f[0]*d,z=eye[2]+f[2]*d;if(Math.hypot(x-s.x,z-s.z)<1.2)continue;if(blocks.some(b=>b[4]<1.0&&b[5]>.08&&b[0]<x+.45&&b[2]>x-.45&&b[1]<z+.45&&b[3]>z-.45))continue;point=[x,z];break;}
+ for(let d=reach;d>=1.5;d-=.4){const x=eye[0]+f[0]*d,z=eye[2]+f[2]*d;if(Math.hypot(x-s.x,z-s.z)<1.2)continue;if(blocks.some(b=>b[4]<1.0&&b[5]>.08&&b[0]<x+.45&&b[2]>x-.45&&b[1]<z+.45&&b[3]>z-.45))continue;point=[x,z,Math.max(.12,eye[1]+f[1]*d)];break;}
  if(!point)return null;
  const now=root.elapsed??s.elapsed??0,id=s.id??'solo',signals=root.signals??={};
- const signal={id:id+':'+now,owner:id,x:point[0],z:point[1],start:now,until:now+SIGNAL_DURATION};
+ const signal={id:id+':'+now,owner:id,x:point[0],z:point[1],y:point[2],start:now,until:now+SIGNAL_DURATION};
  signals[id]=signal;s.signals=signals;s.signalCooldownUntil=now+SIGNAL_COOLDOWN;s.signalPulseUntil=signal.until;
  return signal;
 }
