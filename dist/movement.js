@@ -77,18 +77,17 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
  const x=mag?(Math.cos(s.yaw)*side-Math.sin(s.yaw)*up)/mag:0,z=mag?(-Math.sin(s.yaw)*side-Math.cos(s.yaw)*up)/mag:0;
 
  const preSpeed=Math.hypot(s.vx,s.vz);
+ // A/D are steering inputs, never an acceleration trigger. Require actual
+ // forward running momentum and unambiguous W at the instant of takeoff.
+ const forwardSpeed=-Math.sin(s.yaw)*s.vx-Math.cos(s.yaw)*s.vz;
+ const forwardHop=crouch&&up===1&&!keys.has('KeyA')&&!keys.has('KeyD')&&preSpeed>P.sprint*.78&&forwardSpeed>=preSpeed*.8;
  s.wasDuck=crouch;
  if(s.grounded&&s.jumpBuffer>0){
   // Compensate the semi-implicit gravity step equally at 60 and 120 Hz.
   s.vy=Math.sqrt(2*P.gravity*jumpHeightFor(preSpeed,crouch))+P.gravity*dt*.5;s.grounded=false;s.onRail=false;s.jumpBuffer=0;s.hopBoosted=false;
   // The slide remains active through takeoff; gravity alone controls Y.
   s.slideExit=0;
- }
- // One small momentum gain per airborne hop, never a per-frame speed exploit.
- // Crouch-jumping at running speed rewards a forward or strafe input.
- if(!s.grounded&&crouch&&mag&&!s.hopBoosted&&preSpeed>P.sprint*.78&&s.vx*x+s.vz*z>preSpeed*.15){
-  const gain=Math.min(P.bhopCap,preSpeed+.88)/preSpeed;
-  s.vx*=gain;s.vz*=gain;s.hopBoosted=true;
+  if(forwardHop){const gain=Math.min(P.bhopCap,preSpeed+.88)/preSpeed;s.vx*=gain;s.vz*=gain;s.hopBoosted=true;}
  }
  const speedBeforeMove=Math.hypot(s.vx,s.vz),sliding=s.slideTime>0&&speedBeforeMove>P.walk;
  if(s.grounded||sliding){
@@ -109,7 +108,15 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
    const exitWish=exit?(sprint?P.sprint:P.walk)*(heavy?.85:1):wish;
    if(mag)accelerate(s,x,z,exitWish,P.groundAccel,dt);
   }
- }else if(mag){if(duck)steerHop(s,x,z,dt);accelerate(s,x,z,P.airWish,P.airAccel,dt);}
+ }else if(mag){
+  const before=Math.hypot(s.vx,s.vz);
+  if(duck&&!(keys.has('KeyA')&&keys.has('KeyD')))steerHop(s,x,z,dt);
+  accelerate(s,x,z,P.airWish,P.airAccel,dt);
+  // Preserve normal low-speed air control; fast movement and crouched air
+  // steering may redirect existing momentum but cannot manufacture it.
+  const cap=crouch?Math.max(before,P.airWish):Math.max(before,P.sprint*.78);
+  const after=Math.hypot(s.vx,s.vz);if(after>cap){s.vx*=cap/after;s.vz*=cap/after;}
+ }
  const speed=Math.hypot(s.vx,s.vz);if(speed>P.bhopCap){s.vx*=P.bhopCap/speed;s.vz*=P.bhopCap/speed;}
  const ox=s.x,oz=s.z,wasGrounded=s.grounded;
  const slices=Math.max(1,Math.ceil(Math.hypot(s.vx,s.vz)*dt/.035));for(let i=0;i<slices;i++)solve(s,blocks,s.vx*dt/slices,s.vz*dt/slices,surface);
