@@ -49,6 +49,12 @@ function penetration(s,blocks,x=s.x,z=s.z){
 }
 function recoverOverlap(s,blocks,dt){
  const old=penetration(s,blocks);if(!old.size){s.collisionRecovery=false;return false;}
+ // A valid low step/ramp seam is not a deep overlap. Allow the original
+ // bounded step-up if the entire capsule fits at the accessible support.
+ if(s.grounded){
+  const y=s.y,top=Math.max(y,...[...old.keys()].map(b=>supportTop(b,s.x,s.z)).filter(h=>h<=y+P.stepHeight));
+  if(top>y){s.y=top;if(!penetration(s,blocks).size){s.collisionRecovery=false;return false;}s.y=y;}
+ }
  s.collisionRecovery=true;const total=[...old.values()].reduce((a,b)=>a+b,0);
  const step=Math.min(.055,3*dt);let best=null,score=total;
  // Search only a local ring; no arbitrary destination or floor change.
@@ -142,10 +148,10 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
   const after=Math.hypot(s.vx,s.vz);if(after>cap){s.vx*=cap/after;s.vz*=cap/after;}
  }
  const speed=Math.hypot(s.vx,s.vz);if(speed>P.bhopCap){s.vx*=P.bhopCap/speed;s.vz*=P.bhopCap/speed;}
- const ox=s.x,oz=s.z,wasGrounded=s.grounded;
+ const ox=s.x,oy=s.y,oz=s.z,wasGrounded=s.grounded;
  const slices=Math.max(1,Math.ceil(Math.hypot(s.vx,s.vz)*dt/.035));for(let i=0;i<slices;i++)solve(s,blocks,s.vx*dt/slices,s.vz*dt/slices,surface);
  // Bound the whole tick too, rather than accumulating solver pushes per slice.
- if(Math.hypot(s.x-ox,s.z-oz)>speed*dt+.018){s.x=ox;s.z=oz;s.vx=s.vz=0;}
+ if(Math.hypot(s.x-ox,s.z-oz)>speed*dt+.018){s.x=ox;s.y=oy;s.z=oz;s.vx=s.vz=0;}
  s.steps+=Math.hypot(s.x-ox,s.z-oz);
  const old=s.y;s.vy-=P.gravity*dt;let next=old+s.vy*dt;
  let floor=surface(s.x,s.z,old);
