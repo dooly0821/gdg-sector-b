@@ -113,7 +113,7 @@ function recoverOverlap(s,blocks,dt,keys,surface){
   for(let i=0;i<16;i++){const a=i*Math.PI/8,dx=Math.cos(a),dz=Math.sin(a),x=s.x+dx*distance,z=s.z+dz*distance,v=valid(x,z);if(v===null||v>=total-1e-6)continue;const score=v-(dx*ix+dz*iz)*.001;if(score<bestScore){best=[x,z];bestScore=score;}}
  }
  // A plateau or local minimum must not become an infinite input lock.
- if(!best||s.escapeStall>.22){
+ if(s.escapeRoute?.length||!best||s.escapeStall>.22){
   if(!s.escapeRoute?.length&&!s.escapeRetry){s.escapeRoute=escapeRoute(s,blocks,old,ix,iz);s.escapeRetry=.25;}
   const goal=s.escapeRoute?.[0];
   if(goal){const dx=goal[0]-s.x,dz=goal[1]-s.z,len=Math.hypot(dx,dz),r=Math.min(1,distance/Math.max(len,1e-9)),x=s.x+dx*r,z=s.z+dz*r;

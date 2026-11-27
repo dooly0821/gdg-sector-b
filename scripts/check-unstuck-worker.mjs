@@ -17,7 +17,7 @@ for(const hz of [60,120]){
  // route around the end without crossing a third, initially clear barrier.
  const trap=[[-1,8,-.17,12,0,3],[.17,8,1,12,0,3]],barrier=[-.15,11.1,.15,11.3,0,3],s=make();
  let escaped=false;for(let i=0;i<hz*4;i++){const x=s.x,z=s.z;move(s,idle,[...trap,barrier],dt,false,flat);assert(!overlap(s,barrier),'cannot enter new solid');assert(Math.hypot(s.x-x,s.z-z)<=3*dt+1e-6);if(!trap.some(b=>overlap(s,b))){escaped=true;break;}}
- assert(escaped,'route finds open end of narrow pinch');
+ assert(escaped,'route finds open end of narrow pinch '+JSON.stringify({x:s.x,y:s.y,z:s.z,route:s.escapeRoute,stall:s.escapeStall}));
  const low=[[-.4,9.5,.4,10.5,0,.7]],j=make();
  for(let i=0;i<hz*2;i++){move(j,w,low,dt,i===0,flat);if(!low.some(b=>overlap(j,b)))break;}
  assert(!low.some(b=>overlap(j,b)),'jump or move out of low crate');
