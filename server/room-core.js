@@ -123,7 +123,7 @@ export function tickRoom(room,now=Date.now()){
   const active=live(room);if(!active.length){room.phase='failed';break;}
   const ss=active.map(p=>attach(room,p));advanceLockers(q,dt,ss);
   for(const p of active){
-   const s=attach(room,p);const stale=now-(p.lastInputAt??p.lastSeen);if(stale>650){p.input.keys=[];p.jump=false;}
+   const s=attach(room,p);const stale=now-(p.lastInputAt??p.lastSeen);if(stale>650){p.input.keys=[];p.jump=false;s.slideRequested=false;}
    s.netHitProtected=stale>500||wallDelta>.30||due>.50;s.yaw=p.input.yaw;s.pitch=p.input.pitch;
    step(s,new Set(p.input.keys),blocks,dt,p.jump);p.jump=false;
    updateViewmodel(s,dt);
