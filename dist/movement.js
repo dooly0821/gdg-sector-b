@@ -1,6 +1,6 @@
 import {nearbyBlocks} from './contact.js';
 // Original, Source-inspired movement controller. All units are metres/seconds.
-export const PHYSICS=Object.freeze({hz:120,walk:4.5,sprint:7,groundAccel:11,friction:7,stopSpeed:1.7,airAccel:22,airWish:2.65,hopTurn:3.35,bhopCap:13.4,gravity:18,jump:Math.sqrt(2*18*1.2),jumpHeight:1.2,crouchJumpHeight:1.0,hopHeightBonus:.35,slideExit:.24,slideTurn:2.2,slideDuration:.8,slideRecovery:.4,radius:.255,height:1.70,stepHeight:.25,groundSnap:.16,jumpBuffer:.18,skin:.001});
+export const PHYSICS=Object.freeze({hz:120,walk:4.5,sprint:7,groundAccel:11,friction:7,stopSpeed:1.7,airAccel:22,airWish:2.65,hopTurn:24,bhopCap:13.4,gravity:18,jump:Math.sqrt(2*18*1.2),jumpHeight:1.2,crouchJumpHeight:1.0,hopHeightBonus:.35,slideExit:.24,slideTurn:2.2,slideDuration:.8,slideRecovery:.4,radius:.255,height:1.70,stepHeight:.25,groundSnap:.16,jumpBuffer:.18,skin:.001});
 const P=PHYSICS,clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const bounds=[[-16,-23,-14.79,12,-10,20],[-16,16,-14.79,23,-10,20],[14.55,-23,16,23,-10,20],[-16,-23,16,-21.4,-10,20],[-16,21.4,-3,22.15,-10,20],[3,21.4,16,22.15,-10,20],[11,-20,14.9,7,3.12,3.6]];
 function contact(x,z,b,r){const [a,c,d,e]=b;const qx=clamp(x,a,d),qz=clamp(z,c,e),dx=x-qx,dz=z-qz,len=Math.hypot(dx,dz);if(len>=r)return null;if(len>1e-8)return [dx/len,dz/len,r-len];const sides=[[x-a,-1,0],[d-x,1,0],[z-c,0,-1],[e-z,0,1]].sort((a,b)=>a[0]-b[0]);return [sides[0][1],sides[0][2],r+sides[0][0]];}
@@ -184,6 +184,7 @@ export function jumpHeightFor(speed,duck=false){return (duck?P.crouchJumpHeight:
 function steerHop(s,x,z,dt,turn=P.hopTurn){
  const speed=Math.hypot(s.vx,s.vz);if(speed<2.5)return;
  const current=Math.atan2(s.vx,s.vz),goal=Math.atan2(x,z),angle=Math.atan2(Math.sin(goal-current),Math.cos(goal-current));
+ if(turn===P.hopTurn&&Math.abs(angle)>.12)s.hopTurnGrace=.22;
  const next=current+clamp(angle,-turn*dt,turn*dt);
  s.vx=Math.sin(next)*speed;s.vz=Math.cos(next)*speed;
 }
@@ -198,7 +199,7 @@ function advanceVertical(s,blocks,dt,surface,wasGrounded,existing=null){
  s.onRail=s.grounded&&blocks.some(b=>railSupport(b,s.x,s.z)&&Math.abs(railTop(b,s.x,s.z)-s.y)<.035);
 }
 export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
- if(dt<=0)return;s.vx??=0;s.vz??=0;s.jumpBuffer??=0;
+ if(dt<=0)return;s.vx??=0;s.vz??=0;s.jumpBuffer??=0;s.hopTurnGrace=Math.max(0,(s.hopTurnGrace??0)-dt);
  const crouch=keys.has('KeyC'),pressed=keys.has('KeyV')&&!s.wasSlideKey||s.slideRequested;s.wasSlideKey=keys.has('KeyV');s.slideRequested=false;
  const wasSliding=(s.slideTime??0)>0;
  s.slideCooldown=Math.max(0,(s.slideCooldown??0)-dt);s.slideTime=Math.max(0,(s.slideTime??0)-dt);s.slideExit=Math.max(0,(s.slideExit??0)-dt);
@@ -249,17 +250,24 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
    if(mag)accelerate(s,x,z,exitWish,P.groundAccel,dt);
   }
  }else if(mag){
-  const before=Math.hypot(s.vx,s.vz);
-  if(duck&&!(keys.has('KeyA')&&keys.has('KeyD')))steerHop(s,x,z,dt);
-  accelerate(s,x,z,P.airWish,P.airAccel,dt);
+  const before=Math.hypot(s.vx,s.vz),hopControl=(crouch||s.hopBoosted)&&before>=2.5;
+  // Redirect the existing momentum, without a new acceleration bonus.
+  if(hopControl){
+   if(up<0&&!side&&(s.vx*x+s.vz*z)<0){const brake=Math.max(0,1-2*dt);s.vx*=brake;s.vz*=brake;}
+   steerHop(s,x,z,dt);
+  }
+  const redirected=Math.hypot(s.vx,s.vz);
+  if(!hopControl)accelerate(s,x,z,P.airWish,P.airAccel,dt);
   // Preserve normal low-speed air control; fast movement and crouched air
   // steering may redirect existing momentum but cannot manufacture it.
-  const cap=crouch?Math.max(before,P.airWish):Math.max(before,P.sprint*.78);
+  const cap=hopControl?Math.max(redirected,P.airWish):crouch?Math.max(before,P.airWish):Math.max(before,P.sprint*.78);
   const after=Math.hypot(s.vx,s.vz);if(after>cap){s.vx*=cap/after;s.vz*=cap/after;}
  }
  const rawSpeed=Math.hypot(s.vx,s.vz);if(rawSpeed>P.bhopCap){s.vx*=P.bhopCap/rawSpeed;s.vz*=P.bhopCap/rawSpeed;}const speed=Math.min(rawSpeed,P.bhopCap);
  const ox=s.x,oy=s.y,oz=s.z,wasGrounded=s.grounded;
- const slices=Math.max(1,Math.ceil(Math.hypot(s.vx,s.vz)*dt/.035));for(let i=0;i<slices;i++)solve(s,blocks,s.vx*dt/slices,s.vz*dt/slices,surface);
+ // Limit repeated sweep checks to reachable colliders; keep full recovery/support geometry.
+ const reach=P.radius+speed*dt+.035,local=blocks.filter(b=>b[0]<=ox+reach&&b[2]>=ox-reach&&b[1]<=oz+reach&&b[3]>=oz-reach);
+ const slices=Math.max(1,Math.ceil(Math.hypot(s.vx,s.vz)*dt/.035));for(let i=0;i<slices;i++)solve(s,local,s.vx*dt/slices,s.vz*dt/slices,surface);
  // Bound the whole tick too, rather than accumulating solver pushes per slice.
  if(Math.hypot(s.x-ox,s.z-oz)>speed*dt+.018){s.x=ox;s.y=oy;s.z=oz;s.vx=s.vz=0;}
  s.steps+=Math.hypot(s.x-ox,s.z-oz);
