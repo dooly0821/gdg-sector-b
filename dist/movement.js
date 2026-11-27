@@ -144,7 +144,7 @@ function candidateStep(s,blocks,dx,dz,surface){
  const oldX=s.x,oldZ=s.z,oldY=s.y;s.x+=dx;s.z+=dz;
  // Only allow a step if the top is accessible and the full body fits.
  if(s.grounded){let top=surface(s.x,s.z,s.y);for(const b of blocks){if(b[6]==='stair-ramp'&&contact(s.x,s.z,b,P.radius-.035)){const h=stairTop(b,s.x,s.z);if(h<=s.y+P.stepHeight)top=Math.max(top,h);}else if(b[6]!=='rail'&&b[6]!=='stair-ramp'&&b[5]>s.y+.012&&b[5]<=s.y+P.stepHeight&&contact(s.x,s.z,b,P.radius+.005))top=Math.max(top,b[5]);else if(railSupport(b,s.x,s.z)&&railSupport(b,oldX,oldZ)&&Math.abs(railTop(b,oldX,oldZ)-oldY)<.20){const h=railTop(b,s.x,s.z);if(h<=s.y+P.stepHeight)top=Math.max(top,h);}}
-  if(top>s.y&&top-s.y<=P.stepHeight&&!blocks.some(b=>overlaps(top,b,s.z,s.x,s.bodyHeight)&&contact(s.x,s.z,b,P.radius)))s.y=top;
+  if(top>s.y&&top-s.y<=P.stepHeight&&!blocks.some(b=>overlaps(top,b,s.z,s.x,s.bodyHeight)&&contact(s.x,s.z,b,P.radius-.002)))s.y=top;
  }
 
  const result=[s.x,s.y,s.z];s.x=oldX;s.y=oldY;s.z=oldZ;return result;
@@ -190,7 +190,7 @@ function steerHop(s,x,z,dt,turn=P.hopTurn){
 function advanceVertical(s,blocks,dt,surface,wasGrounded,existing=null){
  const old=s.y;s.vy-=P.gravity*dt;let next=old+s.vy*dt;
  let floor=surface(s.x,s.z,old);
- for(const b of blocks){if(!contact(s.x,s.z,b,P.radius-.035))continue;const top=supportTop(b,s.x,s.z);if((b[6]!=='rail'||railSupport(b,s.x,s.z))&&top<=old+(s.vy<=0?.065:.025)&&top>=floor&&!blocks.some(c=>c!==b&&!existing?.has(c)&&overlaps(top,c,s.z,s.x,s.bodyHeight)&&contact(s.x,s.z,c,P.radius)))floor=top;
+ for(const b of blocks){if(!contact(s.x,s.z,b,P.radius-.035))continue;const top=supportTop(b,s.x,s.z);if((b[6]!=='rail'||railSupport(b,s.x,s.z))&&top<=old+(s.vy<=0?.065:.025)&&top>=floor&&!blocks.some(c=>c!==b&&!existing?.has(c)&&overlaps(top,c,s.z,s.x,s.bodyHeight)&&contact(s.x,s.z,c,P.radius-.002)))floor=top;
   const span=b[7]?heightSpan(b,s.x,s.z):0;
   const bottom=Math.min(blockHeight(b,s.z-span,0),blockHeight(b,s.z+span,0));
   if(s.vy>0&&old+s.bodyHeight<=bottom+.012&&next+s.bodyHeight>=bottom){next=Math.min(next,bottom-s.bodyHeight-.002);s.vy=0;}}
