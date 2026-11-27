@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import {emitSignal,signalReady,signalForActor} from '../dist/facility-actions.js';
-import {activeSignal,signalPower,visibleSignalPoint} from '../dist/signal-feedback.js';
+import {activeSignal,signalPower,signalRainbow,visibleSignalPoint} from '../dist/signal-feedback.js';
 const s={x:0,y:0,z:10,yaw:0,pitch:-.1,bodyHeight:1.7,flashlight:true,elapsed:4,id:'worker'};
 const sig=emitSignal(s,s,[]);assert(sig&&Number.isFinite(sig.y));assert.equal(sig.until-sig.start,2);assert.equal(signalReady(s),12);assert.equal(activeSignal(s),sig);
 assert(signalPower(sig,4)>2&&signalPower(sig,4.5)>1&&signalPower(sig,4.5)<signalPower(sig,4));assert.equal(signalPower(sig,6),1);
+assert.deepEqual(signalRainbow(null,4),[0,0]);assert.deepEqual(signalRainbow(sig,3.99),[0,0]);assert.equal(signalRainbow(sig,4)[1],1);assert(signalRainbow(sig,4.5)[0]>.5);assert.equal(signalRainbow(sig,4.5,true)[0],0);assert(signalRainbow(sig,5.9)[1]<1);assert.deepEqual(signalRainbow(sig,6),[0,0]);
 const eye=[0,1.58,10],pt=[sig.x,sig.y,sig.z];assert.deepEqual(visibleSignalPoint(sig,eye,[]),pt);
 const mid=(sig.z+10)/2;assert.equal(visibleSignalPoint(sig,eye,[[-1,mid-.1,1,mid+.1,0,4]]),null);
 assert.equal(visibleSignalPoint({...sig,x:40},eye,[]),null);

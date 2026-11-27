@@ -63,7 +63,7 @@ void main(){
 const fs=`#version 300 es
 precision highp float;precision highp sampler2DArray;
 in vec3 P,N;in vec2 UV,tile;in vec4 C,Q,shadowPos;
-uniform sampler2DArray atlas;uniform sampler2D shadowMap,floorTex,skinBase,skinEmission;uniform bool skinActive,fpActive;uniform vec2 fpFactors;uniform vec3 eye,lamps[8];uniform float lampRed[8];uniform float shadowStep,hand,clock,torchPower,clay,character,actorOpacity,gridPower,lowCostShadow;uniform vec3 torchPos,torchDir,core;uniform vec4 footprints[2],cargoGlow;uniform float rescueGlow;uniform float zonePowers[8];uniform float renderLite;
+uniform sampler2DArray atlas;uniform sampler2D shadowMap,floorTex,skinBase,skinEmission;uniform bool skinActive,fpActive;uniform vec2 fpFactors;uniform vec3 eye,lamps[8];uniform float lampRed[8];uniform float shadowStep,hand,clock,torchPower,clay,character,actorOpacity,gridPower,lowCostShadow;uniform vec3 torchPos,torchDir,core;uniform vec2 torchRainbow;uniform vec4 footprints[2],cargoGlow;uniform float rescueGlow;uniform float zonePowers[8];uniform float renderLite;
  int zoneAt(vec3 p){return p.z>=78.?(p.x< -15.?6:7):p.z>=54.?(p.x< -15.?4:5):p.z>=22.?(p.x< -15.?2:3):(p.x< -15.?1:0);}
 out vec4 outColor;
 float visibility(vec3 n){
@@ -113,7 +113,14 @@ void main(){
   vec3 delta=P-torchPos;float d=length(delta);vec3 ray=delta/max(d,.001);
   float spot=smoothstep(.87,.975,dot(ray,torchDir));
   float atten=25./(d*d+2.5);float diffuse=max(dot(n,-ray),0.);
-  lit+=vec3(1.,.88,.67)*torchPower*spot*atten*(.08+.92*diffuse);
+  vec3 torchTint=vec3(1.,.88,.67);
+  if(torchRainbow.y>0.001){
+   // Chromatic rings travel across the existing beam, not the whole screen.
+   float hue=fract(torchRainbow.x+(1.-spot)*1.35);
+   vec3 rgb=clamp(abs(fract(hue+vec3(0.,.666667,.333333))*6.-3.)-1.,0.,1.);
+   torchTint=mix(torchTint,mix(vec3(.22),rgb,.88),torchRainbow.y);
+  }
+  lit+=torchTint*torchPower*spot*atten*(.08+.92*diffuse);
   if(renderLite<.5)sheen+=pow(max(dot(n,normalize(v-ray)),0.),25.)*spot*atten*Q.y*.2*torchPower;
  }
  if(hand<.5&&n.y>.65&&P.y<.25){
@@ -178,7 +185,7 @@ export class Renderer{
  constructor(canvas){
   this.canvas=canvas;this.gl=canvas.getContext('webgl2',{alpha:false,antialias:true,powerPreference:'high-performance'});if(!this.gl)throw Error('WebGL 2 is unavailable. Enable graphics acceleration in desktop Chrome, then reload.');
   const gl=this.gl;this.program=compile(gl,vs,fs);this.depthProgram=compile(gl,vs,depthFS);
-  this.loc={};for(let p of [this.program,this.depthProgram]){let u={};for(let k of ['VP','offset','lightVP','worldObject','objectMatrix','clock','core','clay','character','actorOpacity','atlas','shadowMap','floorTex','eye','lamps','lampRed[0]','shadowStep','hand','torchPower','torchPos','torchDir','flexPivot','flexForward','flexNormal','flexWidth','flexAmount','digitWidths','knuckles','digitLengths','fingerAmounts','footprints[0]','skinActive','skinBones[0]','skinBase','skinEmission','fpActive','fpFactors','gridPower','zonePowers[0]','lowCostShadow','renderLite','cargoGlow','rescueGlow'])u[k]=gl.getUniformLocation(p,k);u.skinBones=u['skinBones[0]'];this.loc[p===this.program?'main':'depth']=u;}
+  this.loc={};for(let p of [this.program,this.depthProgram]){let u={};for(let k of ['VP','offset','lightVP','worldObject','objectMatrix','clock','core','clay','character','actorOpacity','atlas','shadowMap','floorTex','eye','lamps','lampRed[0]','shadowStep','hand','torchPower','torchPos','torchDir','torchRainbow','flexPivot','flexForward','flexNormal','flexWidth','flexAmount','digitWidths','knuckles','digitLengths','fingerAmounts','footprints[0]','skinActive','skinBones[0]','skinBase','skinEmission','fpActive','fpFactors','gridPower','zonePowers[0]','lowCostShadow','renderLite','cargoGlow','rescueGlow'])u[k]=gl.getUniformLocation(p,k);u.skinBones=u['skinBones[0]'];this.loc[p===this.program?'main':'depth']=u;}
   this.buffers={};
   const lv=cameraView([-8,88,25],[-10,-88,5]);const ortho=new Float32Array([1/50,0,0,0,0,1/70,0,0,0,0,-2/180,0,0,0,-1,1]);this.lightVP=multiply(ortho,lv);
  }
@@ -297,7 +304,7 @@ export class Renderer{
   // to avoid placing a light source on the far side of a wall.
   const local=pose.torchLocal?.position??[.325,-.283,-.887],dir=pose.torchLocal?.direction??[-.045,-.025,-1];
   const torch=eye.map((v,i)=>v+right[i]*(local[0]+off[0])+up[i]*(local[1]+off[1])-forward[i]*(local[2]+off[2]));
-  gl.uniform3fv(u.torchPos,torch);gl.uniform3fv(u.torchDir,unit(forward.map((v,i)=>v*(-dir[2])+right[i]*dir[0]+up[i]*dir[1])));gl.uniform1f(u.torchPower,pose.flashlight||0);const lampScore=l=>Math.hypot(l[0]-eye[0],l[2]-eye[2])+(1-(pose.gridPower??1))*(l[3]?0:16);const lights=this.lights.map(l=>({l,score:lampScore(l)})).sort((a,b)=>a.score-b.score).slice(0,8).map(v=>v.l);
+  gl.uniform3fv(u.torchPos,torch);gl.uniform3fv(u.torchDir,unit(forward.map((v,i)=>v*(-dir[2])+right[i]*dir[0]+up[i]*dir[1])));gl.uniform1f(u.torchPower,pose.flashlight||0);gl.uniform2fv(u.torchRainbow,pose.torchRainbow??[0,0]);const lampScore=l=>Math.hypot(l[0]-eye[0],l[2]-eye[2])+(1-(pose.gridPower??1))*(l[3]?0:16);const lights=this.lights.map(l=>({l,score:lampScore(l)})).sort((a,b)=>a.score-b.score).slice(0,8).map(v=>v.l);
   while(lights.length<8)lights.push([0,10000,0,0]);
   gl.uniform3fv(u.lamps,new Float32Array(lights.flatMap(l=>l.slice(0,3))));gl.uniform1fv(u['lampRed[0]'],new Float32Array(lights.map(l=>l[3]??0)));
   const footprints=(pose.actors??[]).flatMap(actor=>actor.footprint?[actor.footprint]:[]).slice(0,2);
