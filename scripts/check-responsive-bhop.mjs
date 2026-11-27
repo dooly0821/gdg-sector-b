@@ -11,7 +11,7 @@ for(const hz of [60,120]){
   move(s,hold,[],dt,false,flat);assert(angle(s,...target)<Math.abs(turn)-.05,'first tick turns');
   for(let i=1;i<Math.ceil((Math.abs(turn)/P.hopTurn+.02)*hz);i++)move(s,hold,[],dt,false,flat);
   assert(angle(s,...target)<.015,'fast aligned turn '+turn+' '+hz);
-  assert(Math.abs(speed(s)-entry)<1e-7,'turn keeps speed without boosting');
+  assert(Math.abs(speed(s)-entry)<1e-7,'turn keeps speed without boosting '+JSON.stringify({entry,turn,hz,speed:speed(s)}));
  }
  const side=make();for(let i=0;i<Math.ceil(.1*hz);i++)move(side,new Set(['KeyD','KeyC']),[],dt,false,flat);
  assert(angle(side,1,0)<.015&&Math.abs(speed(side)-10)<1e-7);
@@ -25,6 +25,6 @@ for(const count of [2,3,4]){
  for(const p of Object.values(room.players)){Object.assign(p.state,{x:0,z:10,y:1,grounded:false,vx:0,vz:-10,vy:0});}
  for(const token of tokens)operateRoom(room,{op:'sync',token,inputSeq:1,input:{keys:['KeyW','KeyC'],yaw:Math.PI/2,pitch:0}},t);
  t+=100;tickRoom(room,t);
- for(const p of Object.values(room.players)){const s=snapshot(room,p).self;assert(angle(s,-1,0)<.02&&Math.abs(speed(s)-10)<1e-6,'server turn '+count);}
+ for(const p of Object.values(room.players)){const s=snapshot(room,p).self;assert(angle(s,-1,0)<.02&&Math.abs(speed(s)-10)<1e-6,'server turn '+count+' '+JSON.stringify({x:s.x,y:s.y,z:s.z,vx:s.vx,vz:s.vz}));}
  console.log('PASS authoritative bhop direction change '+count+' players');
 }

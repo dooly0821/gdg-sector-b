@@ -257,7 +257,7 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
    steerHop(s,x,z,dt);
   }
   const redirected=Math.hypot(s.vx,s.vz);
-  accelerate(s,x,z,P.airWish,P.airAccel,dt);
+  if(!hopControl)accelerate(s,x,z,P.airWish,P.airAccel,dt);
   // Preserve normal low-speed air control; fast movement and crouched air
   // steering may redirect existing momentum but cannot manufacture it.
   const cap=hopControl?Math.max(redirected,P.airWish):crouch?Math.max(before,P.airWish):Math.max(before,P.sprint*.78);
