@@ -29,8 +29,8 @@ import {Renderer} from './renderer.js';
 const $=s=>document.querySelector(s),canvas=$('#world'),keys=new Set(),icon=i=>'<svg aria-hidden="true"><use href="#i-'+i+'"/></svg>';
 let coop=null,soloSession=null,coopStarting=false,coopEnding=false,coopEventSeq=0,coopError='',coopBusy=false;
 let spectateId=null,spectateCamera=null;
-let chatOpen=false,chatComposing=false,chatCompositionEnd=-1e6,chatHideTimer=null,chatRecent=false,chatPendingText=null;
-const teamChat=new TeamChatClient((client,fresh)=>{if(fresh){chatRecent=true;clearTimeout(chatHideTimer);chatHideTimer=setTimeout(()=>{chatRecent=false;renderTeamChat();},8000);}renderTeamChat();});
+let chatOpen=false,chatComposing=false,chatCompositionEnd=-1e6,chatHideTimer=null,chatRecent=false,chatPendingText=null;const chatHeldKeys=new Set();
+const teamChat=new TeamChatClient((client,fresh)=>{if(fresh){chatRecent=true;clearTimeout(chatHideTimer);chatHideTimer=setTimeout(()=>{chatRecent=false;renderTeamChat();},8000);}renderTeamChat();},{active:()=>chatOpen||chatRecent});
 let coopListTimer=null,coopListGeneration=0,coopListBusy=false,coopNickname='',selectedServer=null,visibleServers=[];
 try{coopNickname=localStorage.getItem('gdg.nickname')??'';}catch{}
 let mode='menu',pane='',session=null,renderer,worlds,setupPromise,raf,last=0,drag=false,grabbing=false,lookReady=0,radioUntil=0,jump=false,accumulator=0;
@@ -477,11 +477,11 @@ function renderTeamChat(){
  if(list.dataset.signature!==signature){
   list.dataset.signature=signature;list.replaceChildren(...messages.map(m=>{const line=document.createElement('div'),name=document.createElement('b'),text=document.createElement('span');name.textContent=m.name+(m.player===teamChat.you?' (나)':'')+' : ';text.textContent=m.text;line.classList.toggle('chat-self',m.player===teamChat.you);line.append(name,text);return line;}));list.scrollTop=list.scrollHeight;
  }
- list.hidden=!chatOpen&&!messages.length;$('#team-chat-send').disabled=teamChat.sending;
+ list.hidden=!chatOpen&&!messages.length;$('#team-chat-send').disabled=teamChat.sending||teamChat.disabled;
 }
 function openTeamChat(){
- if(chatOpen||mode!=='game'||!coopStarting||!teamChat.room)return false;
- chatOpen=true;chatComposing=false;chatCompositionEnd=-1e6;releaseGameInput();renderTeamChat();
+ if(chatOpen||mode!=='game'||!coopStarting||!teamChat.room||teamChat.disabled)return false;
+ chatOpen=true;chatComposing=false;chatCompositionEnd=-1e6;chatHeldKeys.clear();releaseGameInput();renderTeamChat();
  if(document.pointerLockElement===canvas)document.exitPointerLock();
  $('#team-chat-input').focus({preventScroll:true});return true;
 }
@@ -490,10 +490,10 @@ function closeTeamChat(relock=true){
  if(relock&&mode==='game'&&!session?.failed){canvas.focus({preventScroll:true});lock();}
  else $('#team-chat-input').blur();
 }
-function resetTeamChat(){closeTeamChat(false);chatRecent=false;clearTimeout(chatHideTimer);chatPendingText=null;teamChat.stop();$('#team-chat-input').value='';}
+function resetTeamChat(){closeTeamChat(false);chatHeldKeys.clear();chatRecent=false;clearTimeout(chatHideTimer);chatPendingText=null;teamChat.stop();$('#team-chat-input').value='';}
 function submitTeamChat(){
  const field=$('#team-chat-input'),text=field.value.trim();
- if(chatComposing||teamChat.sending||!text||Array.from(text).length>100)return;
+ if(!chatOpen||chatComposing||performance.now()-chatCompositionEnd<85||teamChat.sending||teamChat.disabled)return;if(!text){closeTeamChat();return;}if(Array.from(text).length>100){teamChat.status='메시지는 100자 이내로 입력하세요.';renderTeamChat();return;}
  const generation=teamChat.generation;chatPendingText=text;closeTeamChat();
  teamChat.send(text).then(ok=>{if(generation===teamChat.generation&&ok&&field.value.trim()===text)field.value='';if(generation===teamChat.generation)chatPendingText=null;});
 }
@@ -502,12 +502,15 @@ $('#team-chat-input').addEventListener('compositionstart',()=>chatComposing=true
 $('#team-chat-input').addEventListener('compositionend',()=>{chatComposing=false;chatCompositionEnd=performance.now();});
 document.addEventListener('keydown',e=>{
  if(chatOpen){
+  if(e.code&&e.code!=='Enter'&&e.code!=='Escape')chatHeldKeys.add(e.code);
   if(chatCompositionKey(e,chatComposing,chatCompositionEnd))return;
+  if(e.code==='Tab'){e.preventDefault();const field=$('#team-chat-input'),button=$('#team-chat-send');if(document.activeElement===field&&!button.disabled)button.focus();else field.focus();return;}
   if(e.code==='Escape'){e.preventDefault();closeTeamChat();return;}
   if(e.code==='Enter'){e.preventDefault();if(!e.repeat)submitTeamChat();return;}
   return;
  }
- if(mode==='game'&&coopStarting&&e.code==='Enter'&&!e.repeat&&teamChat.room){e.preventDefault();openTeamChat();return;}
+ if(chatHeldKeys.has(e.code)){if(e.repeat){e.preventDefault();return;}chatHeldKeys.delete(e.code);}
+ if(mode==='game'&&coopStarting&&e.code==='Enter'&&!e.repeat&&teamChat.room&&!teamChat.disabled){e.preventDefault();openTeamChat();return;}
  if(e.code==='Enter'&&!$('#modal').hidden&&pane==='coop'&&!coop&&document.activeElement?.id==='coop-nickname'){e.preventDefault();if(selectedServer)coopConnect(selectedServer);return;}
  if(e.code==='Escape'){if(e.repeat)return;e.preventDefault();if(mode==='game'){pauseShift();}else if(!$('#modal').hidden){closePane();}return;}
  if(mode==='game'&&blockGameplayShortcut(e)){e.preventDefault();e.stopPropagation();return;}
@@ -517,7 +520,7 @@ document.addEventListener('keydown',e=>{
  if(e.code==='KeyV'){e.preventDefault();if(!e.repeat){session.slideRequested=true;if(coopStarting&&coop)coop.command('slide');}return;}
  if(e.code==='KeyF'){e.preventDefault();if(!e.repeat){if(coopStarting&&coop)coop.command('signal');else if(!closedLocker(session)&&emitSignal(session,session,worlds[0].blocks.concat(lockerDoorBlocks(session)))){lureJingle();say('디스코 유인 신호 전송 · 12초 대기',2.5);}else say(signalReady(session)>0?'유인 신호 재사용 대기 중':'손전등을 켜고 열린 공간을 조준하세요.',2);}return;}
  if(e.code==='KeyQ'&&!e.repeat){if(coopStarting&&coop){coop.command('torch');return;}if(session.handAction){session.restoreTorch=!session.restoreTorch;return;}if(toggleFlashlight(session)){session.pendingUse=false;session.restoreTorch=false;beep(180,.055,'triangle',.025);}else say('상자를 집거나 내려놓는 동안에는 장비 전환을 할 수 없습니다.',2);return;}if(e.code==='KeyE'&&!e.repeat){if(coopStarting&&coop){keys.add('KeyE');coop.inputChanged();}use();return;}if(e.code==='Space'&&!e.repeat){jump=true;if(coopStarting&&coop)coop.command('jump');}const changed=!keys.has(e.code);keys.add(e.code);if(changed&&coopStarting&&coop&&['KeyW','KeyA','KeyS','KeyD','KeyC','ShiftLeft','ShiftRight','Space'].includes(e.code))coop.inputChanged();
-});document.addEventListener('keyup',e=>{const changed=keys.delete(e.code);if(changed&&coopStarting&&coop)coop.inputChanged();});
+});document.addEventListener('keyup',e=>{chatHeldKeys.delete(e.code);const changed=keys.delete(e.code);if(changed&&coopStarting&&coop)coop.inputChanged();});
 canvas.addEventListener('wheel',e=>{if(mode==='game'&&!chatOpen){e.preventDefault();if(session?.failed){switchSpectator(e.deltaY>0?1:-1);return;}jump=true;if(coopStarting&&coop)coop.command('jump');}},{passive:false});
 function pointer(e){if(mode!=='game'||chatOpen||session?.failed||(document.pointerLockElement!==canvas&&!drag)||performance.now()<lookReady)return;session.yaw-=mouseDelta(e.movementX,settings.sensitivity);session.yaw=Math.atan2(Math.sin(session.yaw),Math.cos(session.yaw));session.pitch=Math.max(-CONFIG.pitchLimit,Math.min(CONFIG.pitchLimit,session.pitch-mouseDelta(e.movementY,settings.sensitivity)*(settings.invert?-1:1)));if(coopStarting&&coop){const old=session.lastSentLook??[0,0];if(Math.abs(Math.atan2(Math.sin(session.yaw-old[0]),Math.cos(session.yaw-old[0])))>.10||Math.abs(session.pitch-old[1])>.12){session.lastSentLook=[session.yaw,session.pitch];coop.inputChanged();}}}
 document.addEventListener('mousemove',pointer);canvas.addEventListener('mousedown',e=>{if(mode==='game'&&!chatOpen&&!session?.failed&&e.button===0){e.preventDefault();canvas.focus({preventScroll:true});drag=true;lock();}});document.addEventListener('mouseup',()=>drag=false);
