@@ -157,6 +157,7 @@ export function applyCoopSnapshot(s,snap,first=false){
  if(s.handAction&&prevAction&&s.handAction.index===prevAction.index&&s.handAction.placing===prevAction.placing)
   s.handAction={...s.handAction,time:Math.max(s.handAction.time,prevAction.time)};
  if(first)s.flashAmount=v.flashAmount??0;
+ s.threatWarnings=v.threatWarnings??{};if(revived||first){s.warningPaintPending=[];s.warningShown=[];}
  s.signalCooldownUntil=v.signalCooldownUntil??0;s.signalPulseUntil=v.signalPulseUntil??0;
  if(hard){s.slideTime=v.slideTime??0;s.slideCooldown=v.slideCooldown??0;s.slideExit=v.slideExit??0;s.slideRequested=false;}
  s.skipLockerAdvance=true;s.coopPrediction=true;s.coopHidden=hidden;s.id=snap.you;

@@ -1,3 +1,4 @@
+import {updateThreatWarnings,warnedForCapture} from './threat-warning.js';
 import {signalForActor,zonePower} from './facility-actions.js';
 import {expandedLayout,EXTENSION_ROUTES,EXTENSION_HIDE} from './map-layout.js';
 import {DIFFICULTIES,effectiveDifficulty,missionTotal} from './difficulty.js';
@@ -207,6 +208,7 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
  s.haunt??=[];
  if(s.failed)return null;
  updateSpawns(s,blocks,rootForward,dt,rng);
+ updateThreatWarnings(root,team?root.teamPlayers:[root],root.haunt);
  s.hauntCooldown=Math.max(0,(s.hauntCooldown??0)-dt);
  let captured=null;
  s.haunt.forEach(actor=>{
@@ -241,7 +243,7 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
   }
   const hiding=closedLocker(s),entry=hiding?lockerEntry(hiding):null;
   const climb=updateClimber(actor,s,nav,local,dt,!!hiding);
-  if(climb?.handled){if(actor.state==='disappear')return;if(climb.hit&&!s.netHitProtected&&(s.hitProtectedUntil??0)<=root.elapsed){actor.speed=0;captured=type.name;s.handAction=null;s.pendingUse=null;s.vault=null;s.jumpBuffer=0;s.vx=s.vz=s.vy=0;s.failed=true;s.capturedBy=i;}return;}
+  if(climb?.handled){if(actor.state==='disappear')return;if(climb.hit&&!hiding&&!s.failed&&!s.netHitProtected&&(s.hitProtectedUntil??0)<=root.elapsed&&warnedForCapture(s,actor,root.elapsed)){actor.speed=0;captured=type.name;s.handAction=null;s.pendingUse=null;s.vault=null;s.jumpBuffer=0;s.vx=s.vz=s.vy=0;s.failed=true;s.capturedBy=i;}return;}
   const safe=s.grounded&&REFUGES.some(([x,y,z,r])=>Math.abs(s.y-y)<.09&&Math.hypot(s.x-x,s.z-z)<r);
   const pursuit=actor.pursuit??false,torchOn=(s.flashAmount??0)>.25;
   const detectRange=type.range*difficulty.range*1.04*(zonePower(root,s.x,s.z)<.5&&!torchOn?.76:1)*(s.bodyHeight<1.2&&!torchOn?.67:1);
@@ -431,7 +433,7 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
   const vertical=Math.max(0,s.y-strikeHeight,strikeHeight-s.y-(s.bodyHeight??1.70));
   const hitDx=s.x-actor.x,hitDz=s.z-actor.z,hitDist=Math.hypot(hitDx,hitDz);
   const aligned=(Math.sin(actor.yaw)*hitDx+Math.cos(actor.yaw)*hitDz)/Math.max(.001,hitDist);
-  if(!hiding&&!safe&&!s.netHitProtected&&(s.hitProtectedUntil??0)<=root.elapsed&&striking&&(!captured||team)&&actor.age>.65&&actor.timer<.56&&line(local,actor,s)&&aligned>.40&&visible(local,[actor.x,strikeHeight,actor.z],[s.x,clamp(strikeHeight,s.y+.1,s.y+(s.bodyHeight??1.7)-.1),s.z])&&Math.hypot(hitDist,vertical)<armReach[i]&&s.hauntCooldown===0){
+  if(!s.failed&&!hiding&&!safe&&!s.netHitProtected&&(s.hitProtectedUntil??0)<=root.elapsed&&warnedForCapture(s,actor,root.elapsed)&&striking&&(!captured||team)&&actor.age>.65&&actor.timer<.56&&line(local,actor,s)&&aligned>.40&&visible(local,[actor.x,strikeHeight,actor.z],[s.x,clamp(strikeHeight,s.y+.1,s.y+(s.bodyHeight??1.7)-.1),s.z])&&Math.hypot(hitDist,vertical)<armReach[i]&&s.hauntCooldown===0){
    actor.speed=0;captured=type.name;
    s.handAction=null;s.pendingUse=null;s.vault=null;s.jumpBuffer=0;s.vx=s.vz=s.vy=0;s.failed=true;s.capturedBy=i;
   }

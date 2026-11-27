@@ -9,7 +9,7 @@ await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromiu
 try{
  const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  // Inject test-only fixture into the real application module; no production hooks, no game server traffic.
- await page.route('**/app.js*',async route=>{const res=await route.fetch();await route.fulfill({response:res,body:(await res.text())+'\n;window.__uiTest=(name)=>{if(name==="pause"){session=newShift(Math.random,"normal");mode="paused";}else if(name==="failed"){session=newShift(Math.random,"normal");mode="game";failShift("녹령");return;}else{mode="menu";}openPane(name);};'});});
+ await page.route('**/app.js*',async route=>{const res=await route.fetch();await route.fulfill({response:res,body:(await res.text())+'\n;window.__warningTest=()=>{session=newShift();session.x=0;session.z=0;session.yaw=0;session.threatWarnings={a:{id:"a:1",kind:0,x:0,z:3,y:0,distance:3,urgent:true,ackAt:null},b:{id:"b:2",kind:1,x:3,z:0,y:0,distance:3,urgent:true,ackAt:null}};document.querySelector("#modal").hidden=true;document.querySelector("#play").hidden=false;mode="game";renderThreatHud(session);const first=warningList(session).every(w=>w.ackAt==null);renderThreatHud(session);return {first,acked:warningList(session).every(w=>Number.isFinite(w.ackAt)),text:document.querySelector("#threat-directions").textContent,pointer:getComputedStyle(document.querySelector("#threat-warning")).pointerEvents};};window.__uiTest=(name)=>{if(name==="pause"){session=newShift(Math.random,"normal");mode="paused";}else if(name==="failed"){session=newShift(Math.random,"normal");mode="game";failShift("녹령");return;}else{mode="menu";}openPane(name);};'});});
  await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>!!window.__uiTest);
  for(const [w,h] of [[1920,1080],[1366,768],[1157,402],[800,600]]){
   await page.setViewportSize({width:w,height:h});
@@ -23,5 +23,6 @@ try{
    console.log('UI_OK',pane,w,h,JSON.stringify(data));
   }
  }
+ const warning=await page.evaluate(()=>window.__warningTest());assert(warning.first&&warning.acked&&warning.text.includes('뒤쪽')&&warning.text.includes('오른쪽')&&warning.pointer==='none');console.log('UI_THREAT_OK',JSON.stringify(warning));
  assert.deepEqual(errors,[]);
 }finally{await browser.close();await new Promise(r=>server.close(r));}
