@@ -10,7 +10,7 @@ export function updateThreatWarnings(root,players,actors){
    if(a.state==='disappear')continue;
    const prior=old[a.warningId],d=Math.hypot(a.x-p.x,a.z-p.z),dy=(a.surfaceY??0)-p.y;
    if(d>(prior?WARNING_EXIT:WARNING_RADIUS)||Math.abs(dy)>4&&a.state!=='ceilingStalk'&&a.state!=='wallDescent')continue;
-   const w=prior??{id:a.warningId+':'+(p.threatSequence=(p.threatSequence??0)+1),first:now,ackAt:null};
+   const w=prior??{id:(p.id??'solo')+':'+a.warningId+':'+(p.threatSequence=(p.threatSequence??0)+1),first:now,ackAt:null};
    w.kind=a.kind;w.x=a.x;w.z=a.z;w.y=a.surfaceY??0;w.distance=d;w.urgent=d<=4.5;next[a.warningId]=w;
   }
   p.threatWarnings=next;

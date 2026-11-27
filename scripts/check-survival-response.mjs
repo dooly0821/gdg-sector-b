@@ -35,7 +35,7 @@ function ghost(kind,z){
 for(let kind=0;kind<4;kind++)for(const wall of [false,true]){
  const s=ghost(kind,1.5);let result=null;
  for(let i=0;i<600&&!result;i++){s.elapsed+=dt;result=updateHaunt(s,wall?[[-8,.65,8,.75,0,3]]:[],[0,0,-1],dt,()=>.42);acknowledgeWarnings(s,warningList(s).map(w=>w.id),s.elapsed);}
- assert.equal(Boolean(result),!wall);
+ assert.equal(Boolean(result),!wall,'capture kind '+kind+' wall '+wall+' actor '+JSON.stringify(s.haunt[0])+' warnings '+JSON.stringify(s.threatWarnings));
  assert.equal(Boolean(s.failed),!wall);
  assert.ok(!s.encounterHit,'no capture delay');
 }

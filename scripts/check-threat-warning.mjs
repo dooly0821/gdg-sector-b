@@ -14,9 +14,10 @@ for(const level of ['easy','normal','hard','hell'])for(let kind=0;kind<4;kind++)
  let hit=null;for(let i=0;i<600&&!hit;i++){s.elapsed+=dt;hit=updateHaunt(s,empty,forward,dt,()=>.42);if(s.elapsed-received<REACTION_SECONDS)assert(!hit&&!s.failed,'no surprise capture');}
  assert(hit&&s.failed,'ordinary capture still possible '+level+' '+kind);
 }
-const p={x:0,y:0,z:0,yaw:0},q={x:0,y:0,z:25,yaw:0},root={elapsed:0},a=actor(1,0,5);
+const p={id:'p',x:0,y:0,z:0,yaw:0},q={id:'q',x:0,y:0,z:25,yaw:0},root={elapsed:0},a=actor(1,0,5);
 updateThreatWarnings(root,[p,q],[a]);assert.equal(warningList(p).length,1);assert.equal(warningList(q).length,0);
 assert.equal(warningLabel(p,warningList(p)[0]).arrow,'↓');p.yaw=Math.PI;assert.equal(warningLabel(p,warningList(p)[0]).arrow,'↑');
+q.z=0;updateThreatWarnings(root,[p,q],[a]);assert.notEqual(warningList(p)[0].id,warningList(q)[0].id);acknowledgeWarnings(q,[warningList(p)[0].id],0);assert.equal(warningList(q)[0].ackAt,null);
 const old=warningList(p)[0].id;acknowledgeWarnings(p,[old],0);root.elapsed=2;assert(warnedForCapture(p,a,2));
 a.z=20;updateThreatWarnings(root,[p,q],[a]);assert(!warningList(p).length);a.z=5;updateThreatWarnings(root,[p,q],[a]);assert.notEqual(warningList(p)[0].id,old);acknowledgeWarnings(p,[old],2);assert(!warnedForCapture(p,a,4));
 for(const count of [2,3,4]){
