@@ -264,8 +264,8 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
    }
    actor.warningHold=null;actor.state='recovery';actor.timer=.12;actor.strikePoints=null;
   }
-  const climb=updateClimber(actor,s,nav,local,dt,!!hiding||safe);
-  if(climb?.handled){if(actor.state==='disappear')return;if(climb.hit&&!hiding&&!safe&&!s.failed&&!protectedHit()&&warnedForCapture(s,actor,root.elapsed)){captured=type.name;captureWorker(s,actor);}return;}
+  const climb=updateClimber(actor,s,nav,local,dt,!!hiding);
+  if(climb?.handled){if(actor.state==='disappear')return;if(climb.hit&&!hiding&&!s.failed&&!protectedHit()&&warnedForCapture(s,actor,root.elapsed)){captured=type.name;captureWorker(s,actor);}return;}
   const pursuit=actor.pursuit??false,torchOn=(s.flashAmount??0)>.25;
   const detectRange=type.range*difficulty.range*1.04*(zonePower(root,s.x,s.z)<.5&&!torchOn?.76:1)*(s.bodyHeight<1.2&&!torchOn?.67:1);
   const near=dist<5.5,range=pursuit?24+(difficulty.count-1)*2:Math.max(5.5,detectRange);
