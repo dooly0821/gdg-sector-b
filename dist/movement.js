@@ -95,13 +95,21 @@ function recoverOverlap(s,blocks,dt,keys){
  const ix=mag?(Math.cos(yaw)*side-Math.sin(yaw)*up)/mag:0,iz=mag?(-Math.sin(yaw)*side-Math.cos(yaw)*up)/mag:0;
  const distance=Math.min(.055,3*dt),total=[...old.values()].reduce((a,b)=>a+b,0);
  const valid=(x,z)=>{const h=penetration(s,blocks,x,z);if([...h.keys()].some(b=>!old.has(b)))return null;return [...h.values()].reduce((a,b)=>a+b,0);};
- let best=null,bestScore=Infinity;
- // Respect an intentional escape, including tangent motion with equal depth.
- if(mag){const x=s.x+ix*distance,z=s.z+iz*distance,v=valid(x,z);if(v!==null&&v<=total+.00001)best=[x,z];}
- s.escapeRetry=Math.max(0,(s.escapeRetry??0)-dt);
+ let best=null,bestScore=total;
+ // Keep the established shallow-contact recovery for accessible stairs
+ // and ordinary single-collider contacts. Only broaden escape when that
+ // local solver cannot make progress.
+ for(const scale of [1,.5])for(let i=0;i<16;i++){
+  const a=i*Math.PI/8,x=s.x+Math.cos(a)*distance*scale,z=s.z+Math.sin(a)*distance*scale;
+  const next=penetration(s,blocks,x,z);
+  if([...next].some(([b,d])=>!old.has(b)||d>old.get(b)+.001))continue;
+  const sum=[...next.values()].reduce((a,b)=>a+b,0);
+  if(sum<bestScore-1e-6){best=[x,z];bestScore=sum;}
+ }
+ // Opposing contacts can be escaped along a flat tangent, even when
+ // there is no direction which reduces every penetration.
+ if(!best&&mag){const x=s.x+ix*distance,z=s.z+iz*distance,v=valid(x,z);if(v!==null&&v<=total+.00001)best=[x,z];}
  if(!best){
-  // Fast local downhill escape, allowing one existing overlap to deepen
-  // slightly if the total penetration decreases (opposing normals).
   for(let i=0;i<16;i++){const a=i*Math.PI/8,dx=Math.cos(a),dz=Math.sin(a),x=s.x+dx*distance,z=s.z+dz*distance,v=valid(x,z);if(v===null||v>=total-1e-6)continue;const score=v-(dx*ix+dz*iz)*.001;if(score<bestScore){best=[x,z];bestScore=score;}}
  }
  // A plateau or local minimum must not become an infinite input lock.
