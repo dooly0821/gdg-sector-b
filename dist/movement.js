@@ -84,7 +84,7 @@ function escapeRoute(s,blocks,old,ix,iz){
  }
  return null;
 }
-function recoverOverlap(s,blocks,dt,keys){
+function recoverOverlap(s,blocks,dt,keys,surface){
  const old=penetration(s,blocks);if(!old.size){s.collisionRecovery=false;s.escapeRoute=null;s.escapeRetry=0;s.escapeStall=0;return false;}
  if(s.grounded){
   const y=s.y,top=Math.max(y,...[...old.keys()].map(b=>supportTop(b,s.x,s.z)).filter(h=>h<=y+P.stepHeight));
@@ -127,14 +127,16 @@ function recoverOverlap(s,blocks,dt,keys){
  if(best){const next=valid(...best);s.escapeStall=next<total-.0001?0:(s.escapeStall??0)+dt;s.x=best[0];s.z=best[1];}
  else s.escapeStall=(s.escapeStall??0)+dt;
  s.vx=s.vz=0;
- // Retain bounded vertical motion during a wedged jump/fall if it does not
- // enter a new collider; crouch height is still handled by the main move.
- if(!s.grounded){
-  const y=s.y,vy=s.vy-P.gravity*dt,next=Math.max(0,y+vy*dt);
-  s.y=next;const h=penetration(s,blocks);if([...h.keys()].some(b=>!old.has(b))){s.y=y;s.vy=0;}else{s.vy=next===0?0:vy;s.grounded=next===0;}
- }else{s.vy=0;}
- // Jumping out of a low obstruction uses the regular jump velocity, not teleport.
- if(s.grounded&&s.jumpBuffer>0){const y=s.y;s.y=y+.025;const h=penetration(s,blocks);s.y=y;if([...h.keys()].every(b=>old.has(b))){s.grounded=false;s.vy=Math.sqrt(2*P.gravity*jumpHeightFor(0,keys.has('KeyC')));s.jumpBuffer=0;}}
+ // Use the same supporting floors as normal movement. A worker touching
+ // a guard rail must not fall through the deck during overlap recovery.
+ const wasGrounded=s.grounded,oldY=s.y;
+ if(s.grounded&&s.jumpBuffer>0){
+  s.grounded=false;s.onRail=false;s.vy=Math.sqrt(2*P.gravity*jumpHeightFor(0,keys.has('KeyC')))+P.gravity*dt*.5;s.jumpBuffer=0;
+ }
+ const initial=penetration(s,blocks);
+ advanceVertical(s,blocks,dt,surface,wasGrounded,initial);
+ const final=penetration(s,blocks);
+ if([...final.keys()].some(b=>!initial.has(b))){s.y=oldY;s.vy=0;s.grounded=wasGrounded;}
  return true;
 }
 // Try the normal accessible step before treating a surface as a wall.
@@ -185,6 +187,16 @@ function steerHop(s,x,z,dt,turn=P.hopTurn){
  const next=current+clamp(angle,-turn*dt,turn*dt);
  s.vx=Math.sin(next)*speed;s.vz=Math.cos(next)*speed;
 }
+function advanceVertical(s,blocks,dt,surface,wasGrounded,existing=null){
+ const old=s.y;s.vy-=P.gravity*dt;let next=old+s.vy*dt;
+ let floor=surface(s.x,s.z,old);
+ for(const b of blocks){if(!contact(s.x,s.z,b,P.radius-.035))continue;const top=supportTop(b,s.x,s.z);if((b[6]!=='rail'||railSupport(b,s.x,s.z))&&top<=old+(s.vy<=0?.065:.025)&&top>=floor&&!blocks.some(c=>c!==b&&!existing?.has(c)&&overlaps(top,c,s.z,s.x,s.bodyHeight)&&contact(s.x,s.z,c,P.radius)))floor=top;
+  const span=b[7]?heightSpan(b,s.x,s.z):0;
+  const bottom=Math.min(blockHeight(b,s.z-span,0),blockHeight(b,s.z+span,0));
+  if(s.vy>0&&old+s.bodyHeight<=bottom+.012&&next+s.bodyHeight>=bottom){next=Math.min(next,bottom-s.bodyHeight-.002);s.vy=0;}}
+ if(s.vy<=0&&(next<=floor+.003||(wasGrounded&&old-floor<=P.groundSnap&&old>=floor))){s.y=floor;s.vy=0;s.grounded=true;}else{s.y=next;s.grounded=false;}
+ s.onRail=s.grounded&&blocks.some(b=>railSupport(b,s.x,s.z)&&Math.abs(railTop(b,s.x,s.z)-s.y)<.035);
+}
 export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
  if(dt<=0)return;s.vx??=0;s.vz??=0;s.jumpBuffer??=0;
  const crouch=keys.has('KeyC'),pressed=keys.has('KeyV')&&!s.wasSlideKey||s.slideRequested;s.wasSlideKey=keys.has('KeyV');s.slideRequested=false;
@@ -200,7 +212,7 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
  const current=s.bodyHeight??P.height,target=duck?1.06:P.height;
  const height=current+clamp(target-current,-dt*6.8,dt*5.5);
  s.bodyHeight=height<=current||!blocks.some(b=>contact(s.x,s.z,b,P.radius)&&overlaps(s.y,b,s.z,s.x,height))?height:current;
- if(recoverOverlap(s,blocks,dt,keys)){s.elapsed+=dt;return;}
+ if(recoverOverlap(s,blocks,dt,keys,surface)){s.elapsed+=dt;return;}
  const sprint=keys.has('ShiftLeft')||keys.has('ShiftRight'),heavy=s.carried>=0&&s.cargo?.[s.carried]?.special==='heavy',up=+keys.has('KeyW')-+keys.has('KeyS'),side=+keys.has('KeyD')-+keys.has('KeyA'),mag=Math.hypot(up,side),wish=(s.bodyHeight<P.height-.01?P.walk*.55:sprint?P.sprint:P.walk)*(heavy?.85:1);
  const x=mag?(Math.cos(s.yaw)*side-Math.sin(s.yaw)*up)/mag:0,z=mag?(-Math.sin(s.yaw)*side-Math.cos(s.yaw)*up)/mag:0;
 
@@ -251,14 +263,7 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
  // Bound the whole tick too, rather than accumulating solver pushes per slice.
  if(Math.hypot(s.x-ox,s.z-oz)>speed*dt+.018){s.x=ox;s.y=oy;s.z=oz;s.vx=s.vz=0;}
  s.steps+=Math.hypot(s.x-ox,s.z-oz);
- const old=s.y;s.vy-=P.gravity*dt;let next=old+s.vy*dt;
- let floor=surface(s.x,s.z,old);
- for(const b of blocks){if(!contact(s.x,s.z,b,P.radius-.035))continue;const top=supportTop(b,s.x,s.z);if((b[6]!=='rail'||railSupport(b,s.x,s.z))&&top<=old+(s.vy<=0?.065:.025)&&top>=floor&&!blocks.some(c=>c!==b&&overlaps(top,c,s.z,s.x,s.bodyHeight)&&contact(s.x,s.z,c,P.radius)))floor=top;
-  const span=b[7]?heightSpan(b,s.x,s.z):0;
-  const bottom=Math.min(blockHeight(b,s.z-span,0),blockHeight(b,s.z+span,0));
-  if(s.vy>0&&old+s.bodyHeight<=bottom+.012&&next+s.bodyHeight>=bottom){next=Math.min(next,bottom-s.bodyHeight-.002);s.vy=0;}}
- if(s.vy<=0&&(next<=floor+.003||(wasGrounded&&old-floor<=P.groundSnap&&old>=floor))){s.y=floor;s.vy=0;s.grounded=true;}else{s.y=next;s.grounded=false;}
- s.onRail=s.grounded&&blocks.some(b=>railSupport(b,s.x,s.z)&&Math.abs(railTop(b,s.x,s.z)-s.y)<.035);
+ advanceVertical(s,blocks,dt,surface,wasGrounded);
  s.elapsed+=dt;
 }
 
