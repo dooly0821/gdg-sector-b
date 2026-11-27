@@ -1,0 +1,18 @@
+name: Live chat stability QA
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  private-live-chat:
+    if: github.head_ref == 'qa-live-chat-stability-20261127'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/check-live-health.mjs
+      - run: node scripts/live-chat-stability.mjs
+      - run: node scripts/check-live-health.mjs
+        if: always()
