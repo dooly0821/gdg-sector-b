@@ -47,26 +47,86 @@ function penetration(s,blocks,x=s.x,z=s.z){
  for(const b of blocks){if(!overlaps(s.y,b,z,x,s.bodyHeight))continue;const n=contact(x,z,b,P.radius);if(n&&n[2]>.002)hits.set(b,n[2]);}
  return hits;
 }
-function recoverOverlap(s,blocks,dt){
- const old=penetration(s,blocks);if(!old.size){s.collisionRecovery=false;return false;}
- // A valid low step/ramp seam is not a deep overlap. Allow the original
- // bounded step-up if the entire capsule fits at the accessible support.
+// An overlap can have opposing normals (two racks or a crate against a
+// wall). Requiring every individual depth to decrease traps the worker.
+// Plan a short continuous exit through ONLY the already intersecting solids.
+function escapeRoute(s,blocks,old,ix,iz){
+ const radius=4,near=blocks.filter(b=>b[0]<=s.x+radius+P.radius&&b[2]>=s.x-radius-P.radius&&b[1]<=s.z+radius+P.radius&&b[3]>=s.z-radius-P.radius);
+ const allowed=(x,z)=>{const h=penetration(s,near,x,z);for(const b of h.keys())if(!old.has(b))return -1;return h.size;};
+ const unit=.10,limit=Math.round(radius/unit),dirs=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
+ dirs.sort((a,b)=>(b[0]*ix+b[1]*iz)/Math.hypot(...b)-(a[0]*ix+a[1]*iz)/Math.hypot(...a));
+ // Direct exit is cheap for ordinary single-collider overlap.
+ let best=null,score=Infinity;
+ for(let k=0;k<32;k++){
+  const angle=k*Math.PI/16,dx=Math.cos(angle),dz=Math.sin(angle);
+  for(let d=unit;d<=radius+.001;d+=unit){
+   const h=allowed(s.x+dx*d,s.z+dz*d);
+   if(h<0)break;
+   if(!h){const cost=d+(1-dx*ix-dz*iz)*.12;if(cost<score){score=cost;best=[[s.x+dx*d,s.z+dz*d]];}break;}
+  }
+ }
+ if(best)return best;
+ // A bent exit may be necessary at overlapping box/shelf corners.
+ // Bound work to a local grid; never perform this search every frame.
+ const q=[[0,0]],seen=new Map([['0,0',null]]);
+ for(let i=0;i<q.length&&i<2400;i++){
+  const [x,z]=q[i],key=x+','+z;
+  for(const [dx,dz] of dirs){
+   const nx=x+dx,nz=z+dz,k=nx+','+nz;
+   if(Math.abs(nx)>limit||Math.abs(nz)>limit||seen.has(k))continue;
+   const wx=s.x+nx*unit,wz=s.z+nz*unit;
+   const h=allowed(wx,wz);
+   if(h<0||allowed(s.x+(x+dx*.5)*unit,s.z+(z+dz*.5)*unit)<0)continue;
+   seen.set(k,key);
+   if(!h){const path=[];let p=k;while(p!=='0,0'){const [a,b]=p.split(',').map(Number);path.push([s.x+a*unit,s.z+b*unit]);p=seen.get(p);}return path.reverse();}
+   q.push([nx,nz]);
+  }
+ }
+ return null;
+}
+function recoverOverlap(s,blocks,dt,keys){
+ const old=penetration(s,blocks);if(!old.size){s.collisionRecovery=false;s.escapeRoute=null;s.escapeRetry=0;s.escapeStall=0;return false;}
  if(s.grounded){
   const y=s.y,top=Math.max(y,...[...old.keys()].map(b=>supportTop(b,s.x,s.z)).filter(h=>h<=y+P.stepHeight));
-  if(top>y){s.y=top;if(!penetration(s,blocks).size){s.collisionRecovery=false;return false;}s.y=y;}
+  if(top>y){s.y=top;if(!penetration(s,blocks).size){s.collisionRecovery=false;s.escapeRoute=null;s.escapeRetry=0;s.escapeStall=0;return false;}s.y=y;}
  }
- s.collisionRecovery=true;const total=[...old.values()].reduce((a,b)=>a+b,0);
- const step=Math.min(.055,3*dt);let best=null,score=total;
- // Search only a local ring; no arbitrary destination or floor change.
- for(const scale of [1,.5])for(let i=0;i<16;i++){
-  const a=i*Math.PI/8,x=s.x+Math.cos(a)*step*scale,z=s.z+Math.sin(a)*step*scale;
-  const next=penetration(s,blocks,x,z);
-  if([...next].some(([b,d])=>!old.has(b)||d>old.get(b)+.001))continue;
-  const sum=[...next.values()].reduce((a,b)=>a+b,0);
-  if(sum<score-1e-6){best=[x,z];score=sum;}
+ s.collisionRecovery=true;
+ const up=+keys.has('KeyW')-+keys.has('KeyS'),side=+keys.has('KeyD')-+keys.has('KeyA'),mag=Math.hypot(up,side),yaw=s.yaw??0;
+ const ix=mag?(Math.cos(yaw)*side-Math.sin(yaw)*up)/mag:0,iz=mag?(-Math.sin(yaw)*side-Math.cos(yaw)*up)/mag:0;
+ const distance=Math.min(.055,3*dt),total=[...old.values()].reduce((a,b)=>a+b,0);
+ const valid=(x,z)=>{const h=penetration(s,blocks,x,z);if([...h.keys()].some(b=>!old.has(b)))return null;return [...h.values()].reduce((a,b)=>a+b,0);};
+ let best=null,bestScore=Infinity;
+ // Respect an intentional escape, including tangent motion with equal depth.
+ if(mag){const x=s.x+ix*distance,z=s.z+iz*distance,v=valid(x,z);if(v!==null&&v<=total+.00001)best=[x,z];}
+ s.escapeRetry=Math.max(0,(s.escapeRetry??0)-dt);
+ if(!best){
+  // Fast local downhill escape, allowing one existing overlap to deepen
+  // slightly if the total penetration decreases (opposing normals).
+  for(let i=0;i<16;i++){const a=i*Math.PI/8,dx=Math.cos(a),dz=Math.sin(a),x=s.x+dx*distance,z=s.z+dz*distance,v=valid(x,z);if(v===null||v>=total-1e-6)continue;const score=v-(dx*ix+dz*iz)*.001;if(score<bestScore){best=[x,z];bestScore=score;}}
  }
- if(best){s.x=best[0];s.z=best[1];}
- s.vx=s.vz=0;s.vy=0;s.jumpBuffer=0;
+ // A plateau or local minimum must not become an infinite input lock.
+ if(!best||s.escapeStall>.22){
+  if(!s.escapeRoute?.length&&!s.escapeRetry){s.escapeRoute=escapeRoute(s,blocks,old,ix,iz);s.escapeRetry=.25;}
+  const goal=s.escapeRoute?.[0];
+  if(goal){const dx=goal[0]-s.x,dz=goal[1]-s.z,len=Math.hypot(dx,dz),r=Math.min(1,distance/Math.max(len,1e-9)),x=s.x+dx*r,z=s.z+dz*r;
+   if(valid(x,z)!==null){best=[x,z];if(len<=distance+.00001)s.escapeRoute.shift();}
+   else{s.escapeRoute=null;s.escapeRetry=.1;}
+  }
+ }
+ // Last resort: allow user-controlled motion inside an EXISTING overlap
+ // instead of freezing. New solids still block, even during recovery.
+ if(!best&&mag){const x=s.x+ix*distance,z=s.z+iz*distance;if(valid(x,z)!==null)best=[x,z];}
+ if(best){const next=valid(...best);s.escapeStall=next<total-.0001?0:(s.escapeStall??0)+dt;s.x=best[0];s.z=best[1];}
+ else s.escapeStall=(s.escapeStall??0)+dt;
+ s.vx=s.vz=0;
+ // Retain bounded vertical motion during a wedged jump/fall if it does not
+ // enter a new collider; crouch height is still handled by the main move.
+ if(!s.grounded){
+  const y=s.y,vy=s.vy-P.gravity*dt,next=Math.max(0,y+vy*dt);
+  s.y=next;const h=penetration(s,blocks);if([...h.keys()].some(b=>!old.has(b))){s.y=y;s.vy=0;}else{s.vy=next===0?0:vy;s.grounded=next===0;}
+ }else{s.vy=0;}
+ // Jumping out of a low obstruction uses the regular jump velocity, not teleport.
+ if(s.grounded&&s.jumpBuffer>0){const y=s.y;s.y=y+.025;const h=penetration(s,blocks);s.y=y;if([...h.keys()].every(b=>old.has(b))){s.grounded=false;s.vy=Math.sqrt(2*P.gravity*jumpHeightFor(0,keys.has('KeyC')));s.jumpBuffer=0;}}
  return true;
 }
 // Try the normal accessible step before treating a surface as a wall.
@@ -132,7 +192,7 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
  const current=s.bodyHeight??P.height,target=duck?1.06:P.height;
  const height=current+clamp(target-current,-dt*6.8,dt*5.5);
  s.bodyHeight=height<=current||!blocks.some(b=>contact(s.x,s.z,b,P.radius)&&overlaps(s.y,b,s.z,s.x,height))?height:current;
- if(recoverOverlap(s,blocks,dt)){s.elapsed+=dt;return;}
+ if(recoverOverlap(s,blocks,dt,keys)){s.elapsed+=dt;return;}
  const sprint=keys.has('ShiftLeft')||keys.has('ShiftRight'),heavy=s.carried>=0&&s.cargo?.[s.carried]?.special==='heavy',up=+keys.has('KeyW')-+keys.has('KeyS'),side=+keys.has('KeyD')-+keys.has('KeyA'),mag=Math.hypot(up,side),wish=(s.bodyHeight<P.height-.01?P.walk*.55:sprint?P.sprint:P.walk)*(heavy?.85:1);
  const x=mag?(Math.cos(s.yaw)*side-Math.sin(s.yaw)*up)/mag:0,z=mag?(-Math.sin(s.yaw)*side-Math.cos(s.yaw)*up)/mag:0;
 
