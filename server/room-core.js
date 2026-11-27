@@ -5,6 +5,7 @@ import {DIFFICULTIES,normalizeDifficulty,effectiveDifficulty,cargoQuota,difficul
 import {randomBytes} from 'node:crypto';
 import {createShiftEvents,tickShiftEvents} from '../dist/shift-events.js';
 import {normalizeNickname} from '../dist/nickname.js';
+import {acknowledgeWarnings} from '../dist/threat-warning.js';
 import {powerTarget,toggleZone,emitSignal,pruneSignals} from '../dist/facility-actions.js';
 import {expandedLayout} from '../dist/map-layout.js';
 import {createScene,newShift,randomCargo,step,forward,handlingTarget,canUse,dropTarget,deliveryCount,MISSION_TOTAL,parcelBlocks} from '../dist/mission.js';
@@ -79,7 +80,7 @@ function tickRevives(room,active,now,dt){
   if(p.reviveTarget!==t.id){p.reviveTarget=t.id;p.reviveProgress=0;}
   p.reviveProgress=(p.reviveProgress??0)+dt;
   if(p.reviveProgress+1e-8>=REVIVE_SECONDS){
-   Object.assign(t.state,{failed:false,capturedBy:null,handAction:null,pendingUse:null,vault:null,vx:0,vy:0,vz:0,jumpBuffer:0,slideTime:0,slideExit:0,slideRequested:false,hopBoosted:false,hitProtectedUntil:room.shared.elapsed+3});
+   Object.assign(t.state,{failed:false,capturedBy:null,handAction:null,pendingUse:null,vault:null,vx:0,vy:0,vz:0,jumpBuffer:0,slideTime:0,slideExit:0,slideRequested:false,hopBoosted:false,threatWarnings:{},hitProtectedUntil:room.shared.elapsed+3});
    t.input.keys=[];t.reviveHeld=false;t.jump=false;t.reviveProgress=0;t.reviveTarget=null;p.reviveProgress=0;p.reviveTarget=null;
    pushEvent(room,{type:'revive',player:t.id,by:p.id});
   }
@@ -140,14 +141,14 @@ export function tickRoom(room,now=Date.now()){
   updateHaunt(q,blocks,forward(anchor),dt);
   for(const e of q.hauntSounds)pushEvent(room,{type:'haunt',...e});
   delete q.teamPlayers;
-  for(const p of active){if(p.state.failed){p.state.slideTime=0;p.state.slideExit=0;p.state.slideRequested=false;p.state.restoreTorch=false;p.reviveProgress=0;p.reviveTarget=null;p.input.keys=[];p.reviveHeld=false;p.jump=false;dropOwned(room,p);pushEvent(room,{type:'capture',player:p.id,kind:p.state.capturedBy});}detach(p);}
+  for(const p of active){if(p.state.failed){p.state.threatWarnings={};p.state.slideTime=0;p.state.slideExit=0;p.state.slideRequested=false;p.state.restoreTorch=false;p.reviveProgress=0;p.reviveTarget=null;p.input.keys=[];p.reviveHeld=false;p.jump=false;dropOwned(room,p);pushEvent(room,{type:'capture',player:p.id,kind:p.state.capturedBy});}detach(p);}
   if(q.states.every(v=>v==='DELIVERED')){room.phase='complete';break;}
  }
  if(!live(room).length&&room.phase==='playing')room.phase='failed';
 }
 const ghostFields=['kind','x','z','yaw','phase','age','life','speed','aggression','state','timer','fade','surfaceY','surfaceRoll','lightReaction','reveal','pursuit','spawnGrace','targetId'];
 function ghostPublic(a){return Object.fromEntries(ghostFields.filter(k=>a[k]!==undefined).map(k=>[k,a[k]]));}
-function selfState(room,p){const s=attach(room,p),out={};for(const k of ['x','y','z','yaw','pitch','vx','vy','vz','grounded','bodyHeight','steps','onRail','carried','flashlight','flashAmount','handAction','vault','failed','capturedBy','noise','horrorEvent','cargoSignalAt','signalCooldownUntil','signalPulseUntil','slideTime','slideCooldown','slideExit'])if(s[k]!==undefined)out[k]=s[k];detach(p);return out;}
+function selfState(room,p){const s=attach(room,p),out={};for(const k of ['x','y','z','yaw','pitch','vx','vy','vz','grounded','bodyHeight','steps','onRail','carried','flashlight','flashAmount','handAction','vault','failed','capturedBy','noise','horrorEvent','cargoSignalAt','signalCooldownUntil','signalPulseUntil','slideTime','slideCooldown','slideExit','threatWarnings'])if(s[k]!==undefined)out[k]=s[k];detach(p);return out;}
 export function snapshot(room,p){
  const q=room.shared;const count=Object.keys(room.players).length,startCount=room.phase==='lobby'?count:q.startCount??count,level=room.phase==='lobby'?effectiveDifficulty(room.requestedDifficulty,count):q.difficultyLevel??'normal';const players=Object.values(room.players).map(a=>{attach(room,a);const pub=publicPlayer(a);detach(a);return pub;});
  return {room:room.code,phase:room.phase,serverTime:room.lastTick,simLagMs:Math.round(((room.simDebt??0)+(room.fraction??0)/60)*1000),host:room.host,you:p.id,ack:p.commandSeq,inputAck:p.lastInputSeq??0,players,self:selfState(room,p),cargo:q.cargo,cargoDeadlines:q.cargoDeadlines??{},shiftEvents:q.shiftEvents??null,powerZones:q.powerZones??{},signals:q.signals??{},states:q.states,parked:q.parked,deliveryOrder:q.deliveryOrder,deliveryBays:q.deliveryBays??{},lockers:q.lockers,lockerRevision:q.lockerRevision,elapsed:q.elapsed,haunt:q.haunt.map(ghostPublic),events:room.events,quota:room.phase==='lobby'?cargoQuota(count):q.states.length,startCount,requestedDifficulty:normalizeDifficulty(room.requestedDifficulty),difficulty:teamDifficulty(Math.max(1,live(room).length),level,room.phase==='lobby'?count:q.startCount??1)};
@@ -171,6 +172,7 @@ export function operateRoom(room,body,now=Date.now()){
    if(sequenced&&incoming<=(p.lastInputSeq??0))return {snapshot:snapshot(room,p)};
    if(sequenced)p.lastInputSeq=incoming;
    const input=body.input??{};const gap=now-(p.lastInputAt??now);p.lastInputAt=now;if(gap>500)p.state.hitProtectedUntil=Math.max(p.state.hitProtectedUntil??0,room.shared.elapsed+Math.min(1.2,.55+gap/4000));p.input={keys:Array.isArray(input.keys)?[...new Set(input.keys.filter(k=>keysAllowed.has(k)))].slice(0,9):[],yaw:clamp(finite(input.yaw,p.input.yaw),-1e4,1e4),pitch:clamp(finite(input.pitch,p.input.pitch),-1.3,1.3)};
+   acknowledgeWarnings(p.state,input.warningAck,room.shared.elapsed);
    p.reviveHeld=p.input.keys.includes('KeyE');p.state.yaw=p.input.yaw;p.state.pitch=p.input.pitch;
    for(const cmd of (Array.isArray(body.commands)?body.commands.slice(0,16):[]))command(room,p,cmd);
   }

@@ -1,0 +1,8 @@
+#threat-warning[hidden]{display:none!important}
+#threat-warning{position:absolute;top:clamp(65px,17vh,180px);left:50%;transform:translateX(-50%);z-index:12;pointer-events:none;max-width:calc(100% - 24px);width:max-content;box-sizing:border-box;padding:8px 17px 10px;border:1px solid #d6a342;border-left:4px solid #d6a342;border-radius:3px;background:linear-gradient(120deg,#24201bef,#13100fec);color:#f2dcad;text-align:center;font:700 clamp(11px,1.2vw,18px)/1.35 system-ui,sans-serif;box-shadow:0 3px 12px #0008}
+#threat-warning strong{display:block;color:#ffd27b;font-size:.85em;letter-spacing:.04em;margin-bottom:3px}
+#threat-directions{white-space:pre-line}
+#threat-warning.urgent{border-color:#e56d4f;color:#ffe0cc}
+#threat-warning.urgent strong{color:#ff977b}
+#play.spectating #threat-warning{display:none!important}
+@media(max-height:500px){#threat-warning{top:48px;padding:4px 10px;font-size:11px}}

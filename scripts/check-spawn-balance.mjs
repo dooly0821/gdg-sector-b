@@ -1,3 +1,4 @@
+import {acknowledgeWarnings,warningList} from '../dist/threat-warning.js';
 import assert from 'node:assert/strict';
 import {createScene,newShift} from '../dist/mission.js';
 import {SPAWN_BALANCE,hiddenSpawn,updateHaunt} from '../dist/haunt.js';
@@ -17,8 +18,8 @@ assert.ok(!hiddenSpawn(Object.assign(newShift(),{x:0,z:0,y:0}),0,20,1,[]));
 const close=Object.assign(newShift(),{x:0,z:1,bodyHeight:1.7,hauntDirector:{delay:1e6,bag:[]}});
 close.haunt=[{kind:1,x:0,z:0,yaw:0,phase:0,age:0,life:50,speed:0,timer:.3,state:'patrol',spawnGrace:2.5,path:[[0,0],[0,5]],pathIndex:1,direction:1,aggression:0}];
 const empty=[];
-for(let i=0;i<145;i++){close.elapsed+=dt;assert.ok(!updateHaunt(close,empty,[0,0,-1],dt,()=>.42));assert.ok(!close.failed);assert.equal(close.haunt[0].speed,0);}
-let caught=null;for(let i=0;i<400&&!caught;i++){close.elapsed+=dt;caught=updateHaunt(close,empty,[0,0,-1],dt,()=>.42);}assert.equal(caught,'함귀');
+for(let i=0;i<145;i++){close.elapsed+=dt;assert.ok(!updateHaunt(close,empty,[0,0,-1],dt,()=>.42));assert.ok(!close.failed);assert.equal(close.haunt[0].speed,0);acknowledgeWarnings(close,warningList(close).map(w=>w.id),close.elapsed);}
+let caught=null;for(let i=0;i<400&&!caught;i++){close.elapsed+=dt;caught=updateHaunt(close,empty,[0,0,-1],dt,()=>.42);acknowledgeWarnings(close,warningList(close).map(w=>w.id),close.elapsed);}assert.equal(caught,'함귀');
 const first=Object.assign(newShift(),{elapsed:0,horrorEvent:{type:'pickup',time:0}});updateHaunt(first,w.blocks,[0,0,-1],dt,()=>.42);assert.ok(first.hauntDirector.delay>=7.9);
 const crowded=Object.assign(newShift(),{elapsed:30,x:0,z:0,hauntDirector:{delay:0,bag:[0]},haunt:[{kind:1,x:0,z:5,age:2,life:50,pursuit:true,state:'alert',speed:0,timer:0,path:[[0,5]],pathIndex:0,direction:1,phase:0,yaw:0,aggression:1}]});updateHaunt(crowded,empty,[0,0,1],dt,()=>.42);assert.equal(crowded.haunt.length,1);
 console.log('PASS: hidden spawn distance, warning grace, no overlapping pursuit spawns and post-grace capture',count);

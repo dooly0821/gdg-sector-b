@@ -1,3 +1,4 @@
+import {acknowledgeWarnings,warningList} from '../dist/threat-warning.js';
 import assert from 'node:assert/strict';
 import {indexBlocks,freeAt,segmentFree,navigate,recover} from '../dist/haunt-navigation.js';
 import {createScene,newShift} from '../dist/mission.js';
@@ -23,6 +24,6 @@ route('post overlap',[[-.25,-.25,.25,.25,0,2]],[.2,0],[0,5]);
 const [w]=createScene(),blocks=w.blocks.concat(worldBounds),nav=indexBlocks(blocks);
 const nearest=p=>{for(let d=0;d<3.5;d+=.25)for(let k=0;k<16;k++){const q=[p[0]+Math.cos(k*Math.PI/8)*d,p[1]+Math.sin(k*Math.PI/8)*d];if(freeAt(nav,...q,body,.05))return q;}throw Error('no free test position');};
 for(const [name,a,b] of [['B-C',[-12,10],[-21,17]],['D02-D03',[-10,33],[-20,40]],['C02-D04',[-20,60],[-10,72]],['B rack',[-6,5],[-6,-7]]])route(name,blocks,nearest(a),nearest(b));
-const s=Object.assign(newShift(),{x:0,z:7,bodyHeight:1.7});s.hauntDirector={delay:1e6,bag:[]};s.haunt=[{kind:1,x:0,z:0,yaw:0,phase:0,age:2,life:40,speed:0,timer:0,state:'search',pursuit:true,lastKnown:[0,7],path:[[0,0],[0,8]],pathIndex:0,direction:1,aggression:1}];let caught=null;for(let t=0;t<1200&&!caught;t++){s.elapsed+=dt;caught=updateHaunt(s,[[-3,2,3,2.4,0,3]],[0,0,1],dt,()=>.42);}
+const s=Object.assign(newShift(),{x:0,z:7,bodyHeight:1.7});s.hauntDirector={delay:1e6,bag:[]};s.haunt=[{kind:1,x:0,z:0,yaw:0,phase:0,age:2,life:40,speed:0,timer:0,state:'search',pursuit:true,lastKnown:[0,7],path:[[0,0],[0,8]],pathIndex:0,direction:1,aggression:1}];let caught=null;for(let t=0;t<1200&&!caught;t++){s.elapsed+=dt;caught=updateHaunt(s,[[-3,2,3,2.4,0,3]],[0,0,1],dt,()=>.42);acknowledgeWarnings(s,warningList(s).map(w=>w.id),s.elapsed);}
 assert.equal(caught,'함귀');assert.ok(s.failed);
 console.log('PASS: wall, U trap, overlap recovery, four warehouse paths and pursuit capture');

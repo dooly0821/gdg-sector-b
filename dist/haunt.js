@@ -1,3 +1,4 @@
+import {updateThreatWarnings,warnedForCapture} from './threat-warning.js';
 import {signalForActor,zonePower} from './facility-actions.js';
 import {expandedLayout,EXTENSION_ROUTES,EXTENSION_HIDE} from './map-layout.js';
 import {DIFFICULTIES,effectiveDifficulty,missionTotal} from './difficulty.js';
@@ -190,6 +191,16 @@ function attackContact(actor,s,blocks){
   return Math.hypot(x-s.x,y-bodyY,z-s.z)<r+.255&&visible(blocks,[x,y,z],[s.x,bodyY,s.z]);
  });
 }
+// Re-evaluate the same real strike geometry after a warning hold. Never
+// queue a guaranteed hit: distance, current LOS and player protection still apply.
+function strikeContact(actor,s,local,i){
+ const dist=Math.hypot(s.x-actor.x,s.z-actor.z);
+ if(actor.state!=='charge'||dist>=2.8||!attackContact(actor,s,local)||actor.age<=.65||actor.timer>=.56)return false;
+ const strikeHeight=eyeHeights[i]-.30,vertical=Math.max(0,s.y-strikeHeight,strikeHeight-s.y-(s.bodyHeight??1.70));
+ const hitDx=s.x-actor.x,hitDz=s.z-actor.z,aligned=(Math.sin(actor.yaw)*hitDx+Math.cos(actor.yaw)*hitDz)/Math.max(.001,dist);
+ return aligned>.40&&Math.hypot(dist,vertical)<armReach[i]&&line(local,actor,s)&&visible(local,[actor.x,strikeHeight,actor.z],[s.x,clamp(strikeHeight,s.y+.1,s.y+(s.bodyHeight??1.7)-.1),s.z]);
+}
+function captureWorker(s,actor){actor.speed=0;actor.warningHold=null;s.handAction=null;s.pendingUse=null;s.vault=null;s.jumpBuffer=0;s.vx=s.vz=s.vy=0;s.failed=true;s.capturedBy=actor.kind;}
 export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
  const s=root,routes=routesFor(root),team=Array.isArray(s.teamPlayers),difficulty=teamDifficulty(team?s.teamPlayers.filter(p=>!p.failed).length:1,s.difficultyLevel,s.startCount??1),assigned=new Map();
  if(!mapCache.has(blocks))mapCache.set(blocks,blocks.concat(worldBounds));
@@ -207,6 +218,7 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
  s.haunt??=[];
  if(s.failed)return null;
  updateSpawns(s,blocks,rootForward,dt,rng);
+ updateThreatWarnings(root,team?root.teamPlayers:[root],root.haunt);
  s.hauntCooldown=Math.max(0,(s.hauntCooldown??0)-dt);
  let captured=null;
  s.haunt.forEach(actor=>{
@@ -214,7 +226,7 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
   if(team)actor.targetDelay=Math.max(0,(actor.targetDelay??0)-dt);
   const s=team?chooseTeamTarget(root,actor,nav,assigned,difficulty):root;if(!s)return;
   const forward=team?s.teamView??rootForward:rootForward;
-  if(team){s.hauntSounds=root.hauntSounds??=[];s.hauntCooldown=root.hauntCooldown;if(actor.targetId!==s.id){actor.targetId=s.id;clearObservation(actor);actor.lastHeardTime=null;actor.sightDelay=0;actor.seenCache=false;actor.beam=0;if(!actor.climb){actor.pursuit=false;actor.lastKnown=null;actor.state='patrol';actor.navPath=null;actor.navJob=null;actor.navDelay=0;}}assigned.set(s.id,(assigned.get(s.id)??0)+1);}
+  if(team){s.hauntSounds=root.hauntSounds??=[];s.hauntCooldown=root.hauntCooldown;if(actor.targetId!==s.id){actor.warningHold=null;actor.targetId=s.id;clearObservation(actor);actor.lastHeardTime=null;actor.sightDelay=0;actor.seenCache=false;actor.beam=0;if(!actor.climb){actor.pursuit=false;actor.lastKnown=null;actor.state='patrol';actor.navPath=null;actor.navJob=null;actor.navDelay=0;}}assigned.set(s.id,(assigned.get(s.id)??0)+1);}
   if((actor.spawnGrace??0)>0){
    const old=actor.spawnGrace;actor.spawnGrace=Math.max(0,old-dt);
    actor.speed=0;actor.phase+=dt*.65;
@@ -240,9 +252,20 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
    return;
   }
   const hiding=closedLocker(s),entry=hiding?lockerEntry(hiding):null;
-  const climb=updateClimber(actor,s,nav,local,dt,!!hiding);
-  if(climb?.handled){if(actor.state==='disappear')return;if(climb.hit&&!s.netHitProtected&&(s.hitProtectedUntil??0)<=root.elapsed){actor.speed=0;captured=type.name;s.handAction=null;s.pendingUse=null;s.vault=null;s.jumpBuffer=0;s.vx=s.vz=s.vy=0;s.failed=true;s.capturedBy=i;}return;}
   const safe=s.grounded&&REFUGES.some(([x,y,z,r])=>Math.abs(s.y-y)<.09&&Math.hypot(s.x-x,s.z-z)<r);
+  const protectedHit=()=>s.netHitProtected||(s.hitProtectedUntil??0)>root.elapsed||s.hauntCooldown>0;
+  if(actor.warningHold){
+   const torchRepels=(i===0||i===3)&&(s.flashAmount??0)>.25&&lightSense(local,actor,s,forward)>.25;
+   if(i===3&&s.horrorEvent?.type==='drop'&&s.elapsed-s.horrorEvent.time<.55&&dist<4){actor.warningHold=null;actor.state='disappear';return;}
+   if(!s.failed&&!hiding&&!safe&&!torchRepels&&strikeContact(actor,s,local,i)){
+    actor.speed=0;
+    if(warnedForCapture(s,actor,root.elapsed)&&!protectedHit()){captured=type.name;captureWorker(s,actor);}
+    return;
+   }
+   actor.warningHold=null;actor.state='recovery';actor.timer=.12;actor.strikePoints=null;
+  }
+  const climb=updateClimber(actor,s,nav,local,dt,!!hiding);
+  if(climb?.handled){if(actor.state==='disappear')return;if(climb.hit&&!hiding&&!s.failed&&!protectedHit()&&warnedForCapture(s,actor,root.elapsed)){captured=type.name;captureWorker(s,actor);}return;}
   const pursuit=actor.pursuit??false,torchOn=(s.flashAmount??0)>.25;
   const detectRange=type.range*difficulty.range*1.04*(zonePower(root,s.x,s.z)<.5&&!torchOn?.76:1)*(s.bodyHeight<1.2&&!torchOn?.67:1);
   const near=dist<5.5,range=pursuit?24+(difficulty.count-1)*2:Math.max(5.5,detectRange);
@@ -426,14 +449,9 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
    if(s.hauntSounds.length>4)s.hauntSounds.shift();
   }
   if(actor.state!=='charge')actor.strikePoints=null;
-  const striking=actor.state==='charge'&&dist<2.8&&attackContact(actor,s,local);
-  const strikeHeight=eyeHeights[i]-.30;
-  const vertical=Math.max(0,s.y-strikeHeight,strikeHeight-s.y-(s.bodyHeight??1.70));
-  const hitDx=s.x-actor.x,hitDz=s.z-actor.z,hitDist=Math.hypot(hitDx,hitDz);
-  const aligned=(Math.sin(actor.yaw)*hitDx+Math.cos(actor.yaw)*hitDz)/Math.max(.001,hitDist);
-  if(!hiding&&!safe&&!s.netHitProtected&&(s.hitProtectedUntil??0)<=root.elapsed&&striking&&(!captured||team)&&actor.age>.65&&actor.timer<.56&&line(local,actor,s)&&aligned>.40&&visible(local,[actor.x,strikeHeight,actor.z],[s.x,clamp(strikeHeight,s.y+.1,s.y+(s.bodyHeight??1.7)-.1),s.z])&&Math.hypot(hitDist,vertical)<armReach[i]&&s.hauntCooldown===0){
-   actor.speed=0;captured=type.name;
-   s.handAction=null;s.pendingUse=null;s.vault=null;s.jumpBuffer=0;s.vx=s.vz=s.vy=0;s.failed=true;s.capturedBy=i;
+  if(!s.failed&&!hiding&&!safe&&(!captured||team)&&strikeContact(actor,s,local,i)){
+   if(!warnedForCapture(s,actor,root.elapsed)){actor.warningHold=true;actor.speed=0;}
+   else if(!protectedHit()){captured=type.name;captureWorker(s,actor);}
   }
  });
  return captured;

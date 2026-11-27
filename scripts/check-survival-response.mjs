@@ -1,3 +1,4 @@
+import {acknowledgeWarnings,warningList} from '../dist/threat-warning.js';
 import assert from 'node:assert/strict';
 import {newShift,step,canUse,handlingTarget,createScene} from '../dist/mission.js';
 import {updateHaunt} from '../dist/haunt.js';
@@ -33,8 +34,8 @@ function ghost(kind,z){
 }
 for(let kind=0;kind<4;kind++)for(const wall of [false,true]){
  const s=ghost(kind,1.5);let result=null;
- for(let i=0;i<600&&!result;i++){s.elapsed+=dt;result=updateHaunt(s,wall?[[-8,.65,8,.75,0,3]]:[],[0,0,-1],dt,()=>.42);}
- assert.equal(Boolean(result),!wall);
+ for(let i=0;i<600&&!result;i++){s.elapsed+=dt;result=updateHaunt(s,wall?[[-8,.65,8,.75,0,3]]:[],[0,0,-1],dt,()=>.42);acknowledgeWarnings(s,warningList(s).map(w=>w.id),s.elapsed);}
+ assert.equal(Boolean(result),!wall,'capture kind '+kind+' wall '+wall+' actor '+JSON.stringify(s.haunt[0])+' warnings '+JSON.stringify(s.threatWarnings));
  assert.equal(Boolean(s.failed),!wall);
  assert.ok(!s.encounterHit,'no capture delay');
 }
@@ -47,4 +48,4 @@ assert.ok(q.haunt[0].pursuit&&q.haunt[0].speed>2);
 q.z=49;
 for(let i=0;i<480;i++){q.elapsed+=dt;updateHaunt(q,wall,[0,0,-1],dt,()=>.42);}
 assert.ok(!q.haunt[0]?.pursuit);
-console.log('PASS: bounded crouch-hop, free shelf jump, cargo aim/occlusion, immediate capture and persistent pursuit');
+console.log('PASS: bounded crouch-hop, free shelf jump, cargo aim/occlusion, warned capture and persistent pursuit');
