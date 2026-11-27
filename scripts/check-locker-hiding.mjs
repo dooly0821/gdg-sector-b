@@ -1,3 +1,4 @@
+import {acknowledgeWarnings,warningList} from '../dist/threat-warning.js';
 import assert from 'node:assert/strict';
 import {createScene,newShift,step} from '../dist/mission.js';
 import {LOCKERS,lockerTarget,useLocker,closedLocker,insideLocker,buildLockerDoor,lockerEntry} from '../dist/lockers.js';
@@ -15,7 +16,7 @@ for(const l of LOCKERS)for(const kind of (l.id===1?[0,1,2,3]:[1])){
  for(let i=0;i<35;i++)step(s,idle,w.blocks,dt);
  assert.ok(closedLocker(s));s.yaw=0;
  s.haunt=[{kind,x:l.x,z:l.z-2.05,yaw:0,phase:0,age:2,life:100,speed:0,timer:0,state:'alert',pursuit:true,path:[[l.x,l.z-3],[l.x,l.z-13]],pathIndex:0,direction:1,aggression:1}];
- let waited=0,away=0,far=0,closest=Infinity,minX=Infinity,maxX=-Infinity;for(let i=0;i<2400;i++){s.elapsed+=dt;assert.ok(!updateHaunt(s,w.blocks,[0,0,-1],dt,()=>.42),'no hidden capture');const a=s.haunt[0];if(a.state==='lockerWait'){waited+=dt;minX=Math.min(minX,a.x);maxX=Math.max(maxX,a.x);}if(a.state==='lockerAway')away+=dt;far=Math.max(far,Math.hypot(a.x-l.x,a.z-l.z));closest=Math.min(closest,Math.hypot(a.x-lockerEntry(l)[0],a.z-lockerEntry(l)[1]));if(away>1)break;}
+ let waited=0,away=0,far=0,closest=Infinity,minX=Infinity,maxX=-Infinity;for(let i=0;i<2400;i++){s.elapsed+=dt;assert.ok(!updateHaunt(s,w.blocks,[0,0,-1],dt,()=>.42),'no hidden capture');acknowledgeWarnings(s,warningList(s).map(w=>w.id),s.elapsed);const a=s.haunt[0];if(a.state==='lockerWait'){waited+=dt;minX=Math.min(minX,a.x);maxX=Math.max(maxX,a.x);}if(a.state==='lockerAway')away+=dt;far=Math.max(far,Math.hypot(a.x-l.x,a.z-l.z));closest=Math.min(closest,Math.hypot(a.x-lockerEntry(l)[0],a.z-lockerEntry(l)[1]));if(away>1)break;}
  assert.ok(waited>=4.4&&far>10&&away>.9&&closest<.7,'search/leave '+l.id);
  assert.ok(maxX-minX>.2,'paces '+l.id);
  assert.equal(useLocker(s,l),'opening');

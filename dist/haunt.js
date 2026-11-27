@@ -255,7 +255,9 @@ export function updateHaunt(root,blocks,rootForward,dt,rng=Math.random){
   const safe=s.grounded&&REFUGES.some(([x,y,z,r])=>Math.abs(s.y-y)<.09&&Math.hypot(s.x-x,s.z-z)<r);
   const protectedHit=()=>s.netHitProtected||(s.hitProtectedUntil??0)>root.elapsed||s.hauntCooldown>0;
   if(actor.warningHold){
-   if(!s.failed&&!hiding&&!safe&&strikeContact(actor,s,local,i)){
+   const torchRepels=(i===0||i===3)&&(s.flashAmount??0)>.25&&lightSense(local,actor,s,forward)>.25;
+   if(i===3&&s.horrorEvent?.type==='drop'&&s.elapsed-s.horrorEvent.time<.55&&dist<4){actor.warningHold=null;actor.state='disappear';return;}
+   if(!s.failed&&!hiding&&!safe&&!torchRepels&&strikeContact(actor,s,local,i)){
     actor.speed=0;
     if(warnedForCapture(s,actor,root.elapsed)&&!protectedHit()){captured=type.name;captureWorker(s,actor);}
     return;
