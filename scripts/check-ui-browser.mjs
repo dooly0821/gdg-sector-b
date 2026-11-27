@@ -5,7 +5,7 @@ import {readFile} from 'node:fs/promises';
 import {resolve,extname} from 'node:path';
 const root=resolve('dist'),mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.webp':'image/webp','.png':'image/png','.svg':'image/svg+xml','.glb':'model/gltf-binary'};
 const server=createServer(async(req,res)=>{try{const u=new URL(req.url,'http://localhost'),path=resolve(root,'.'+(u.pathname==='/'?'/index.html':u.pathname));if(!path.startsWith(root+'/'))throw Error('path');if(u.pathname==='/api/room'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({servers:[1,2,3].map(i=>({id:'GDGS'+(21+i),name:'서버 0'+i,count:0,max:4,phase:'empty',joinable:true}))}));return;}res.setHeader('Content-Type',mime[extname(path)]??'application/octet-stream');res.end(await readFile(path));}catch{res.statusCode=404;res.end();}});
-await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true,args:['--no-sandbox','--enable-webgl','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 try{
  const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  // Inject test-only fixture into the real application module; no production hooks, no game server traffic.
@@ -24,6 +24,7 @@ try{
   }
  }
  const warning=await page.evaluate(()=>window.__warningTest());assert(warning.first&&warning.acked&&warning.text.includes('뒤쪽')&&warning.text.includes('오른쪽')&&warning.pointer==='none');console.log('UI_THREAT_OK',JSON.stringify(warning));
+ const shader=await page.evaluate(async()=>{const {Renderer}=await import('/renderer.js');const c=document.createElement('canvas');const r=new Renderer(c),gl=r.gl,u=r.loc.main.torchRainbow;gl.useProgram(r.program);gl.uniform2fv(u,[.5,1]);const active=Array.from(gl.getUniform(r.program,u));gl.uniform2fv(u,[0,0]);const off=Array.from(gl.getUniform(r.program,u));const error=gl.getError();gl.getExtension('WEBGL_lose_context')?.loseContext();return {linked:gl.isContextLost()||!!u,active,off,error};});assert(shader.linked&&shader.error===0);assert.deepEqual(shader.active,[.5,1]);assert.deepEqual(shader.off,[0,0]);console.log('UI_RAINBOW_SHADER_OK',JSON.stringify(shader));
  const lure=await page.evaluate(()=>window.__signalTest());assert(lure.visible&&lure.pointer==='none'&&lure.label.includes('유인 지점')&&lure.blocked&&lure.expired);console.log('UI_LURE_OK',JSON.stringify(lure));
  assert.deepEqual(errors,[]);
 }finally{await browser.close();await new Promise(r=>server.close(r));}

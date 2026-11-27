@@ -1,15 +1,16 @@
 #signal-markers[hidden],#signal-status[hidden],.lure-marker[hidden]{display:none!important}
 #signal-markers{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:6}
-.lure-marker{position:absolute;width:36px;height:36px;transform:translate(-50%,-50%);color:#f8d47d;pointer-events:none}
-.lure-ring{position:absolute;inset:2px;border:2px solid currentColor;border-radius:50%;opacity:.85;animation:lure-wave 1s ease-out infinite}
-.lure-dot{position:absolute;inset:13px;border:1px solid currentColor;transform:rotate(45deg);background:#3c3017b0;box-shadow:0 0 8px #ffd17c80}
-.lure-marker b{position:absolute;top:40px;left:50%;transform:translateX(-50%);white-space:nowrap;font:700 11px/1.2 system-ui,sans-serif;letter-spacing:.02em;color:#ffe7b5;background:#19170fdf;border:1px solid #b09153;padding:4px 7px;border-radius:2px;text-shadow:0 1px 2px #000}
-.lure-marker:not(.own){color:#c0d5c6}
-.lure-marker:not(.own) b{color:#d8e9dc;border-color:#779b83}
-#signal-status{position:absolute;top:calc(50% + 52px);left:50%;transform:translateX(-50%);z-index:9;pointer-events:none;text-align:center;padding:5px 10px;border:1px solid #ccad63;border-radius:2px;background:#201a10e8;color:#ffe0a2;font:700 clamp(10px,1vw,13px)/1.3 system-ui,sans-serif;white-space:nowrap}
-#signal-status span{display:block;height:3px;margin-top:4px;background:#5c4b2a;overflow:hidden}
-#signal-status i{display:block;height:100%;background:#ffd16e;transform-origin:left;transition:transform .12s linear}
+.lure-marker{position:absolute;width:48px;height:48px;transform:translate(-50%,-50%);color:#fff0fc;pointer-events:none}
+.lure-ring{position:absolute;inset:0;border-radius:50%;background:conic-gradient(#ff3d69,#ffbc37,#eaff45,#40ff96,#33dfff,#7168ff,#ff45d9,#ff3d69);mask:radial-gradient(transparent 57%,#000 59%,#000 73%,transparent 75%);opacity:.9;animation:lure-disco-wave 1s ease-out infinite}
+.lure-ring.echo{animation-delay:-.5s}
+.lure-dot{position:absolute;inset:12px;display:grid;place-items:center;font:900 25px/1 system-ui,sans-serif;color:#fff3fc;text-shadow:0 0 7px #ff58d9,0 0 12px #45ecff;animation:lure-disco-spin 1s linear infinite}
+.lure-marker b{position:absolute;top:54px;left:50%;transform:translateX(-50%);white-space:nowrap;font:800 11px/1.2 system-ui,sans-serif;letter-spacing:.03em;color:#fff0fc;background:#19131fe8;border:1px solid #d790ff;padding:4px 7px;border-radius:3px;text-shadow:0 1px 2px #000}
+.lure-marker:not(.own) b{color:#d8e9ff;border-color:#7bc5eb}
+#signal-status{position:absolute;top:calc(50% + 52px);left:50%;transform:translateX(-50%);z-index:9;pointer-events:none;text-align:center;padding:6px 11px;border:1px solid #d790ff;border-radius:3px;background:#1b1428ed;color:#fff0fc;font:800 clamp(10px,1vw,13px)/1.3 system-ui,sans-serif;white-space:nowrap}
+#signal-status span{display:block;height:4px;margin-top:5px;background:#3c2d4c;overflow:hidden}
+#signal-status i{display:block;height:100%;background:linear-gradient(90deg,#ff476c,#ffb83c,#f8ff54,#42ff91,#3bdbff,#8f6bff,#ff49dc);transform-origin:left;transition:transform .12s linear}
 #play.spectating #signal-markers,#play.spectating #signal-status{display:none!important}
-@keyframes lure-wave{0%{transform:scale(.65);opacity:.95}100%{transform:scale(1.65);opacity:.25}}
-@media(prefers-reduced-motion:reduce){.lure-ring{animation:none}#signal-status i{transition:none}}
-@media(max-height:500px){#signal-status{top:calc(50% + 42px)}.lure-marker b{top:34px}}
+@keyframes lure-disco-wave{0%{transform:scale(.65) rotate(0deg);opacity:.95}100%{transform:scale(1.85) rotate(170deg);opacity:.25}}
+@keyframes lure-disco-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.lure-ring,.lure-dot{animation:none}.lure-ring.echo{display:none}#signal-status i{transition:none}}
+@media(max-height:500px){#signal-status{top:calc(50% + 42px)}.lure-marker b{top:46px}}

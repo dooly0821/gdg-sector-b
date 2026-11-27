@@ -7,6 +7,11 @@ export function signalPower(signal,elapsed){
  // Smooth, two slow swells instead of hard on/off flashes.
  return 1+fade*(.65+.65*(.5+.5*Math.cos(age*Math.PI*2)));
 }
+// Phase in turns, strength fades back to ordinary warm flashlight before expiry.
+export function signalRainbow(signal,elapsed,reducedMotion=false){
+ if(!signal||elapsed<signal.start||elapsed>=signal.until)return [0,0];
+ return [reducedMotion?0:(elapsed-signal.start)*1.1,Math.min(1,(signal.until-elapsed)/.22)];
+}
 export function visibleSignalPoint(signal,eye,blocks){
  const point=[signal.x,Number.isFinite(signal.y)?signal.y:.18,signal.z];
  if(!point.every(Number.isFinite)||Math.hypot(point[0]-eye[0],point[2]-eye[2])>25)return null;
@@ -28,7 +33,7 @@ export function renderSignalFeedback(s,eye,blocks,project,host,status,now){
  for(const sig of list){
   const id=String(sig.id),key=id;seen.add(key);
   let el=[...host.children].find(n=>n.dataset.signal===key);
-  if(!el){el=document.createElement('div');el.className='lure-marker';el.dataset.signal=key;el.innerHTML='<span class="lure-ring"></span><span class="lure-dot"></span><b></b>';host.append(el);}
+  if(!el){el=document.createElement('div');el.className='lure-marker';el.dataset.signal=key;el.innerHTML='<span class="lure-ring"></span><span class="lure-ring echo"></span><span class="lure-dot">✦</span><b></b>';host.append(el);}
   el.classList.toggle('own',sig.owner===(s.id??'solo'));
   let test=cache[key];
   if(!test||now-test.at>=75||Math.hypot(eye[0]-test.eye[0],eye[1]-test.eye[1],eye[2]-test.eye[2])>.18||test.blocks!==blocks){

@@ -1,4 +1,4 @@
-import {activeSignal,signalPower,renderSignalFeedback,clearSignalFeedback} from './signal-feedback.js';
+import {activeSignal,signalPower,signalRainbow,renderSignalFeedback,clearSignalFeedback} from './signal-feedback.js';
 import {warningList,warningLabel,acknowledgeWarnings} from './threat-warning.js';
 import {powerTarget,toggleZone,emitSignal,signalReady,zonePowers,zonePower,pruneSignals} from './facility-actions.js';
 import {expandedLayout} from './map-layout.js';
@@ -40,6 +40,8 @@ persist();
 let sound,master,hum;
 function audioOn(){try{if(!sound){sound=new AudioContext();master=sound.createGain();master.gain.value=0;master.connect(sound.destination);hum=sound.createOscillator();hum.frequency.value=56;hum.type='sine';hum.connect(master);hum.start();}sound.resume().catch(()=>{});master.gain.setTargetAtTime(settings.audio&&mode==='game'?.026*(settings.volume??1):0,sound.currentTime,.4);}catch{}}
 function beep(hz,time=.12,type='sine',gain=.1){if(!sound||!settings.audio||settings.volume<=0)return;let o=sound.createOscillator(),g=sound.createGain(),now=sound.currentTime;o.type=type;o.frequency.setValueAtTime(hz,now);o.frequency.exponentialRampToValueAtTime(hz*.68,now+time);g.gain.setValueAtTime(Math.max(.0001,gain*(settings.volume??1)),now);g.gain.exponentialRampToValueAtTime(.0001,now+time);o.connect(g);g.connect(sound.destination);o.onended=()=>{o.disconnect();g.disconnect();};o.start();o.stop(now+time+.02);}
+const reducedLureMotion=matchMedia('(prefers-reduced-motion: reduce)');
+function lureJingle(){if(!sound||!settings.audio||settings.volume<=0)return;const o=sound.createOscillator(),g=sound.createGain(),t=sound.currentTime,v=Math.max(.0001,.055*(settings.volume??1));o.type='triangle';for(const [i,hz] of [392,523.25,659.25,783.99,523.25].entries()){o.frequency.setValueAtTime(hz,t+i*.075);g.gain.setValueAtTime(v,t+i*.075);g.gain.exponentialRampToValueAtTime(.0001,t+i*.075+.066);}o.connect(g);g.connect(sound.destination);o.onended=()=>{o.disconnect();g.disconnect();};o.start(t);o.stop(t+.39);}
 function say(line,duration=5){$('#radio').innerHTML='<strong>관제실</strong>'+line;radioUntil=performance.now()+duration*1000;}
 const rows=[['W A S D','이동'],['MOUSE','시점 회전'],['SHIFT','달리기'],['C (누르고 유지)','앉기 / 은신'],['V','달리기 / 공중 슬라이딩 · 종료 후 0.4초 재사용 대기'],['F','손전등 유인 신호 · 12초 재사용 대기'],['위협 경보','화살표 방향으로 귀신 접근 · 즉시 도주'],['C + W A S D','앉은 채 이동 / 낮은 은신처 진입'],['W + SPACE','난간 · 선반 · 상자 위 자유 점프'],['SHIFT + W + SPACE','달리면서 난간 점프'],['W + C + SPACE','전진 버니합 · 도약할 때만 가속'],['A / D','공중 방향 조절 · 추가 가속 없음'],['SPACE / WHEEL','기본 점프 (약 1.2m) · 연속 점프'],['C + SPACE','앉기 점프 (약 1m) · 버니합 가속 시 최대 1.35m'],['Q','손전등 들기 / 내리기'],['E','상자 들기 · 내려놓기 / 쓰러진 팀원 근처 '+REVIVE_SECONDS+'초 유지해 구조'],['M','전체 지도 확대 / 축소'],['ESC','일시 정지']];
 const links='<a class="doc" href="characters.html" target="_blank" rel="noopener">캐릭터 검수실 ↗</a><div class="panel-actions"><a class="doc" href="unity-migration.html" target="_blank" rel="noopener">Unity 이식 가이드 ↗</a></div>';
@@ -141,7 +143,7 @@ function onCoopState(snap){
   else if(event.type==='anomaly'){beep(event.phase==='start'?58:180,.35,'triangle',.12);say(event.message,4);}
   else if(event.type==='notice'&&(!event.player||event.player===snap.you))say(event.message,3);
   else if(event.type==='power'){beep(180,.12,'triangle',.06);say(event.message,3);}
-  else if(event.type==='signal'&&event.player===snap.you){beep(330,.28,'triangle',.085);beep(660,.14,'sine',.045);say('유인 신호 전송 · 12초 대기',2.5);}
+  else if(event.type==='signal'&&event.player===snap.you){lureJingle();say('디스코 유인 신호 전송 · 12초 대기',2.5);}
   else if(event.type==='door'&&event.player===snap.you)beep(112,.19,'triangle',.08);
   else if(event.type==='cargo'&&event.player===snap.you){beep(event.result==='delivered'?620:235,.12);say(event.id+' · '+(event.result==='delivered'?'팀 배송 완료':event.result==='picked'?'집화 완료':'임시 적치 완료'),2.5);}
  }
@@ -416,7 +418,7 @@ function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/10
  const view=facing;
  const visualTime=coopStarting?(s.coopVisualClock??s.elapsed):s.elapsed;
  const pose=choreography(s,eye,available,moving,keys.has('ShiftLeft')||keys.has('ShiftRight'),visualTime,view);
- pose.actors=[...hauntLayers(s,name=>renderer?.skins?.has(name)),...lockerLayers(s,LOCKER_DOOR_GROUP),...(hiddenLocker?[]:workerLegLayers(s)),...peerLayers(coop,s,dt,TEAM_WORKER_GROUP)];pose.rescueActors=coopStarting?rescueLayers(coop?.snapshot?.players,coop?.snapshot?.you,TEAM_WORKER_GROUP):[];pose.clock=visualTime;const lighting=eventLighting(s);pose.gridPower=lighting.power;pose.zonePowers=zonePowers(s);pose.localPower=zonePower(s,s.x,s.z);const lure=activeSignal(s);if(s.flashlight&&lure)pose.flashlight=(pose.flashlight??0)*signalPower(lure,s.elapsed);
+ pose.actors=[...hauntLayers(s,name=>renderer?.skins?.has(name)),...lockerLayers(s,LOCKER_DOOR_GROUP),...(hiddenLocker?[]:workerLegLayers(s)),...peerLayers(coop,s,dt,TEAM_WORKER_GROUP)];pose.rescueActors=coopStarting?rescueLayers(coop?.snapshot?.players,coop?.snapshot?.you,TEAM_WORKER_GROUP):[];pose.clock=visualTime;const lighting=eventLighting(s);pose.gridPower=lighting.power;pose.zonePowers=zonePowers(s);pose.localPower=zonePower(s,s.x,s.z);const lure=activeSignal(s);if(s.flashlight&&lure){const reduced=reducedLureMotion.matches;pose.flashlight=(pose.flashlight??0)*(reduced?1.65:signalPower(lure,s.elapsed));pose.torchRainbow=signalRainbow(lure,s.elapsed,reduced);}
  if(hiddenLocker){pose.hands=[];if(Math.floor(s.elapsed*1.6)>Math.floor((s.elapsed-dt)*1.6)&&s.haunt.some(a=>Math.hypot(a.x-s.x,a.z-s.z)<8))beep(43,.15,'sine',.055);}
  // Hysteresis: lower render resolution only after sustained slow frames.
  const frameMs=Math.min(150,rawDt*1000);s.frameAverage=(s.frameAverage??16.7)*.90+frameMs*.10;
@@ -469,7 +471,7 @@ document.addEventListener('keydown',e=>{
  if(e.code==='KeyM'){e.preventDefault();if(!e.repeat){session.mapExpanded=!session.mapExpanded;$('#play').classList.toggle('map-expanded',session.mapExpanded);}return;}
  if(e.code==='F3'){e.preventDefault();if(!e.repeat)session.showTraversal=!session.showTraversal;return;}
  if(e.code==='KeyV'){e.preventDefault();if(!e.repeat){session.slideRequested=true;if(coopStarting&&coop)coop.command('slide');}return;}
- if(e.code==='KeyF'){e.preventDefault();if(!e.repeat){if(coopStarting&&coop)coop.command('signal');else if(!closedLocker(session)&&emitSignal(session,session,worlds[0].blocks.concat(lockerDoorBlocks(session)))){beep(330,.28,'triangle',.085);beep(660,.14,'sine',.045);say('유인 신호 전송 · 12초 대기',2.5);}else say(signalReady(session)>0?'유인 신호 재사용 대기 중':'손전등을 켜고 열린 공간을 조준하세요.',2);}return;}
+ if(e.code==='KeyF'){e.preventDefault();if(!e.repeat){if(coopStarting&&coop)coop.command('signal');else if(!closedLocker(session)&&emitSignal(session,session,worlds[0].blocks.concat(lockerDoorBlocks(session)))){lureJingle();say('디스코 유인 신호 전송 · 12초 대기',2.5);}else say(signalReady(session)>0?'유인 신호 재사용 대기 중':'손전등을 켜고 열린 공간을 조준하세요.',2);}return;}
  if(e.code==='KeyQ'&&!e.repeat){if(coopStarting&&coop){coop.command('torch');return;}if(session.handAction){session.restoreTorch=!session.restoreTorch;return;}if(toggleFlashlight(session)){session.pendingUse=false;session.restoreTorch=false;beep(180,.055,'triangle',.025);}else say('상자를 집거나 내려놓는 동안에는 장비 전환을 할 수 없습니다.',2);return;}if(e.code==='KeyE'&&!e.repeat){if(coopStarting&&coop){keys.add('KeyE');coop.inputChanged();}use();return;}if(e.code==='Space'&&!e.repeat){jump=true;if(coopStarting&&coop)coop.command('jump');}const changed=!keys.has(e.code);keys.add(e.code);if(changed&&coopStarting&&coop&&['KeyW','KeyA','KeyS','KeyD','KeyC','ShiftLeft','ShiftRight','Space'].includes(e.code))coop.inputChanged();
 });document.addEventListener('keyup',e=>{const changed=keys.delete(e.code);if(changed&&coopStarting&&coop)coop.inputChanged();});
 canvas.addEventListener('wheel',e=>{if(mode==='game'){e.preventDefault();if(session?.failed){switchSpectator(e.deltaY>0?1:-1);return;}jump=true;if(coopStarting&&coop)coop.command('jump');}},{passive:false});
