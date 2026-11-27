@@ -16,7 +16,8 @@ export function blockGameplayShortcut(e){
  return !!(e.ctrlKey||e.metaKey||e.altKey||['ControlLeft','ControlRight','AltLeft','AltRight','MetaLeft','MetaRight','Tab','F1','F5','F7','F10','F11','F12','ContextMenu'].includes(e.code));
 }
 export function frameBudget(raw,accumulator,tick){
- const dt=Math.max(0,Math.min(.067,Number.isFinite(raw)?raw:0)),total=Math.max(0,Math.min(tick*8+tick*.999,accumulator+dt));
+ // Recover moderate 60Hz frame spikes within the existing eight-step ceiling.
+ const dt=Math.max(0,Math.min(.10,tick*8,Number.isFinite(raw)?raw:0)),total=Math.max(0,Math.min(tick*8+tick*.999,accumulator+dt));
  const steps=Math.min(8,Math.floor((total+1e-9)/tick));
  return {dt,steps,remainder:Math.max(0,total-steps*tick)};
 }

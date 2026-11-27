@@ -176,10 +176,10 @@ export function applyCoopSnapshot(s,snap,first=false){
 export function advanceCoopPrediction(s,blocks,dynamic,dt,now){
  if(!s.coopHidden&&!!s.grounded===!!s.netGrounded&&!s.vault&&s.netCorrection){
   const [dx,dz]=s.netCorrection,len=Math.hypot(dx,dz),speed=Math.hypot(finite(s.vx),finite(s.vz));
-  const maxRate=s.grounded?(speed<.5?2.8:1.45):.70,limit=Math.min(1-Math.exp(-dt*6),len>0?maxRate*dt/len:0),x=s.x,z=s.z;
+  const turning=(s.hopTurnGrace??0)>0&&speed>5.46,maxRate=turning?.30:s.grounded?(speed<.5?2.8:1.45):.70,limit=Math.min(1-Math.exp(-dt*6),len>0?maxRate*dt/len:0),x=s.x,z=s.z;
   let cx=dx*limit,cz=dz*limit;
   // While sprinting, bound the backwards component so a normal correction cannot reverse motion.
-  if(speed>.5){const ux=s.vx/speed,uz=s.vz/speed,back=cx*ux+cz*uz,floor=-Math.min(maxRate,speed*(s.slideTime>0?.025:.08))*dt;if(back<floor){cx+=(floor-back)*ux;cz+=(floor-back)*uz;}}
+  if(speed>.5){const ux=s.vx/speed,uz=s.vz/speed,back=cx*ux+cz*uz,floor=-Math.min(maxRate,speed*(s.slideTime>0||turning?.025:.08))*dt;if(back<floor){cx+=(floor-back)*ux;cz+=(floor-back)*uz;}}
   nudgeCoopPosition(s,blocks,cx,cz,dynamic);
   const mx=s.x-x,mz=s.z-z;s.netAppliedX=(s.netAppliedX??0)+mx;s.netAppliedZ=(s.netAppliedZ??0)+mz;
   s.netCorrection=[dx-mx,dz-mz];
