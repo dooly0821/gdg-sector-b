@@ -15,5 +15,5 @@ for(const hz of [60,120]){
 }
 const s=Object.assign(newShift(),{x:0,y:.38,z:0,yaw:0,pitch:-.35,grounded:false,vz:-6,cargo:[{id:'B-01',area:'test',pos:[0,.6,-1.65]}],states:['AVAILABLE']});
 const t=handlingTarget(s,[]);assert(canUse(s,t,[]));assert(!canUse(s,t,[[-1,-.8,1,-.7,0,3]]));assert(beginHandling(s,t,[]));for(let i=0;i<30;i++)advanceHandling(s,[],1/60);assert.equal(s.carried,0);
-const down={id:'down',failed:true,x:2.55,y:0,z:0},me={id:'me',x:0,y:0,z:0};assert.equal(REVIVE_SECONDS,2.5);assert.equal(findReviveTarget(me,[down],[],me.id).id,'down');assert.equal(findReviveTarget(me,[down],[[1,-1,1.1,1,0,3]],me.id),null);
+const down={id:'down',failed:true,x:2.55,y:0,z:0},me={id:'me',x:0,y:0,z:0};assert.equal(REVIVE_SECONDS,1.7);assert.equal(findReviveTarget(me,[down],[],me.id).id,'down');assert.equal(findReviveTarget(me,[down],[[1,-1,1.1,1,0,3]],me.id),null);
 console.log('PASS: accelerated bhop at both tick rates, airborne pickup and physical obstacle jump, wider revive with wall safety');
