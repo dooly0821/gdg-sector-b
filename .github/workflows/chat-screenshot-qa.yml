@@ -1,0 +1,22 @@
+name: Team chat screenshot QA
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  screenshot:
+    if: github.head_ref == 'qa-chat-screenshots-20261127'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --no-package-lock playwright
+      - run: npx playwright install chromium
+      - run: node scripts/capture-team-chat.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gdg-team-chat-screenshots
+          path: /tmp/gdg-chat-shots/*.png
