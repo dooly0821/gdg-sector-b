@@ -31,7 +31,7 @@ function attach(room,p){
  const s=p.state,q=room.shared;q.powerZones??={};q.signals??={};q.cargoDeadlines??={};q.deliveryBays??={};for(const k of sharedKeys)s[k]=q[k];
  s.difficultyLevel=q.difficultyLevel??'normal';s.elapsed=q.elapsed;s.skipLockerAdvance=true;s.id=p.id;return s;
 }
-function detach(p){for(const k of sharedKeys)delete p.state[k];delete p.state.hauntSounds;delete p.state.teamView;}
+function detach(p){for(const k of sharedKeys)delete p.state[k];delete p.state.hauntSounds;delete p.state.teamView;delete p.state.placementWorkers;}
 function pushEvent(room,e){room.eventSeq++;room.events.push({...e,seq:room.eventSeq});if(room.events.length>28)room.events.shift();}
 function addPlayer(room,now,nickname){
  const used=new Set(Object.values(room.players).map(p=>p.slot));const slot=[0,1,2,3].find(n=>!used.has(n));check(slot!==undefined,'최대 4명까지 입장할 수 있습니다.',409);
@@ -104,7 +104,7 @@ function command(room,p,cmd){
    const other=live(room).some(a=>a!==p&&insideLocker(a.state,l));
    if(!other){const result=useLocker(s,l);if(result==='closing'){s.yaw=0;s.pitch=0;p.input.yaw=0;p.input.pitch=0;}if(result==='opening'||result==='closing')pushEvent(room,{type:'door',x:l.x,z:l.z,player:p.id});else if(result==='step-back')pushEvent(room,{type:'notice',player:p.id,message:'문이 열릴 공간이 필요합니다. 한 걸음 물러서세요.'});}
    else pushEvent(room,{type:'notice',player:p.id,message:'다른 작업자가 사용하는 사물함입니다.'});
-  }else {const t=handlingTarget(s,blocks);if(canUse(s,t,blocks)){s.restoreTorch=s.flashlight;beginHandling(s,t,blocks);}}
+  }else {s.placementWorkers=live(room).filter(a=>a!==p).map(a=>a.state);const t=handlingTarget(s,blocks);if(canUse(s,t,blocks)){s.restoreTorch=s.flashlight;beginHandling(s,t,blocks);}}
  }
  syncShared(room,p);detach(p);
 }
@@ -129,7 +129,7 @@ export function tickRoom(room,now=Date.now()){
    step(s,new Set(p.input.keys),blocks,dt,p.jump);p.jump=false;
    updateViewmodel(s,dt);
    if(s.handAction){
-    const id=s.handAction.target.id,result=advanceHandling(s,blocks.concat(lockerDoorBlocks(s)),dt);
+    s.placementWorkers=active.filter(a=>a!==p).map(a=>a.state);const id=s.handAction.target.id,result=advanceHandling(s,blocks.concat(lockerDoorBlocks(s)),dt);delete s.placementWorkers;
     if(result){if(s.restoreTorch){s.flashlight=true;s.restoreTorch=false;}if(result!=='cancelled')pushEvent(room,{type:'cargo',result,id,player:p.id});}
    }
    syncShared(room,p);

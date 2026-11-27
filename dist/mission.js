@@ -123,8 +123,13 @@ const parcelPos=(s,i)=>s.parked?.[i]??shiftParcel(s,i).pos;
 const dockTarget=(i=0)=>({pos:EXPANDED_DOCKS[i],id:'BAY '+String(i+2).padStart(2,'0'),area:'Outbound dispatch',dock:true,bay:i});
 const dockTargets=s=>docksFor(s).map((_,i)=>dockTarget(i)).sort((a,b)=>Math.hypot(s.x-a.pos[0],s.z-a.pos[2])-Math.hypot(s.x-b.pos[0],s.z-b.pos[2]));
 const parcelHalf=[CONFIG.parcelWidth/2,CONFIG.parcelWidth*.88,CONFIG.parcelWidth*.41];
+export function cargoWorkerClear(s,pos){
+ const [x,y,z]=pos,[w,h,d]=parcelHalf,r=PHYSICS.radius+.035;
+ return [s,...(s.placementWorkers??[])].every(p=>{if(p.failed||p.y>=y+h-.012||p.y+(p.bodyHeight??PHYSICS.height)<=y+.012)return true;const dx=p.x-Math.max(x-w,Math.min(x+w,p.x)),dz=p.z-Math.max(z-d,Math.min(z+d,p.z));return dx*dx+dz*dz>=r*r;});
+}
 function placementClear(s,pos,blocks){
  const [x,y,z]=pos,[w,h,d]=parcelHalf;
+ if(!cargoWorkerClear(s,pos))return false;
  return ![...blocks,...worldBounds].some(([x1,z1,x2,z2,y1,y2])=>
    x+w>x1&&x-w<x2&&z+d>z1&&z-d<z2&&y+h>y1+.001&&y<y2-.001)&&
   !parcelPositions(s).some(([px,py,pz])=>Math.abs(px-x)<2*w+.03&&Math.abs(py-y)<h+.01&&Math.abs(pz-z)<2*d+.03);
@@ -133,7 +138,7 @@ export function dropTarget(s,blocks){
  if(!s.grounded||s.vault)return null;
  const [w,,d]=parcelHalf, clear=.012;
  const running=Math.hypot(s.vx||0,s.vz||0)>PHYSICS.walk;
- const offsets=running?[[.86,.66],[.86,-.66],[1.04,0]]:[[1.04,0],[.93,0],[1.18,0]];
+ const offsets=running?[[.86,.66],[.86,-.66],[1.04,0],[1.18,.42],[1.18,-.42]]:[[1.04,0],[.93,0],[1.18,0],[1.04,.46],[1.04,-.46]];
  for(const [distance,side] of offsets){
   const x=s.x-Math.sin(s.yaw)*distance+Math.cos(s.yaw)*side;
   const z=s.z-Math.cos(s.yaw)*distance-Math.sin(s.yaw)*side;

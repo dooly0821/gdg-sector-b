@@ -18,7 +18,7 @@ jobs:
       - run: node scripts/check-climb-routes.mjs
 
   live-health:
-    if: github.head_ref == 'bounded-player-collision-recovery-20261127'
+    if: github.head_ref == 'smooth-player-contact-20261127'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:

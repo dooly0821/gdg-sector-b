@@ -69,14 +69,44 @@ function recoverOverlap(s,blocks,dt){
  s.vx=s.vz=0;s.vy=0;s.jumpBuffer=0;
  return true;
 }
-function solve(s,blocks,dx,dz,surface){
- const oldX=s.x,oldZ=s.z,oldY=s.y; s.x+=dx;s.z+=dz;
+// Try the normal accessible step before treating a surface as a wall.
+function candidateStep(s,blocks,dx,dz,surface){
+ const oldX=s.x,oldZ=s.z,oldY=s.y;s.x+=dx;s.z+=dz;
  // Only allow a step if the top is accessible and the full body fits.
  if(s.grounded){let top=surface(s.x,s.z,s.y);for(const b of blocks){if(b[6]==='stair-ramp'&&contact(s.x,s.z,b,P.radius-.035)){const h=stairTop(b,s.x,s.z);if(h<=s.y+P.stepHeight)top=Math.max(top,h);}else if(b[6]!=='rail'&&b[6]!=='stair-ramp'&&b[5]>s.y+.012&&b[5]<=s.y+P.stepHeight&&contact(s.x,s.z,b,P.radius+.005))top=Math.max(top,b[5]);else if(railSupport(b,s.x,s.z)&&railSupport(b,oldX,oldZ)&&Math.abs(railTop(b,oldX,oldZ)-oldY)<.20){const h=railTop(b,s.x,s.z);if(h<=s.y+P.stepHeight)top=Math.max(top,h);}}
   if(top>s.y&&top-s.y<=P.stepHeight&&!blocks.some(b=>overlaps(top,b,s.z,s.x,s.bodyHeight)&&contact(s.x,s.z,b,P.radius)))s.y=top;
  }
- for(let i=0;i<7;i++){let hit=false;for(const b of blocks){if(!overlaps(s.y,b,s.z,s.x,s.bodyHeight))continue;const n=contact(s.x,s.z,b,P.radius);if(!n)continue;hit=true;s.x+=n[0]*(n[2]+P.skin);s.z+=n[1]*(n[2]+P.skin);clip(s,n[0],n[1]);}if(!hit)break;}
- if(Math.hypot(s.x-oldX,s.z-oldZ)>Math.hypot(dx,dz)+.012||blocks.some(b=>overlaps(s.y,b,s.z,s.x,s.bodyHeight)&&contact(s.x,s.z,b,P.radius-.002))){s.x=oldX;s.z=oldZ;s.y=oldY;s.vx=s.vz=0;}
+
+ const result=[s.x,s.y,s.z];s.x=oldX;s.y=oldY;s.z=oldZ;return result;
+}
+// Sweep short movements and keep the unblocked tangent. Never resolve a new
+// contact by pushing through a corner, and never discard both velocity axes.
+function solve(s,blocks,dx,dz,surface){
+ if(Math.hypot(dx,dz)<1e-9)return;
+ let rx=dx,rz=dz;
+ const contacts=(x,y,z)=>{
+  const hits=[];
+  for(const b of blocks){if(!overlaps(y,b,z,x,s.bodyHeight))continue;const n=contact(x,z,b,P.radius);if(n&&n[2]>.001)hits.push(n);}
+  return hits;
+ };
+ for(let pass=0;pass<4&&Math.hypot(rx,rz)>1e-7;pass++){
+  const end=candidateStep(s,blocks,rx,rz,surface),hits=contacts(...end);
+  if(!hits.length){[s.x,s.y,s.z]=end;return;}
+  let lo=0,hi=1,at=[s.x,s.y,s.z],blocked=hits;
+  for(let i=0;i<9;i++){
+   const t=(lo+hi)*.5,point=candidateStep(s,blocks,rx*t,rz*t,surface),h=contacts(...point);
+   if(h.length){hi=t;blocked=h;}else{lo=t;at=point;}
+  }
+  [s.x,s.y,s.z]=at;
+  rx*=1-lo;rz*=1-lo;
+  // Multiple normals at an inside corner are clipped repeatedly, with no
+  // added energy. A rounded outer corner naturally changes its tangent.
+  const before=Math.hypot(rx,rz);
+  for(let i=0;i<3;i++)for(const [nx,nz] of blocked){
+   const d=rx*nx+rz*nz;if(d<0){rx-=d*nx;rz-=d*nz;}clip(s,nx,nz);
+  }
+  if(Math.hypot(rx,rz)>=before-1e-9&&lo<.0001)return;
+ }
 }
 function accelerate(s,x,z,wish,accel,dt){const add=wish-(s.vx*x+s.vz*z);if(add<=0)return;const amt=Math.min(add,accel*wish*dt);s.vx+=x*amt;s.vz+=z*amt;}
 // Only momentum above ordinary sprint speed contributes to jump height.
@@ -147,7 +177,7 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
   const cap=crouch?Math.max(before,P.airWish):Math.max(before,P.sprint*.78);
   const after=Math.hypot(s.vx,s.vz);if(after>cap){s.vx*=cap/after;s.vz*=cap/after;}
  }
- const speed=Math.hypot(s.vx,s.vz);if(speed>P.bhopCap){s.vx*=P.bhopCap/speed;s.vz*=P.bhopCap/speed;}
+ const rawSpeed=Math.hypot(s.vx,s.vz);if(rawSpeed>P.bhopCap){s.vx*=P.bhopCap/rawSpeed;s.vz*=P.bhopCap/rawSpeed;}const speed=Math.min(rawSpeed,P.bhopCap);
  const ox=s.x,oy=s.y,oz=s.z,wasGrounded=s.grounded;
  const slices=Math.max(1,Math.ceil(Math.hypot(s.vx,s.vz)*dt/.035));for(let i=0;i<slices;i++)solve(s,blocks,s.vx*dt/slices,s.vz*dt/slices,surface);
  // Bound the whole tick too, rather than accumulating solver pushes per slice.
