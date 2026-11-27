@@ -18,7 +18,7 @@ jobs:
       - run: node scripts/check-climb-routes.mjs
 
   live-health:
-    if: github.head_ref == 'coop-input-replay-pickup-20261127'
+    if: github.head_ref == 'isolated-team-text-chat-20261127'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -27,3 +27,22 @@ jobs:
         with:
           node-version: '22'
       - run: node scripts/check-live-health.mjs
+
+  team-chat-redis:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/check-team-chat-redis.mjs
+        env:
+          REDIS_CONTAINER: ${{ job.services.redis.id }}

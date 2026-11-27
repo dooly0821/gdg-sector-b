@@ -1,3 +1,4 @@
+import {requestTeamChat} from './team-chat.js';
 import {randomBytes} from 'node:crypto';
 import {createSyncEngine} from './room-sync.js';
 import {normalizeNickname} from '../dist/nickname.js';
@@ -89,3 +90,5 @@ export async function roomRequest(body,{allowMemory=false}={}){
  if(!['create','join','enter','list'].includes(body.op)&&(typeof body.token!=='string'||body.token.length!==48))throw new RoomError('잘못된 입장 인증입니다.',401);
  return configured?durable(config,body):memory(body);
 }
+
+export async function roomChatRequest(body){const config=env();if(!config.url||!config.token)throw new RoomError('팀 채팅 저장소를 사용할 수 없습니다.',503);return requestTeamChat(body,{redis:cmd=>redis(config,cmd),key:roomStorageKey,error:(m,s)=>new RoomError(m,s)});}
