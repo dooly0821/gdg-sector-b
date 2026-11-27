@@ -50,8 +50,8 @@ drift.vx=0;recordCoopPrediction(drift,3500);applyCoopSnapshot(drift,incoming(350
 // Clear floor: progressively close the distance, even after the old snap deadline.
 for(let i=0;i<360;i++){const t=3600+i*1000/60;if(i%12===0){recordCoopPrediction(drift,t);applyCoopSnapshot(drift,incoming(t));}advanceCoopPrediction(drift,[],[],1/60,t);}
 assert(drift.x<.3&&drift.x>=0);assert.equal(drift.netHardCorrections??0,0);
-// Preserve authoritative recovery when truly blocked behind incompatible geometry.
-const blocked={...drift,x:8,vx:0,netHistory:[],netAppliedX:0,netAppliedZ:0,netDivergenceSince:1000,netBlockedSince:1000};recordCoopPrediction(blocked,4100);applyCoopSnapshot(blocked,{self:{...blocked,x:0},players:[{id:'a'}],you:'a',netSample:4100,netReceived:4200,netRtt:200,simLagMs:8,haunt:[]});assert.equal(blocked.x,0);assert.equal(blocked.netHardCorrections,1);
-console.log('PASS stationary recovery: no pre-armed snap, gradual collision-safe convergence, blocked fallback');
+// A truly blocked correction may report desync but must never teleport through geometry.
+const blocked={...drift,x:8,vx:0,netHistory:[],netAppliedX:0,netAppliedZ:0,netDivergenceSince:1000,netBlockedSince:1000};recordCoopPrediction(blocked,4100);applyCoopSnapshot(blocked,{self:{...blocked,x:0},players:[{id:'a'}],you:'a',netSample:4100,netReceived:4200,netRtt:200,simLagMs:8,haunt:[]});assert.equal(blocked.x,8);assert.equal(blocked.netHardCorrections??0,0);assert(blocked.netRecoveryNeeded);
+console.log('PASS stationary recovery: no pre-armed snap, gradual collision-safe convergence, blocked no-warp fallback');
 
 const {readFileSync}=await import('node:fs');assert.match(readFileSync(new URL('../dist/style.css',import.meta.url),'utf8'),/#reticle\{[^}]*pointer-events:none/);console.log('PASS reticle does not intercept mouse capture');

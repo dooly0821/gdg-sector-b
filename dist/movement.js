@@ -40,6 +40,35 @@ export function movementBlocks(blocks){
 export function stairTop(b,x,z){const m=b[8],a=m.axis===0?x:z;return m.top*clamp((a-m.low)/(m.high-m.low),0,1);}
 function supportTop(b,x,z){return b[6]==='stair-ramp'?stairTop(b,x,z):b[6]==='rail'?railTop(b,x,z):blockHeight(b,z,1);}
 function clip(s,nx,nz){let v=s.vx*nx+s.vz*nz;if(v<0){s.vx-=nx*v;s.vz-=nz*v;}}
+// Resolve pre-existing overlaps gradually, not by projecting a worker
+// through a deep collider in one frame. Never enter another solid while escaping.
+function penetration(s,blocks,x=s.x,z=s.z){
+ const hits=new Map();
+ for(const b of blocks){if(!overlaps(s.y,b,z,x,s.bodyHeight))continue;const n=contact(x,z,b,P.radius);if(n&&n[2]>.002)hits.set(b,n[2]);}
+ return hits;
+}
+function recoverOverlap(s,blocks,dt){
+ const old=penetration(s,blocks);if(!old.size){s.collisionRecovery=false;return false;}
+ // A valid low step/ramp seam is not a deep overlap. Allow the original
+ // bounded step-up if the entire capsule fits at the accessible support.
+ if(s.grounded){
+  const y=s.y,top=Math.max(y,...[...old.keys()].map(b=>supportTop(b,s.x,s.z)).filter(h=>h<=y+P.stepHeight));
+  if(top>y){s.y=top;if(!penetration(s,blocks).size){s.collisionRecovery=false;return false;}s.y=y;}
+ }
+ s.collisionRecovery=true;const total=[...old.values()].reduce((a,b)=>a+b,0);
+ const step=Math.min(.055,3*dt);let best=null,score=total;
+ // Search only a local ring; no arbitrary destination or floor change.
+ for(const scale of [1,.5])for(let i=0;i<16;i++){
+  const a=i*Math.PI/8,x=s.x+Math.cos(a)*step*scale,z=s.z+Math.sin(a)*step*scale;
+  const next=penetration(s,blocks,x,z);
+  if([...next].some(([b,d])=>!old.has(b)||d>old.get(b)+.001))continue;
+  const sum=[...next.values()].reduce((a,b)=>a+b,0);
+  if(sum<score-1e-6){best=[x,z];score=sum;}
+ }
+ if(best){s.x=best[0];s.z=best[1];}
+ s.vx=s.vz=0;s.vy=0;s.jumpBuffer=0;
+ return true;
+}
 function solve(s,blocks,dx,dz,surface){
  const oldX=s.x,oldZ=s.z,oldY=s.y; s.x+=dx;s.z+=dz;
  // Only allow a step if the top is accessible and the full body fits.
@@ -47,7 +76,7 @@ function solve(s,blocks,dx,dz,surface){
   if(top>s.y&&top-s.y<=P.stepHeight&&!blocks.some(b=>overlaps(top,b,s.z,s.x,s.bodyHeight)&&contact(s.x,s.z,b,P.radius)))s.y=top;
  }
  for(let i=0;i<7;i++){let hit=false;for(const b of blocks){if(!overlaps(s.y,b,s.z,s.x,s.bodyHeight))continue;const n=contact(s.x,s.z,b,P.radius);if(!n)continue;hit=true;s.x+=n[0]*(n[2]+P.skin);s.z+=n[1]*(n[2]+P.skin);clip(s,n[0],n[1]);}if(!hit)break;}
- if(blocks.some(b=>overlaps(s.y,b,s.z,s.x,s.bodyHeight)&&contact(s.x,s.z,b,P.radius-.002))){s.x=oldX;s.z=oldZ;s.y=oldY;s.vx=s.vz=0;}
+ if(Math.hypot(s.x-oldX,s.z-oldZ)>Math.hypot(dx,dz)+.012||blocks.some(b=>overlaps(s.y,b,s.z,s.x,s.bodyHeight)&&contact(s.x,s.z,b,P.radius-.002))){s.x=oldX;s.z=oldZ;s.y=oldY;s.vx=s.vz=0;}
 }
 function accelerate(s,x,z,wish,accel,dt){const add=wish-(s.vx*x+s.vz*z);if(add<=0)return;const amt=Math.min(add,accel*wish*dt);s.vx+=x*amt;s.vz+=z*amt;}
 // Only momentum above ordinary sprint speed contributes to jump height.
@@ -73,6 +102,7 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
  const current=s.bodyHeight??P.height,target=duck?1.06:P.height;
  const height=current+clamp(target-current,-dt*6.8,dt*5.5);
  s.bodyHeight=height<=current||!blocks.some(b=>contact(s.x,s.z,b,P.radius)&&overlaps(s.y,b,s.z,s.x,height))?height:current;
+ if(recoverOverlap(s,blocks,dt)){s.elapsed+=dt;return;}
  const sprint=keys.has('ShiftLeft')||keys.has('ShiftRight'),heavy=s.carried>=0&&s.cargo?.[s.carried]?.special==='heavy',up=+keys.has('KeyW')-+keys.has('KeyS'),side=+keys.has('KeyD')-+keys.has('KeyA'),mag=Math.hypot(up,side),wish=(s.bodyHeight<P.height-.01?P.walk*.55:sprint?P.sprint:P.walk)*(heavy?.85:1);
  const x=mag?(Math.cos(s.yaw)*side-Math.sin(s.yaw)*up)/mag:0,z=mag?(-Math.sin(s.yaw)*side-Math.cos(s.yaw)*up)/mag:0;
 
@@ -118,8 +148,10 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
   const after=Math.hypot(s.vx,s.vz);if(after>cap){s.vx*=cap/after;s.vz*=cap/after;}
  }
  const speed=Math.hypot(s.vx,s.vz);if(speed>P.bhopCap){s.vx*=P.bhopCap/speed;s.vz*=P.bhopCap/speed;}
- const ox=s.x,oz=s.z,wasGrounded=s.grounded;
+ const ox=s.x,oy=s.y,oz=s.z,wasGrounded=s.grounded;
  const slices=Math.max(1,Math.ceil(Math.hypot(s.vx,s.vz)*dt/.035));for(let i=0;i<slices;i++)solve(s,blocks,s.vx*dt/slices,s.vz*dt/slices,surface);
+ // Bound the whole tick too, rather than accumulating solver pushes per slice.
+ if(Math.hypot(s.x-ox,s.z-oz)>speed*dt+.018){s.x=ox;s.y=oy;s.z=oz;s.vx=s.vz=0;}
  s.steps+=Math.hypot(s.x-ox,s.z-oz);
  const old=s.y;s.vy-=P.gravity*dt;let next=old+s.vy*dt;
  let floor=surface(s.x,s.z,old);

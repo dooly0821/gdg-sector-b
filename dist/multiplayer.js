@@ -140,7 +140,11 @@ export function applyCoopSnapshot(s,snap,first=false){
  // Same-floor drift converges through collision-safe nudges; snap only if those
  // actually remain blocked and both sides have settled for several seconds.
  const blocked=Number.isFinite(s.netBlockedSince)&&now-s.netBlockedSince>2500;
- const hard=first||revived||hidden!==oldHidden||v.failed||(reliable&&stationary&&err>4.25&&blocked&&now-(s.netDivergenceSince??now)>2500)||(verticalConflict&&stationary&&now-s.netFloorSince>1800)||(reliable&&stationary&&mismatch&&sameLocalFloor&&now-(s.netMismatchAt??now)>2500&&vertical>.85);
+ // A stuck worker must never be silently relocated across a wall or to
+ // another storey. Keep the authoritative pose for diagnostics, but ordinary
+ // gameplay only uses collision-safe nudges. Lifecycle transitions remain.
+ const hard=first||revived||hidden!==oldHidden||v.failed;
+ s.netRecoveryNeeded=!hard&&((reliable&&stationary&&err>4.25&&blocked&&now-(s.netDivergenceSince??now)>2500)||(verticalConflict&&stationary&&now-s.netFloorSince>1800)||(reliable&&stationary&&mismatch&&sameLocalFloor&&now-(s.netMismatchAt??now)>2500&&vertical>.85));
  if(hard){
   for(const k of ['x','y','z','vx','vy','vz','grounded','bodyHeight','steps','vault','onRail'])s[k]=v[k]??(k==='vault'?null:s[k]);
   s.netHistory=[];s.netAppliedX=s.netAppliedZ=0;s.netCorrection=[0,0];s.netMismatchAt=null;s.netDivergenceSince=null;s.netBlockedSince=null;s.netFloorSince=null;s.netHardCorrections=(s.netHardCorrections??0)+(first||revived||v.failed||hidden!==oldHidden?0:1);
@@ -179,7 +183,7 @@ export function advanceCoopPrediction(s,blocks,dynamic,dt,now){
   nudgeCoopPosition(s,blocks,cx,cz,dynamic);
   const mx=s.x-x,mz=s.z-z;s.netAppliedX=(s.netAppliedX??0)+mx;s.netAppliedZ=(s.netAppliedZ??0)+mz;
   s.netCorrection=[dx-mx,dz-mz];
-  if(len>.25&&Math.hypot(cx,cz)>.0002&&Math.hypot(mx,mz)<.0001)s.netBlockedSince??=now;else if(Math.hypot(mx,mz)>.0001||len<.25)s.netBlockedSince=null;
+  if(len>.25&&Math.hypot(cx,cz)>.0002&&Math.hypot(mx,mz)<.0001)s.netBlockedSince??=now;else if(Math.hypot(mx,mz)>.0001||len<.25){s.netBlockedSince=null;if(Math.hypot(mx,mz)>.0001)s.netRecoveryNeeded=false;}
   if(len<.008||Math.hypot(mx,mz)<.0001&&len>.008)s.netCorrection=[0,0];
  }
  s.coopVisualClock=(s.coopVisualClock??s.elapsed??0)+dt;
