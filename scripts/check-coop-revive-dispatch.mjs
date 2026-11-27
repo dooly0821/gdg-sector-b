@@ -8,7 +8,7 @@ room.shared.hauntDirector.delay=1e6;room.shared.haunt=[];
 Object.assign(a.state,{x:1.7,z:15,y:0});Object.assign(b.state,{x:.7,z:15,y:0,failed:true});
 let now=start;function advance(n,held){a.input.keys=held?['KeyE']:[];for(let i=0;i<n;i++){now+=34;a.lastSeen=b.lastSeen=a.lastInputAt=now;tickRoom(room,now);}}
 advance(45,true);assert.equal(b.state.failed,true);advance(1,false);assert.equal(a.reviveProgress,0);advance(70,true);assert.equal(b.state.failed,true);advance(6,true);
-assert.equal(b.state.failed,false);assert(room.events.some(e=>e.type==='revive'));assert.equal(REVIVE_SECONDS,2.5);
+assert.equal(b.state.failed,false);assert(room.events.some(e=>e.type==='revive'));assert.equal(REVIVE_SECONDS,1.7);
 assert.equal(DOCKS.length,3);for(const [i,[x,y,z]] of DOCKS.entries()){assert.equal(nextTarget({x,y,z,carried:0}).bay,i);}
 const blocks=createScene()[0].blocks;
 for(const [i,[x,y,z]] of DOCKS.entries()){
