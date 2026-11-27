@@ -110,7 +110,7 @@ async function coopConnect(id){
  stopServerList();coopBusy=true;coopError='';
  for(const b of document.querySelectorAll('.public-server'))b.disabled=true;
  if($('#coop-notice'))$('#coop-notice').textContent=serverName(id)+'에 참가하는 중…';
- const client=new CoopClient(snap=>{if(coop===client)onCoopState(snap);},coopMessage,coopInput);coop=client;
+ const client=new CoopClient(snap=>{if(coop===client)onCoopState(snap);},coopMessage,coopInput);client.enableMotion=true;coop=client;
  try{await client.connect('enter',id,nickname);if(coop!==client){client.leave();return;}if(pane==='coop')coopLobby();}
  catch(e){if(coop===client){coop=null;coopMessage(e);}}
  finally{coopBusy=false;if(pane==='coop'&&!coop)refreshServers();}
@@ -330,7 +330,7 @@ function failShift(name){
 function complete(){pauseShift(false);beep(630,.3);panel('complete',resultMarkup(session,true,1)+'<div class="panel-actions">'+action('retry','다음 근무',true)+action('brief','메인으로')+action('resume','창고 둘러보기')+'</div>','근무 완료','GDG / SHIFT RESULT');}
 let receiptUntil=0;
 function use(target=null,locked=false){
- if(coopStarting&&coop){coop.command('use');return;}
+ if(coopStarting&&coop){const blocks=nearbyBlocks(worlds[0].blocks,session.x,session.z).concat(lockerDoorBlocks(session)),t=handlingTarget(session,blocks);const index=t&&!t.drop&&!t.dock&&canUse(session,t,blocks)?t.index:null;coop.command('use',{cargoIndex:index,yaw:session.yaw,pitch:session.pitch});return;}
  const staticBlocks=worlds[0].blocks,blocks=staticBlocks.concat(lockerDoorBlocks(session));
  if(!locked&&!closedLocker(session)){const panel=powerTarget(session,blocks);if(panel){const e=toggleZone(session,panel);say(e.message,3);beep(180,.12,'triangle',.06);return;}}
  if(!locked&&!session.handAction&&!session.pendingUse){const l=lockerTarget(session,staticBlocks);if(l&&session.carried<0){const result=useLocker(session,l);if(result==='opening'||result==='closing'){beep(112,.19,'triangle',.08);if(result==='closing')session.lockerLook={yaw:session.yaw,pitch:session.pitch,t:0};}else if(result==='step-back')say('문이 열릴 공간이 필요합니다. 한 걸음 물러서서 E를 누르세요.',2.5);else if(result==='enter-first')say('문이 열린 상태입니다. 내부 중앙으로 들어가 E를 누르세요.',2.5);return;}}
@@ -364,7 +364,9 @@ function targetCorners(pos,dock){
 const textIfChanged=(el,value)=>{if(el&&el.textContent!==value)el.textContent=value;};
 function frame(now){if(mode!=='game')return;const rawDt=Math.max(0,(now-last)/1000),dt=Math.min(.067,rawDt);last=now;const s=session;if(document.hidden){clearThreatHud();accumulator=0;s.renderPrevious=null;raf=requestAnimationFrame(frame);return;}if(coopStarting&&s.failed){spectateFrame(now,dt);return;}
  if(keys.has('ArrowLeft'))s.yaw+=dt*1.65;if(keys.has('ArrowRight'))s.yaw-=dt*1.65;if(keys.has('ArrowUp'))s.pitch=Math.min(CONFIG.pitchLimit,s.pitch+dt);if(keys.has('ArrowDown'))s.pitch=Math.max(-CONFIG.pitchLimit,s.pitch-dt);
- const perfStart=performance.now();const was=s.steps;const tick=1/(coopStarting?60:PHYSICS.hz);if(coopStarting&&coop?.snapshot?.phase!=='playing'){accumulator=0;s.renderPrevious=null;s.vx=s.vz=s.vy=0;}else if(s.encounterHit){keys.clear();jump=false;s.vx=s.vz=s.vy=0;accumulator=0;s.renderPrevious=null;}else{const budget=frameBudget(rawDt,accumulator,tick);for(let i=0;i<budget.steps;i++){s.renderPrevious=posePoint(s);step(s,keys,worlds[0].blocks,tick,jump);jump=false;}accumulator=budget.remainder;}
+ const perfStart=performance.now();const was=s.steps;const tick=1/(coopStarting?60:PHYSICS.hz);if(coopStarting&&coop?.snapshot?.phase!=='playing'){accumulator=0;s.renderPrevious=null;s.vx=s.vz=s.vy=0;}else if(s.encounterHit){keys.clear();jump=false;s.vx=s.vz=s.vy=0;accumulator=0;s.renderPrevious=null;}else{const budget=frameBudget(rawDt,accumulator,tick);for(let i=0;i<budget.steps;i++){
+ if(coopStarting&&coop&&!coop.canRecordMotion()){if(now-(s.motionWaitNotice??-3000)>2500){s.motionWaitNotice=now;say('서버 입력 갱신 대기 중 · 연결 상태를 확인하세요.',2);}break;}
+ s.renderPrevious=posePoint(s);const jumped=jump,slid=!!s.slideRequested;step(s,keys,worlds[0].blocks,tick,jumped);if(coopStarting&&coop)coop.recordMotion(s,keys,jumped,slid,now);jump=false;}accumulator=budget.remainder;}
  const perfPhysics=performance.now()-perfStart;
  const doors=lockerDoorBlocks(s),dynamic=parcelBlocks(s).concat(doors).filter(b=>b[0]<s.x+3&&b[2]>s.x-3&&b[1]<s.z+3&&b[3]>s.z-3);const interactionBlocks=nearbyBlocks(worlds[0].blocks,s.x,s.z).concat(doors.filter(b=>b[0]<s.x+3&&b[2]>s.x-3&&b[1]<s.z+3&&b[3]>s.z-3));
  if(coopStarting&&coop?.snapshot?.phase==='playing'){const before=posePoint(s);advanceCoopPrediction(s,worlds[0].blocks,dynamic,dt,now);s.renderPrevious=shiftPrevious(s.renderPrevious,before,posePoint(s));}
