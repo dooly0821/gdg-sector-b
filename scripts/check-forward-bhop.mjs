@@ -14,12 +14,12 @@ for(const hz of [60,120]){
   [['KeyW','KeyA','KeyD','KeyC','Space'],7],
   [['KeyW','KeyD','KeyC','Space'],7],
   [['KeyW','KeyA','KeyC','Space'],7],
-  [['KeyS','KeyC','Space'],7],
+  [['KeyS','KeyC','Space'],null],
   [['KeyW','KeyS','KeyC','Space'],7]
  ];
  for(const [keys,expected] of cases){
   const s=make();move(s,new Set(keys),[],dt,true,flat);
-  assert(Math.abs(speed(s)-expected)<1e-7,keys+' '+hz+' '+speed(s));
+  if(expected===null){assert(speed(s)<7&&speed(s)>0,'opposite direction brakes without a boost');}else assert(Math.abs(speed(s)-expected)<1e-7,keys+' '+hz+' '+speed(s));
  }
  const wrong=make({vx:7,vz:0});move(wrong,new Set(['KeyW','KeyC','Space']),[],dt,true,flat);assert(Math.abs(speed(wrong)-7)<1e-7,'sideways entry cannot boost');
  const s=make();move(s,new Set(['KeyW']),[],dt,true,flat);
