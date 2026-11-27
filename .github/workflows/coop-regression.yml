@@ -16,3 +16,14 @@ jobs:
       - run: node --check dist/app.js && node --check dist/multiplayer.js && node --check dist/mission.js && node --check dist/haunt.js && node --check server/room-core.js
       - run: node scripts/check-haunt-release.mjs
       - run: node scripts/check-climb-routes.mjs
+
+  live-health:
+    if: github.head_ref == 'air-slide-qa-20261127'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/check-live-health.mjs

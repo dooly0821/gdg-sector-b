@@ -64,7 +64,7 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
  const wasSliding=(s.slideTime??0)>0;
  s.slideCooldown=Math.max(0,(s.slideCooldown??0)-dt);s.slideTime=Math.max(0,(s.slideTime??0)-dt);s.slideExit=Math.max(0,(s.slideExit??0)-dt);
  if(wasSliding&&!s.slideTime)s.slideExit=P.slideExit;
- if(pressed&&s.grounded&&!s.slideCooldown&&Math.hypot(s.vx,s.vz)>=P.sprint*.78){s.slideTime=P.slideDuration;s.slideCooldown=P.slideDuration+P.slideRecovery;s.slideExit=0;}
+ if(pressed&&!s.slideTime&&!s.slideCooldown&&Math.hypot(s.vx,s.vz)>=P.sprint*.78){s.slideTime=P.slideDuration;s.slideCooldown=P.slideDuration+P.slideRecovery;s.slideExit=0;}
  const duck=crouch||s.slideTime>0,hopHeld=crouch&&keys.has('Space');
  // Retire legacy scripted vaults; all jumps are controlled by gravity and input.
  s.vault=null;s.ledgeIntent=0;
@@ -80,8 +80,9 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
  s.wasDuck=crouch;
  if(s.grounded&&s.jumpBuffer>0){
   // Compensate the semi-implicit gravity step equally at 60 and 120 Hz.
-  s.vy=Math.sqrt(2*P.gravity*jumpHeightFor(preSpeed,duck))+P.gravity*dt*.5;s.grounded=false;s.onRail=false;s.jumpBuffer=0;s.hopBoosted=false;
-  s.slideTime=0;s.slideExit=0;
+  s.vy=Math.sqrt(2*P.gravity*jumpHeightFor(preSpeed,crouch))+P.gravity*dt*.5;s.grounded=false;s.onRail=false;s.jumpBuffer=0;s.hopBoosted=false;
+  // The slide remains active through takeoff; gravity alone controls Y.
+  s.slideExit=0;
  }
  // One small momentum gain per airborne hop, never a per-frame speed exploit.
  // Crouch-jumping at running speed rewards a forward or strafe input.
@@ -89,13 +90,14 @@ export function move(s,keys,staticBlocks,dt,jump,surface,dynamic=[]){
   const gain=Math.min(P.bhopCap,preSpeed+.88)/preSpeed;
   s.vx*=gain;s.vz*=gain;s.hopBoosted=true;
  }
- if(s.grounded){
-  const speed=Math.hypot(s.vx,s.vz),sliding=s.slideTime>0&&speed>P.walk;
+ const speedBeforeMove=Math.hypot(s.vx,s.vz),sliding=s.slideTime>0&&speedBeforeMove>P.walk;
+ if(s.grounded||sliding){
+  const speed=speedBeforeMove;
   const alignment=mag&&speed>.01?(s.vx*x+s.vz*z)/speed:0;
   if(sliding){
    // Forward input preserves the actual entry momentum. No velocity floor,
    // per-tick boost or position override: collision losses remain losses.
-   const friction=alignment>.15?0:alignment<-.35?4.0:.12;
+   const friction=alignment>.15?0:alignment<-.35?(s.grounded?4.0:2.0):(s.grounded?.12:0);
    const next=Math.max(0,speed-Math.max(speed,P.stopSpeed)*friction*dt);
    s.vx*=next/speed;s.vz*=next/speed;
    if(mag&&alignment>-.35)steerHop(s,x,z,dt,P.slideTurn);
